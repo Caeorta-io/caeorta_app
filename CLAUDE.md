@@ -82,6 +82,16 @@ If a suggestion conflicts with these, the burden is on the proposal, not on the 
 
 ## What to do at the start of a session
 
-1. If the session is non-trivial, read `docs/00-readme.md` to know which other files apply.
-2. Confirm understanding briefly before producing code on multi-file changes.
-3. For any task, identify which week of the action plan it belongs to. If it's a week that hasn't started yet, flag that explicitly — don't build ahead of the plan without confirming.
+1. If the session is non-trivial, read `docs/00_README.md` to know which other files apply.
+2. Read the latest entry of `docs/workdiary.md` — gives you "what was last done, with which tools, and what's still open" without re-deriving from git log.
+3. Confirm understanding briefly before producing code on multi-file changes.
+4. For any task, identify which week of the action plan it belongs to. If it's a week that hasn't started yet, flag that explicitly — don't build ahead of the plan without confirming.
+
+## What to do at the end of a session
+
+At the end of any session that involved meaningful work, update `docs/workdiary.md`:
+
+- Add a new dated entry at the bottom (use the template in the file).
+- Update the **Current tool inventory** table at the top whenever a tool was installed, upgraded, or replaced.
+- Add a row to the **Decisions log** whenever a non-trivial decision was taken.
+- Roll forward open items honestly — don't pretend something is done if it isn't.
