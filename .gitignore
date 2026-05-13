@@ -1,0 +1,78 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+.next/
+.expo/
+.expo-shared/
+*.tsbuildinfo
+
+# Tests
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Environment variables — never commit
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# IDE — keep shared settings, ignore personal
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+
+# Expo / EAS / signing
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Android
+*.apk
+*.aab
+android/app/build/
+android/build/
+android/.gradle/
+android/local.properties
+android/captures/
+android/keystores/
+android/key.properties
+
+# iOS (kept ignored even though iOS is deferred)
+ios/Pods/
+ios/build/
+*.xcuserstate
+
+# Supabase local
+supabase/.branches/
+supabase/.temp/
+
+# Sentry
+.sentryclirc
+
+# Misc
+*.tgz
+.cache/
+.turbo/

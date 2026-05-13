@@ -1,0 +1,414 @@
+# Database Schema (v1)
+
+The platform founder owns schema. This document is the human-readable companion to the migration SQL files in `supabase/migrations/`. When schema changes, **both update together in the same PR**.
+
+## Design principles
+
+1. **Postgres-native.** Use Postgres types (uuid, timestamptz, jsonb, generated columns, partial indexes, RLS) rather than fighting the database.
+2. **RLS-enforced.** Row-level security is the source of truth for authorization. No "trust the client" patterns.
+3. **Append-mostly for telemetry.** Time-series data is rarely updated; design for fast inserts.
+4. **Devices write via Edge Functions, not directly.** Devices never have an anon key or service role. They get short-lived JWTs minted by `mint_device_token`.
+5. **Audit-friendly.** Sensitive operations (device claims, transfers) write to `audit_log`.
+6. **Schema-ready for v2 community features.** Community tables exist (empty) so v2 doesn't require destructive migrations.
+
+## Tables
+
+### Auth + Identity
+
+#### `users`
+Extends Supabase `auth.users` with profile data.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK, FK to auth.users.id |
+| display_name | text | Optional |
+| phone | text | Optional in v1 (email magic link auth); required in v2 |
+| locale | text | Default 'en' |
+| created_at | timestamptz | Default now() |
+| updated_at | timestamptz | Auto-updated via trigger |
+
+#### `user_preferences`
+Per-user app settings.
+
+| Column | Type | Notes |
+|---|---|---|
+| user_id | uuid | PK, FK to users.id |
+| notification_severity_threshold | text | 'info' \| 'warning' \| 'critical' (which severities get push notifications) |
+| quiet_hours_start | time | e.g. '22:00' |
+| quiet_hours_end | time | e.g. '07:00' |
+| timezone | text | e.g. 'Asia/Kolkata' |
+| units_preference | jsonb | { speed: 'kph'\|'mph', temp: 'c'\|'f', pressure: 'bar'\|'psi' } |
+| updated_at | timestamptz | |
+
+### Device
+
+#### `devices`
+The physical OBD-II dongles.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| device_secret | text | Unique. Printed on label as QR. Never exposed via API. |
+| claimed_by_user_id | uuid | Nullable; FK to users.id |
+| claimed_at | timestamptz | When claimed |
+| last_seen_at | timestamptz | Updated on every device action |
+| firmware_version | text | Current version reported by device |
+| target_firmware_version | text | Set by ops; device polls and updates |
+| last_sync_at | timestamptz | Last successful sync completion |
+| hardware_revision | text | e.g. 'v2-esp32c3' |
+| status | text | 'unclaimed' \| 'active' \| 'disabled' \| 'lost' |
+| created_at | timestamptz | When device was provisioned at factory |
+
+#### `device_wifi_credentials`
+Stored Wi-Fi networks per device. Multiple allowed; device picks one available.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| device_id | uuid | FK |
+| ssid | text | |
+| encrypted_password | text | Encrypted via pgcrypto or Supabase Vault |
+| priority | int | Lower = preferred |
+| added_at | timestamptz | |
+
+#### `device_events`
+Append-only log of device actions for debugging.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| device_id | uuid | FK |
+| event_type | text | 'boot' \| 'sync_start' \| 'sync_complete' \| 'ota_start' \| 'ota_complete' \| 'error' \| 'wifi_connected' \| etc. |
+| timestamp | timestamptz | |
+| payload | jsonb | Event-specific data (error code, version numbers, etc.) |
+
+Indexed on `(device_id, timestamp DESC)`.
+
+#### `firmware_versions`
+Available firmware versions for OTA.
+
+| Column | Type | Notes |
+|---|---|---|
+| version | text | PK, e.g. '2.1.3' |
+| binary_url | text | Supabase Storage signed URL |
+| checksum | text | SHA-256 |
+| release_notes | text | |
+| is_active | bool | False to retire a version |
+| created_at | timestamptz | |
+
+#### `device_push_tokens`
+Expo push tokens per user device (phone), not Caeorta device.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| user_id | uuid | FK |
+| token | text | Expo push token |
+| platform | text | 'ios' \| 'android' |
+| created_at | timestamptz | |
+| last_used_at | timestamptz | |
+
+Unique index on `(user_id, token)`.
+
+### Vehicle
+
+#### `vehicles`
+A car owned by a user, paired with a device.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| owner_user_id | uuid | FK |
+| device_id | uuid | FK; one device per vehicle in v1 |
+| make | text | e.g. 'Maruti' |
+| model | text | e.g. 'Swift' |
+| year | int | e.g. 2016 |
+| vin | text | Read from OBD |
+| nickname | text | User-chosen, e.g. "My Daily" |
+| ecu_type | text | 'oem' \| 'haltech' \| 'aem' \| 'motec' \| 'link' \| 'other' |
+| modifications | jsonb | Free-form for now; itemize in v2 |
+| created_at | timestamptz | |
+
+#### `vehicle_modifications`
+Empty in v1; reserved for v2 community features (itemized mod tracking).
+
+### Telemetry
+
+#### `telemetry`
+Raw OBD data. The heavy table.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| vehicle_id | uuid | FK |
+| sync_session_id | uuid | FK |
+| timestamp | timestamptz | When the sample was taken on the car (not when uploaded) |
+| metrics | jsonb | { rpm: 2450, coolant_temp_c: 87, ... } |
+
+Indexed on `(vehicle_id, timestamp DESC)`.
+
+**Partitioning strategy:** consider partitioning by week if volume warrants it (likely not at pilot scale). Add `pg_cron` job at Week 4 to downsample telemetry older than 30 days into per-minute aggregates.
+
+#### `current_state`
+Single row per vehicle. Upserted by device during live mode.
+
+| Column | Type | Notes |
+|---|---|---|
+| vehicle_id | uuid | PK |
+| latest_metrics | jsonb | Same shape as telemetry.metrics |
+| updated_at | timestamptz | |
+
+#### `sync_sessions`
+A single sync attempt from device to cloud.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| device_id | uuid | FK |
+| vehicle_id | uuid | FK |
+| started_at | timestamptz | |
+| completed_at | timestamptz | Null until completion |
+| status | text | 'pending' \| 'streaming' \| 'completed' \| 'failed' |
+| bytes_uploaded | bigint | |
+| row_count | int | |
+| error_message | text | Null on success |
+
+### Diagnostics
+
+#### `dtcs`
+Diagnostic Trouble Codes from the ECU.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| vehicle_id | uuid | FK |
+| sync_session_id | uuid | FK; sync that surfaced this DTC |
+| code | text | e.g. 'P0107' |
+| description | text | OEM/known description |
+| severity_raw | text | As reported by ECU |
+| first_seen_at | timestamptz | |
+| last_seen_at | timestamptz | |
+| is_active | bool | False if cleared |
+| cleared_at | timestamptz | |
+| cleared_by_user_id | uuid | If user marked as cleared |
+
+#### `diagnostic_outputs`
+**The contract table with the AI agent project.** AI agent writes here; app reads.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| vehicle_id | uuid | FK |
+| agent_version | text | e.g. 'v0.3.2' |
+| generated_at | timestamptz | |
+| severity | text | 'info' \| 'warning' \| 'critical' |
+| urgency | text | 'now' \| 'soon' \| 'monitor' |
+| category | text | 'engine' \| 'fuel' \| 'cooling' \| 'transmission' \| 'electrical' \| 'turbo' \| 'insufficient_data' \| 'other' |
+| title | text | Short, e.g. "Lean condition under boost detected" |
+| summary | text | 1-2 sentences |
+| explanation | text | Paragraph or more |
+| recommended_action | text | What the user should do |
+| confidence | numeric(3,2) | 0.00 to 1.00 |
+| referenced_telemetry_ids | uuid[] | Telemetry rows this output references |
+| referenced_dtc_ids | uuid[] | |
+| referenced_drive_id | uuid | The drive being analyzed |
+| status | text | 'new' \| 'seen' \| 'dismissed' \| 'actioned' |
+
+Indexed on `(vehicle_id, generated_at DESC)` and `(vehicle_id, status)`.
+
+#### `diagnostic_feedback`
+User's thumbs up/down on diagnostic outputs. **Critical for the AI agent project's eval loop.**
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| diagnostic_id | uuid | FK to diagnostic_outputs |
+| user_id | uuid | FK |
+| rating | text | 'up' \| 'down' |
+| comment | text | Optional |
+| created_at | timestamptz | |
+
+#### `agent_status`
+Per-vehicle status of the AI agent. App subscribes to this for "analyzing your drive" UI.
+
+| Column | Type | Notes |
+|---|---|---|
+| vehicle_id | uuid | PK |
+| status | text | 'idle' \| 'analyzing' \| 'error' \| 'rate_limited' |
+| updated_at | timestamptz | |
+| last_run_at | timestamptz | |
+| error_message | text | Null if not in error state |
+
+### Drives
+
+#### `drives`
+The unit of analysis. Drive = ignition-on to ignition-off period.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| vehicle_id | uuid | FK |
+| started_at | timestamptz | |
+| ended_at | timestamptz | |
+| distance_km | numeric | |
+| duration_seconds | int | |
+| average_speed_kph | numeric | |
+| peak_metrics | jsonb | { max_rpm: 6800, max_boost_bar: 1.4, ... } |
+| summary_metrics | jsonb | { avg_coolant_temp_c: 88, avg_afr: 14.6, ... } |
+| sync_session_id | uuid | FK |
+| has_anomaly | bool | Flag set by agent for quick filtering |
+
+Indexed on `(vehicle_id, started_at DESC)`.
+
+### Community (empty in v1, schema ready for v2)
+
+These tables exist with proper FKs but have no UI and no Edge Functions yet. They're here to avoid a destructive migration when community features ship in v2.
+
+- `posts` — user posts in community feed
+- `comments` — comments on posts
+- `groups` — model-specific or interest groups
+- `group_members` — many-to-many user<->group
+- `events` — car meets, track days
+- `event_attendees` — many-to-many user<->event
+
+Detailed schema deferred to v2 planning.
+
+### Operational
+
+#### `feedback`
+General user feedback / bug reports.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| user_id | uuid | FK |
+| type | text | 'bug' \| 'feature' \| 'other' |
+| message | text | |
+| app_version | text | |
+| device_info | jsonb | OS, model, etc. |
+| created_at | timestamptz | |
+
+#### `app_versions`
+Version gating. App queries on launch to check if forced update needed.
+
+| Column | Type | Notes |
+|---|---|---|
+| version | text | PK, e.g. '1.0.5' |
+| platform | text | 'ios' \| 'android' |
+| is_supported | bool | False = force update |
+| force_update_below_this | bool | True = block app launch below this version |
+| release_notes | text | |
+| released_at | timestamptz | |
+
+#### `audit_log`
+Append-only log of sensitive operations.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | uuid | PK |
+| actor_user_id | uuid | Who performed it |
+| action | text | e.g. 'device.claimed', 'device.transferred', 'user.deleted' |
+| target_type | text | e.g. 'device', 'user' |
+| target_id | uuid | |
+| metadata | jsonb | |
+| timestamp | timestamptz | |
+
+No update policy. Append-only.
+
+## RLS Philosophy
+
+Three actors interact with the database:
+
+1. **Authenticated user (app + admin)** — has a `auth.users.id`. Can read/write their own data only.
+2. **Service role (Edge Functions)** — bypasses RLS. Used for cross-user operations like pairing.
+3. **Device (via minted JWT)** — has a `device_id` claim. Can write only to telemetry, sync_sessions, dtcs, current_state, device_events scoped to its own device_id.
+
+Sample RLS pattern for `vehicles`:
+
+```sql
+-- Users can read their own vehicles
+CREATE POLICY "users_select_own_vehicles" ON vehicles
+  FOR SELECT USING (owner_user_id = auth.uid());
+
+-- Users can update their own vehicles
+CREATE POLICY "users_update_own_vehicles" ON vehicles
+  FOR UPDATE USING (owner_user_id = auth.uid())
+  WITH CHECK (owner_user_id = auth.uid());
+
+-- No direct INSERT — only via Edge Functions
+CREATE POLICY "no_direct_insert" ON vehicles
+  FOR INSERT WITH CHECK (false);
+```
+
+Sample RLS pattern for `telemetry`:
+
+```sql
+-- Users can read telemetry for their own vehicles
+CREATE POLICY "users_select_own_telemetry" ON telemetry
+  FOR SELECT USING (
+    vehicle_id IN (
+      SELECT id FROM vehicles WHERE owner_user_id = auth.uid()
+    )
+  );
+
+-- Devices can insert telemetry for their own vehicle
+CREATE POLICY "devices_insert_own_telemetry" ON telemetry
+  FOR INSERT WITH CHECK (
+    vehicle_id IN (
+      SELECT v.id FROM vehicles v
+      JOIN devices d ON d.id = v.device_id
+      WHERE d.id::text = auth.jwt() ->> 'device_id'
+    )
+  );
+```
+
+## Indexing strategy
+
+Add indexes only when query patterns demand them. Initial set:
+
+- `telemetry (vehicle_id, timestamp DESC)`
+- `diagnostic_outputs (vehicle_id, generated_at DESC)`
+- `diagnostic_outputs (vehicle_id, status)`
+- `dtcs (vehicle_id, is_active, last_seen_at DESC)`
+- `drives (vehicle_id, started_at DESC)`
+- `devices (device_secret)` UNIQUE
+- `devices (claimed_by_user_id)`
+- `device_events (device_id, timestamp DESC)`
+- `device_push_tokens (user_id, token)` UNIQUE
+- `sync_sessions (device_id, started_at DESC)`
+
+Review query plans monthly during pilot. Add indexes for slow queries; remove unused ones.
+
+## Extensions
+
+Enable in v1:
+- `pgcrypto` — for password hashing if needed, encryption helpers
+- `pg_cron` — for scheduled jobs (downsampling, cleanup)
+- `pgvector` — for future embeddings (not used in v1 but cheap to enable)
+- `pg_trgm` — for fuzzy text search (useful for admin search)
+
+## Migration discipline
+
+- Every schema change = one migration file.
+- File naming: `YYYYMMDDHHMMSS_descriptive_name.sql`
+- Migrations are immutable once applied. Never edit an applied migration; write a new one.
+- Apply to dev with `supabase db push --linked`
+- Promote to prod manually after dev verification
+- Generate TS types after every migration: `supabase gen types typescript --linked > packages/supabase/database.types.ts`
+- Update `docs/schema.md` (this file) in the same PR
+
+## Data retention
+
+- `telemetry` — raw data: 30 days. Older data downsampled to per-minute aggregates and retained 1 year.
+- `device_events` — 90 days.
+- `sync_sessions` — 1 year (small, useful for debugging).
+- `diagnostic_outputs` — indefinitely (small, important user history).
+- `audit_log` — indefinitely.
+
+`pg_cron` jobs handle the cleanup. Defined in a migration.
+
+## Backups
+
+Supabase free tier does not include automatic backups. Until upgraded, the platform founder runs weekly `pg_dump` to a private encrypted backup location.
+
+When upgraded to Supabase Pro (after pilot, before commercial launch), enable automatic point-in-time recovery.
