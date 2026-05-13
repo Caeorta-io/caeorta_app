@@ -67,6 +67,7 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-05-13 | **Section 0 closed.** All external accounts (GitHub, Supabase dev+prod, Vercel, Expo, Anthropic, Sentry, PostHog, Cloudflare Registrar + domain, Google Workspace, Resend, Framer) created and stored in 1Password "Caeorta" vault. Founder agreement (YC template) signed. Both founders' dev environments set up. | Week 1 readiness | `docs/08_12_Week_Action_Plan.md` Section 0 status block |
 | 2026-05-13 | **R18 logged: Apple Developer will eventually enroll as Individual, not Organization.** No D-U-N-S; Caeorta not yet incorporated. Acceptable for pilot; plan org transfer Weeks 12–16 post-incorporation. | No incorporated entity at enrollment time | `docs/09_Risks_And_Mitigations.md` R18 |
 | 2026-05-13 | **Week 1 start: Monday 2026-05-18.** | Next-Monday cadence from today (Wed 2026-05-13). Subject to founder revision. | `docs/01_Project_Identity.md` Stage section |
+| 2026-05-13 | **iOS app development paused for v1 pilot — Android-only confirmed.** Apple Developer enrollment is not a Week 1–12 blocker; it's a post-pilot requirement. Google Play Console remains a Week-10 dependency for the Android pilot distribution. Resolves the Section 0 status block contradiction. | Founder confirmation after I surfaced the conflict between the new Section 0 status text and the earlier Android-only decision. | `docs/08_12_Week_Action_Plan.md` Section 0 status block (deferred-items list rewritten) |
 
 ---
 
@@ -183,7 +184,7 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 - Week 1 start = Mon 2026-05-18 (next Monday)
 
 **Open items rolled forward:**
-- **CONTRADICTION TO RECONCILE — flagged to founder.** The Section 0 status block (added per Update 1) says Apple Developer enrollment is "blocker for Week 7 iOS push and Week 10 TestFlight" and is "deferred 2 weeks (funds reason, does not block Week 1-6)." This conflicts with the earlier 2026-05-13 Android-only-for-v1 decision, under which APNs (Week 7), App Store Connect / TestFlight / iPhone screenshots (Week 10), and Apple Sign-In (Week 12) were all marked DEFERRED throughout the action plan with strike-through. Possible resolutions: (a) iOS is back in scope for v1 and the Android-only decision is being reversed, (b) the Section 0 status text should refer to *post-pilot* iOS rather than v1 weeks, (c) deferral length differs by item. **Founder to decide; doc edits will follow that call.**
+- ~~CONTRADICTION TO RECONCILE — flagged to founder.~~ **RESOLVED 2026-05-13 (later same day).** Founder confirmed option (B): iOS app development is paused for v1; Android-only is the pilot path; Apple Developer enrollment is a post-pilot concern, not a Week 7/10 v1 blocker. Section 0 status block's deferred-items list rewritten accordingly in a follow-up commit. All earlier Android-only edits stand as-is.
 - Cleanup of `C:\Users\muham\Documents\Caeorta_App\` (real source) and `C:\Users\muham\OneDrive\Documents\Caeorta_App\` (empty stub) — destructive, awaiting go-ahead.
 - `.gitattributes` for line-ending consistency (Week 1, alongside ESLint/Prettier).
 - `git config --global user.name` (currently empty); decide whether to switch `user.email` to GitHub no-reply.

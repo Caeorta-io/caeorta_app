@@ -51,10 +51,16 @@ Section 0 is closed. Summary of state at Week 1 start:
 - Founder agreement (YC template) signed
 - Both founders' local dev environments fully set up
 
-Deferred 2 weeks (funds reason, does not block Week 1-6):
-- Apple Developer enrollment ($99/year) — blocker for Week 7 iOS push
-  and Week 10 TestFlight; pay by Week 3 to have activation buffer
-- Google Play Console ($25) — blocker for Week 10 Play Internal Testing
+Deferred (funds reason):
+- Apple Developer enrollment ($99/year) — **not a v1 blocker.** iOS is
+  paused for the v1 pilot (Android-only); Apple Developer is needed
+  only for post-pilot iOS rollout. Pay when funded post-pilot. See
+  decisions log in `workdiary.md` and `10_Out_Of_Scope.md` "iOS in v1
+  pilot" for the full rationale.
+- Google Play Console ($25 one-time) — blocker for Week 10 Play Internal
+  Testing (the v1 pilot distribution channel). Pay when funded;
+  activation is typically same-day, so do it by end of Week 9 at the
+  latest.
 
 In flight at Week 1 start:
 - Designer kickoff brief drafted; to be sent ≥48h ahead of Week 1
