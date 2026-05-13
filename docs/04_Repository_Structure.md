@@ -77,6 +77,18 @@ caeorta/
 │   └── config.toml
 │
 ├── docs/
+│   ├── 00_README.md
+│   ├── 01_Project_Identity.md
+│   ├── 02_Working_Agreements.md
+│   ├── 03_Tech_Stack.md
+│   ├── 04_Repository_Structure.md
+│   ├── 05_Database_Schema.md
+│   ├── 06_AI_Agent_Contract.md
+│   ├── 07_Sync_Architecture.md
+│   ├── 08_12_Week_Action_Plan.md
+│   ├── 09_Risks_And_Mitigations.md
+│   ├── 10_Out_Of_Scope.md
+│   ├── workdiary.md               # Living session log + decisions log
 │   ├── ai-agent-contract.md       # Contract with the AI agent project
 │   ├── schema.md                  # Human-readable schema doc
 │   ├── api-contracts.md           # Edge Function input/output contracts
@@ -249,6 +261,10 @@ GitHub Actions handles:
 
 `docs/` is part of the repository, version-controlled. Updates to docs go through PR review same as code.
 
+- **Workdiary** (`docs/workdiary.md`) is the living log of every working
+  session: tool inventory, decisions log, per-session entries. Read latest
+  entry at session start; append entry at session end. Format template at
+  the bottom of the file.
 - **ADRs** (Architecture Decision Records) for any decision worth remembering: why we chose Expo, why we kept Supabase, why we deferred Peaq, etc. Format: short, numbered, dated, immutable (write a new ADR to supersede an old one).
 - **API contracts** for every Edge Function: input shape, output shape, error cases, auth requirements.
 - **Schema doc** is the human-readable companion to migrations. Updated in the same PR as a migration.

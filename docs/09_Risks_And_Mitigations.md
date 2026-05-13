@@ -285,6 +285,26 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 
 ---
 
+## R18: Apple Developer enrolled as Individual, not Organization
+
+**Risk:** Apple Developer account was enrolled as Individual (under one
+founder's Apple ID) rather than Organization, because Caeorta is not yet
+a registered legal entity with a D-U-N-S number. Consequence: the App
+Store listing shows one founder's personal name as the developer rather
+than "Caeorta." Less professional for commercial launch.
+
+**Likelihood:** Certain (this is the chosen path)
+
+**Mitigations:**
+- Acceptable for pilot (10 users who know us)
+- Plan organization transfer between Week 12 and Week 16 once Caeorta
+  is incorporated and has a D-U-N-S number
+- Track the transfer as an explicit Week 13+ task
+
+**Status:** Active. Tracked for post-pilot.
+
+---
+
 ## How to use this document
 
 - **Weekly retro:** Walk this list. Any risks worsening? Any new ones to add? Any to resolve?

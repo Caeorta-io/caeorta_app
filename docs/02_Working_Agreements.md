@@ -76,6 +76,14 @@ When asked to plan or scope something, complete means:
 - **Hardware is being built in a parallel project.** Don't propose changes to firmware; treat the device as a service that writes to known tables.
 - **Quality > speed.** Always. The 12-week plan reflects this. Don't shorten it by cutting quality.
 
+## Workdiary discipline
+
+At the start of any non-trivial session, read the latest entry of
+`docs/workdiary.md` to see where the previous session left off and what's
+still open. At the end of a non-trivial session, append an entry per the
+template at the bottom of the workdiary. This is how context survives
+across sessions when memory cannot.
+
 ## When Claude should END a conversation cleanly
 
 If the founder's question is a strategic one that belongs in another project (Caeorta Startup OS, hardware project, AI agent project), say so clearly and don't try to answer it from this project's context. Examples:

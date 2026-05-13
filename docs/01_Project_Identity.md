@@ -36,11 +36,18 @@ If a question crosses into these areas, ask which project should own it before a
 
 ## Stage when this project starts
 
-- **Pre-week-1.** Repository does not yet exist. Setup is happening (accounts, agreements).
-- **Designer is engaged.** Figma is in progress.
-- **Hardware prototype V1 exists** but is being redesigned (smaller MCU, no screen, see device design below).
+- **Week 1 starting 2026-05-18.** Repository exists at
+  github.com/Caeorta-AI/caeorta_app, both founders cloned locally.
+- **Section 0 closed.** Accounts created, founder agreement signed,
+  tooling set up. See `08_12_Week_Action_Plan.md` Section 0 status.
+- **Designer is engaged.** Figma in progress; kickoff brief drafted,
+  90-min working session scheduled for Week 1.
+- **Hardware prototype V1 exists** but is being redesigned (smaller MCU,
+  no screen).
 - **AI agent is being built in parallel** in its separate project.
-- **No pilot users yet.** Target is 10 friendly enthusiasts in India for the first pilot.
+  Contract v0 review session scheduled with that project for Week 1.
+- **No pilot users yet.** Target is 10 friendly enthusiasts in India for
+  the first pilot.
 
 ## Key product design decisions (already made, do not re-litigate)
 

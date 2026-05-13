@@ -41,10 +41,12 @@ Tools intentionally **not** installed (per project decisions or scope):
 - **Local working path**: `C:\Code\caeorta_app` (NOT OneDrive)
 - **Default branch**: `main`
 - **Workspace manager**: pnpm 11 workspaces (`apps/*`, `packages/*`)
-- **Founder roles**: App founder owns Expo mobile app + UI + AI agent integration + design implementation. Platform founder owns Supabase schema/RLS/Edge Functions + Next.js admin + Framer marketing + OTA + push backend + device pairing + CI/CD.
+- **Founder roles**:
+  - **App** — Muhammed Raslan Thalassery: Expo mobile app, UI, AI agent output integration, design implementation
+  - **Platform** — Sulaiman Shiyas Ali: Supabase schema/RLS/Edge Functions, Next.js admin, Framer marketing, OTA, push backend, device pairing, CI/CD
 - **Founders' commit identities**:
-  - App founder: `user.name` = `Muhammed_Raslan` (repo-scoped — global `user.name` currently empty), `user.email` = `muhammedraslanthalassery@gmail.com` (global)
-  - Platform founder: TBD when they set up
+  - App (Muhammed Raslan): `user.name` = `Muhammed_Raslan` (repo-scoped — global `user.name` currently empty), `user.email` = `muhammedraslanthalassery@gmail.com` (global)
+  - Platform (Sulaiman Shiyas Ali): TBD when they make their first commit
 
 ---
 
@@ -61,6 +63,10 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-05-13 | **GitHub org slug: `Caeorta-AI`.** | Founder choice | `docs/04_Repository_Structure.md`, this file |
 | 2026-05-13 | **Repo lives at `C:\Code\caeorta_app`, not under OneDrive.** | Avoid OneDrive sync churn for `node_modules` and .git locking issues | This file |
 | 2026-05-13 | **Defer full Apple Developer ($99/yr) + Google Play Console ($25 one-time) until funded.** Implication: APNs deferred (push v1 is FCM-only); Play Internal Testing deferred until before pilot launch. | Founder budget constraint | `docs/08_12_Week_Action_Plan.md` Section 0 |
+| 2026-05-13 | **Founder split confirmed** with names: Muhammed Raslan (App), Sulaiman Shiyas Ali (Platform). | Pre-Week-1 decision per founder agreement | `docs/01_Project_Identity.md` Stage section, `docs/08_12_Week_Action_Plan.md` Section 0 status, this file's Repository facts |
+| 2026-05-13 | **Section 0 closed.** All external accounts (GitHub, Supabase dev+prod, Vercel, Expo, Anthropic, Sentry, PostHog, Cloudflare Registrar + domain, Google Workspace, Resend, Framer) created and stored in 1Password "Caeorta" vault. Founder agreement (YC template) signed. Both founders' dev environments set up. | Week 1 readiness | `docs/08_12_Week_Action_Plan.md` Section 0 status block |
+| 2026-05-13 | **R18 logged: Apple Developer will eventually enroll as Individual, not Organization.** No D-U-N-S; Caeorta not yet incorporated. Acceptable for pilot; plan org transfer Weeks 12–16 post-incorporation. | No incorporated entity at enrollment time | `docs/09_Risks_And_Mitigations.md` R18 |
+| 2026-05-13 | **Week 1 start: Monday 2026-05-18.** | Next-Monday cadence from today (Wed 2026-05-13). Subject to founder revision. | `docs/01_Project_Identity.md` Stage section |
 
 ---
 
@@ -148,6 +154,48 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 - After winget installs, already-running shells don't see the new PATH. Either close + reopen the shell, or refresh inline: `$env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH","User")`.
 - Git on Windows defaults `core.autocrlf=true` → LF/CRLF warnings on `git add`. Benign for an all-Windows team; revisit if mixed-OS contributors join.
 - fnm shells are managed via `fnm_multishells`; the Node binary path is per-shell-session. Don't hard-code it — `(Get-Command node).Source` shows the active shell's resolved path.
+
+---
+
+### 2026-05-13 (later same day) — Doc reconciliation (session 2)
+
+**Goal of session:** Reconcile project knowledge with actual Section 0 completion state. Founder provided 6 specific doc updates to perform.
+
+**Done:**
+- Added **Section 0 status — closed 2026-05-13** block to `docs/08_12_Week_Action_Plan.md` immediately under the Section 0 heading. Preserves the original checklist below as historical context.
+- Replaced the workdiary row in `docs/00_README.md` with the founder's shorter spec: `| workdiary.md | Living log; read latest entry at session start, append at session end |`.
+- Replaced the **Stage when this project starts** section in `docs/01_Project_Identity.md` with current Week-1-starting state: repo live, Section 0 closed, designer kickoff scheduled, AI agent Contract v0 review scheduled.
+- Appended **R18 — Apple Developer enrolled as Individual, not Organization** in `docs/09_Risks_And_Mitigations.md`, with Status "Active. Tracked for post-pilot."
+- Restructured the **docs/** subtree in `docs/04_Repository_Structure.md` to explicitly list the 11 numbered files and `workdiary.md`, keeping the aspirational lowercase files (`ai-agent-contract.md`, `schema.md`, `api-contracts.md`, `12-week-plan.md`, `adr/`) intact.
+- Added a **Workdiary** bullet to the **Documentation discipline** section in `docs/04_Repository_Structure.md`.
+- Added a **Workdiary discipline** section to `docs/02_Working_Agreements.md`, placed before "When Claude should END a conversation cleanly".
+
+**Tools / versions touched:** none — docs only.
+
+**Files / commits:**
+- `docs/00_README.md`, `docs/01_Project_Identity.md`, `docs/02_Working_Agreements.md`, `docs/04_Repository_Structure.md`, `docs/08_12_Week_Action_Plan.md`, `docs/09_Risks_And_Mitigations.md`, `docs/workdiary.md`
+- Single commit: `docs: reconcile project knowledge with Section 0 completion + add R18`
+
+**Decisions confirmed (recorded above in Decisions log):**
+- Founder split: Muhammed Raslan = App, Sulaiman Shiyas Ali = Platform
+- Section 0 closed; accounts done; founder agreement signed
+- R18 logged for post-pilot tracking
+- Week 1 start = Mon 2026-05-18 (next Monday)
+
+**Open items rolled forward:**
+- **CONTRADICTION TO RECONCILE — flagged to founder.** The Section 0 status block (added per Update 1) says Apple Developer enrollment is "blocker for Week 7 iOS push and Week 10 TestFlight" and is "deferred 2 weeks (funds reason, does not block Week 1-6)." This conflicts with the earlier 2026-05-13 Android-only-for-v1 decision, under which APNs (Week 7), App Store Connect / TestFlight / iPhone screenshots (Week 10), and Apple Sign-In (Week 12) were all marked DEFERRED throughout the action plan with strike-through. Possible resolutions: (a) iOS is back in scope for v1 and the Android-only decision is being reversed, (b) the Section 0 status text should refer to *post-pilot* iOS rather than v1 weeks, (c) deferral length differs by item. **Founder to decide; doc edits will follow that call.**
+- Cleanup of `C:\Users\muham\Documents\Caeorta_App\` (real source) and `C:\Users\muham\OneDrive\Documents\Caeorta_App\` (empty stub) — destructive, awaiting go-ahead.
+- `.gitattributes` for line-ending consistency (Week 1, alongside ESLint/Prettier).
+- `git config --global user.name` (currently empty); decide whether to switch `user.email` to GitHub no-reply.
+- Update Git from 2.37.1 to current (silences `credential-manager` deprecation stderr noise).
+- Remove the obsolete `Expo CLI` line from `docs/08_12_Week_Action_Plan.md` Section 0 tooling checklist (modern Expo uses `npx expo`).
+- Long-term: move PowerShell `$PROFILE` out of OneDrive-redirected Documents.
+- Section 0 doc items still in checklist (preserved as history) — confirm with Platform founder which of those are physically true, and consider replacing checkbox states with checkmarks in a future cleanup pass.
+
+**Notes / lessons:**
+- The Edit tool tracks file state per absolute path. After copying files to `C:\Code\caeorta_app\`, even copies of files I'd read earlier (at the OneDrive path or the real-Documents path) required a fresh Read at the new path before Edit would accept them.
+- When a founder provides a structured list of doc edits with exact text, the right move is to match their text verbatim and flag contradictions separately, not to smooth conflicts silently. Doing so preserves their authorship over the project's source of truth.
+- Section 0 status block style — "summary at top, original checklist preserved below" — is a useful pattern for converting checklist docs into living state docs without losing history. Worth reusing for future week-end retros.
 
 ---
 

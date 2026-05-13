@@ -34,6 +34,32 @@ Decide which founder owns which role and commit to it.
 
 Things done before code starts. None of these are coding tasks; all of them block code if missing.
 
+## Section 0 status — closed 2026-05-13
+
+Section 0 is closed. Summary of state at Week 1 start:
+
+- Repo live at github.com/Caeorta-AI/caeorta_app, working directory
+  `C:\Code\caeorta_app` (both founders cloned)
+- CLAUDE.md at repo root; all 11 project knowledge files mirrored to `docs/`
+- `docs/workdiary.md` is the living log of decisions, tool inventory, and
+  per-session entries — read latest entry at session start
+- Founder split decided: Muhammed Raslan (App), Sulaiman Shiyas Ali (Platform)
+- All external accounts created and in 1Password "Caeorta" vault:
+  GitHub org, Supabase (dev+prod, ap-south-1), Vercel, Expo org,
+  Anthropic Console (dev+prod keys), Sentry, PostHog, Cloudflare Registrar
+  (domain registered), Google Workspace, Resend, Framer
+- Founder agreement (YC template) signed
+- Both founders' local dev environments fully set up
+
+Deferred 2 weeks (funds reason, does not block Week 1-6):
+- Apple Developer enrollment ($99/year) — blocker for Week 7 iOS push
+  and Week 10 TestFlight; pay by Week 3 to have activation buffer
+- Google Play Console ($25) — blocker for Week 10 Play Internal Testing
+
+In flight at Week 1 start:
+- Designer kickoff brief drafted; to be sent ≥48h ahead of Week 1
+  designer session
+
 ### Accounts and services
 
 - [ ] GitHub organization for Caeorta (separate from personal). 2FA required.

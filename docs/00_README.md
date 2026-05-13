@@ -21,7 +21,7 @@ If a future Claude (or you) opens a fresh chat in this project, this is the map.
 | `08_12_Week_Action_Plan.md` | What to build, in what order, in which week |
 | `09_Risks_And_Mitigations.md` | Things likely to go wrong, watch list |
 | `10_Out_Of_Scope.md` | "Should we add X?" — check here first |
-| `workdiary.md` | Running log of development. Newest entry shows what was last done, current tool inventory, open items. Read the latest entry at the start of any non-trivial session; update at the end. |
+| `workdiary.md` | Living log; read latest entry at session start, append at session end |
 
 ---
 
