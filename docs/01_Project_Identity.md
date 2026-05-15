@@ -37,7 +37,7 @@ If a question crosses into these areas, ask which project should own it before a
 ## Stage when this project starts
 
 - **Week 1 starting 2026-05-18.** Repository exists at
-  github.com/Caeorta-AI/caeorta_app, both founders cloned locally.
+  github.com/Caeorta-io/caeorta_app, both founders cloned locally.
 - **Section 0 closed.** Accounts created, founder agreement signed,
   tooling set up. See `08_12_Week_Action_Plan.md` Section 0 status.
 - **Designer is engaged.** Figma in progress; kickoff brief drafted,

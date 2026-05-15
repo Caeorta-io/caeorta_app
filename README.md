@@ -14,7 +14,7 @@ fnm install 22 && fnm default 22
 corepack enable && corepack prepare pnpm@latest --activate
 
 # 2. Clone and install
-git clone https://github.com/Caeorta-AI/caeorta_app.git
+git clone https://github.com/Caeorta-io/caeorta_app.git
 cd caeorta_app
 pnpm install
 

@@ -37,8 +37,8 @@ Tools intentionally **not** installed (per project decisions or scope):
 
 ## Repository facts
 
-- **GitHub**: [Caeorta-AI/caeorta_app](https://github.com/Caeorta-AI/caeorta_app) — **private**
-- **Local working path**: `C:\Code\caeorta_app` (NOT OneDrive)
+- **GitHub**: [Caeorta-io/caeorta_app](https://github.com/Caeorta-io/caeorta_app) — **private** (org renamed from `Caeorta-AI` on 2026-05-15; see decisions log)
+- **Local working path** (App founder): `c:\Users\muham\Documents\#1_Caeorta_dev\caeorta_app` (NOT OneDrive; path updated 2026-05-15 — see decisions log)
 - **Default branch**: `main`
 - **Workspace manager**: pnpm 11 workspaces (`apps/*`, `packages/*`)
 - **Founder roles**:
@@ -68,6 +68,8 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-05-13 | **R18 logged: Apple Developer will eventually enroll as Individual, not Organization.** No D-U-N-S; Caeorta not yet incorporated. Acceptable for pilot; plan org transfer Weeks 12–16 post-incorporation. | No incorporated entity at enrollment time | `docs/09_Risks_And_Mitigations.md` R18 |
 | 2026-05-13 | **Week 1 start: Monday 2026-05-18.** | Next-Monday cadence from today (Wed 2026-05-13). Subject to founder revision. | `docs/01_Project_Identity.md` Stage section |
 | 2026-05-13 | **iOS app development paused for v1 pilot — Android-only confirmed.** Apple Developer enrollment is not a Week 1–12 blocker; it's a post-pilot requirement. Google Play Console remains a Week-10 dependency for the Android pilot distribution. Resolves the Section 0 status block contradiction. | Founder confirmation after I surfaced the conflict between the new Section 0 status text and the earlier Android-only decision. | `docs/08_12_Week_Action_Plan.md` Section 0 status block (deferred-items list rewritten) |
+| 2026-05-15 | **GitHub org renamed from `Caeorta-AI` to `Caeorta-io`.** Old org no longer accessible to App founder; new org created and MuhammedRaslan granted access. Repo recreated at `github.com/Caeorta-io/caeorta_app`; local history (4 commits) pushed as new initial remote main. | Founder decision (organizational rename; old org effectively retired for this project). | `README.md`, `CLAUDE.md` (indirect via docs), `docs/01_Project_Identity.md`, `docs/04_Repository_Structure.md`, `docs/08_12_Week_Action_Plan.md` Section 0 status block, this file's Repository facts |
+| 2026-05-15 | **App founder's working path updated to `c:\Users\muham\Documents\#1_Caeorta_dev\caeorta_app`** (was `C:\Code\caeorta_app` per session 1). Path appears to have moved between sessions; this entry captures current truth without rewriting historical session 1 / session 2 narration. | Path moved on App founder's machine; reason TBD by founder. Documenting the current reality. | `docs/08_12_Week_Action_Plan.md` Section 0 status block, this file's Repository facts |
 
 ---
 

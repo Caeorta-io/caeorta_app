@@ -2,7 +2,7 @@
 
 ## Monorepo layout
 
-Single repository: `caeorta_app`. Hosted on GitHub under the **Caeorta-AI** organization (not personal accounts).
+Single repository: `caeorta_app`. Hosted on GitHub under the **Caeorta-io** organization (not personal accounts).
 
 ```
 caeorta/

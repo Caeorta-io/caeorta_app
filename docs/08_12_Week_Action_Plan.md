@@ -38,8 +38,9 @@ Things done before code starts. None of these are coding tasks; all of them bloc
 
 Section 0 is closed. Summary of state at Week 1 start:
 
-- Repo live at github.com/Caeorta-AI/caeorta_app, working directory
-  `C:\Code\caeorta_app` (both founders cloned)
+- Repo live at github.com/Caeorta-io/caeorta_app, working directory
+  `c:\Users\muham\Documents\#1_Caeorta_dev\caeorta_app` on the App
+  founder's machine (Platform founder cloned to their own path)
 - CLAUDE.md at repo root; all 11 project knowledge files mirrored to `docs/`
 - `docs/workdiary.md` is the living log of decisions, tool inventory, and
   per-session entries — read latest entry at session start
@@ -90,7 +91,7 @@ In flight at Week 1 start:
 - [ ] VS Code (free, code.visualstudio.com)
 - [ ] Claude Code extension from VS Code Marketplace (official one by Anthropic)
 - [ ] Signed in with Anthropic account
-- [ ] Expo CLI
+- [ ] **OBSOLETE (Expo SDK 50+ uses `npx expo`; no global install needed):** ~~Expo CLI~~
 - [ ] Supabase CLI
 - [ ] **DEFERRED (post-pilot, Android-only v1):** ~~Xcode (Mac)~~
 - [ ] Android Studio (or, lighter: OpenJDK 17 + Android platform-tools for `adb` only; full IDE optional until emulator/native-debug needed)
