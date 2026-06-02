@@ -69,7 +69,7 @@ When asked to plan or scope something, complete means:
 
 ## Founder constraints to remember
 
-- **Both founders are embedded engineers.** They read code, can tweak it, but mobile dev is new territory. JS/TS is not native to them.
+- **Muhammed Raslan (App founder) is the sole code author** for this repo. Embedded engineering background; learning JS/TS and mobile dev. **Sulaiman Shiyas Ali (Platform founder) is the responsible owner for Platform-area decisions** (Supabase schema, RLS, Edge Functions, admin web, marketing site, CI/CD, OTA, push backend) and reviews all Platform PRs. Sulaiman codes outside this repo, not in it.
 - **Two people, full-time, 12-week target.** Effective working hours are bounded. Don't propose plans that require a third person.
 - **Designer is producing Figma in parallel.** Don't propose UI designs from scratch — defer to designer; ask what's in Figma when relevant.
 - **AI agent is being built in a parallel project.** Don't propose changes to the agent's internal logic; treat it as a service with a contract.

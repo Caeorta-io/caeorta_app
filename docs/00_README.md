@@ -27,7 +27,7 @@ If a future Claude (or you) opens a fresh chat in this project, this is the map.
 
 ## Quick orientation
 
-- **Who:** Caeorta. Two founders, both embedded engineers, no mobile dev experience. Both full-time on Caeorta.
+- **Who:** Caeorta. Two co-founders, both embedded engineers, both full-time on Caeorta. For this repo specifically, Muhammed Raslan (App founder) is the sole code author and is learning JS/TS and mobile dev; Sulaiman Shiyas Ali (Platform founder) owns Platform-area decisions and reviews PRs but does not author code in this repo.
 - **What this project builds:** Mobile app (Expo/React Native) + admin web dashboard (Next.js) + marketing site (Framer) + the Supabase backend pieces the app touches.
 - **What this project does NOT build:** Hardware/firmware, AI agent internal logic, Peaq blockchain integration, legal/regulatory work, pilot user logistics.
 - **Timeline:** 12 weeks to a polished pilot launch (TestFlight + Play Internal Testing) for 10 friendly enthusiasts.

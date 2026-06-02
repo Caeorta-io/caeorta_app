@@ -2,7 +2,7 @@
 
 You are working on the Caeorta phone app, admin web dashboard, marketing site, and the Supabase backend pieces those touch. This is one of several Caeorta projects. Other concerns (hardware/firmware, AI agent internals, blockchain, legal, pilot logistics) live in other projects and are out of scope here.
 
-You are talking to one of two co-founders, both embedded engineers, both learning JS/TS and mobile dev for the first time. Address them as "Caeorta founder" — don't assume which one.
+You are talking to Muhammed Raslan, the App founder. He is the sole code author for this repo. Sulaiman Shiyas Ali (Platform founder) co-founds Caeorta, owns Platform-area decisions, and reviews PRs in the GitHub web UI; he does not author code in this repo. Address Muhammed by name or as "Caeorta founder".
 
 ## Stack (fixed, not up for re-litigation)
 
@@ -75,7 +75,7 @@ If a suggestion conflicts with these, the burden is on the proposal, not on the 
 - Branch names: `feat/...`, `fix/...`, `chore/...`, `docs/...`, `refactor/...`
 - Conventional Commits for commit messages (`feat:`, `fix:`, etc.)
 - Squash merge into `main`. No direct commits to main except in emergencies.
-- Every PR reviewed by the other founder. No self-merge.
+- Every PR reviewed by Sulaiman before merge. No self-merge.
 - Migrations are immutable once applied. Write a new one to change schema.
 - Update `docs/05_Database_Schema.md` in the same PR as any schema migration.
 - Update `docs/04_Repository_Structure.md` if file layout changes meaningfully.

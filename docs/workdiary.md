@@ -42,11 +42,11 @@ Tools intentionally **not** installed (per project decisions or scope):
 - **Default branch**: `main`
 - **Workspace manager**: pnpm 11 workspaces (`apps/*`, `packages/*`)
 - **Founder roles**:
-  - **App** — Muhammed Raslan Thalassery: Expo mobile app, UI, AI agent output integration, design implementation
-  - **Platform** — Sulaiman Shiyas Ali: Supabase schema/RLS/Edge Functions, Next.js admin, Framer marketing, OTA, push backend, device pairing, CI/CD
+  - **App founder — Muhammed Raslan Thalassery:** owns and implements the Expo mobile app, UI, AI agent output integration, design implementation. Sole code author for this repo.
+  - **Platform founder — Sulaiman Shiyas Ali:** owns Supabase schema, RLS, Edge Functions, admin web (Next.js), marketing site (Framer), OTA, push backend, device pairing, CI/CD as decision-maker. Reviews all Platform-area PRs. Code in this repo is authored by Muhammed under Sulaiman's ownership.
 - **Founders' commit identities**:
-  - App (Muhammed Raslan): `user.name` = `Muhammed_Raslan` (repo-scoped — global `user.name` currently empty), `user.email` = `muhammedraslanthalassery@gmail.com` (global)
-  - Platform (Sulaiman Shiyas Ali): TBD when they make their first commit
+  - App (Muhammed Raslan): `user.name` = `Muhammed_Raslan` (repo-scoped); `user.name` = `Muhammed Raslan` (global, set 2026-05-15); `user.email` = `muhammedraslanthalassery@gmail.com` (global)
+  - Platform (Sulaiman Shiyas Ali): does not author commits in this repo; PR review only
 
 ---
 
@@ -70,6 +70,7 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-05-13 | **iOS app development paused for v1 pilot — Android-only confirmed.** Apple Developer enrollment is not a Week 1–12 blocker; it's a post-pilot requirement. Google Play Console remains a Week-10 dependency for the Android pilot distribution. Resolves the Section 0 status block contradiction. | Founder confirmation after I surfaced the conflict between the new Section 0 status text and the earlier Android-only decision. | `docs/08_12_Week_Action_Plan.md` Section 0 status block (deferred-items list rewritten) |
 | 2026-05-15 | **GitHub org renamed from `Caeorta-AI` to `Caeorta-io`.** Old org no longer accessible to App founder; new org created and MuhammedRaslan granted access. Repo recreated at `github.com/Caeorta-io/caeorta_app`; local history (4 commits) pushed as new initial remote main. | Founder decision (organizational rename; old org effectively retired for this project). | `README.md`, `CLAUDE.md` (indirect via docs), `docs/01_Project_Identity.md`, `docs/04_Repository_Structure.md`, `docs/08_12_Week_Action_Plan.md` Section 0 status block, this file's Repository facts |
 | 2026-05-15 | **App founder's working path updated to `c:\Users\muham\Documents\#1_Caeorta_dev\caeorta_app`** (was `C:\Code\caeorta_app` per session 1). Path appears to have moved between sessions; this entry captures current truth without rewriting historical session 1 / session 2 narration. | Path moved on App founder's machine; reason TBD by founder. Documenting the current reality. | `docs/08_12_Week_Action_Plan.md` Section 0 status block, this file's Repository facts |
+| 2026-06-02 | **Execution model clarified: Muhammed is sole code author for caeorta_app; Sulaiman reviews PRs and owns Platform-area decisions.** Role accountability (App vs Platform) preserved; only the execution split changes. | Founder bandwidth + working preference. | All Week 1+ work. Reflected in `CLAUDE.md`, `README.md`, `docs/00_README.md`, `docs/01_Project_Identity.md`, `docs/02_Working_Agreements.md`, `docs/04_Repository_Structure.md`, `docs/05_Database_Schema.md`, `docs/08_12_Week_Action_Plan.md`, `docs/09_Risks_And_Mitigations.md` (R14 reframed), this file's Repository facts |
 
 ---
 

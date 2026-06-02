@@ -4,7 +4,9 @@ This is the canonical build plan. It is **living** — when reality diverges, up
 
 ## Founder role split
 
-Decide which founder owns which role and commit to it.
+The split (decided 2026-05-13): Muhammed Raslan owns App; Sulaiman Shiyas Ali owns Platform.
+
+**Execution model:** Muhammed authors all code in this repo. Sulaiman reviews PRs in his role's area and owns the underlying decisions.
 
 ### Platform founder
 - Supabase schema, migrations, RLS
@@ -50,7 +52,7 @@ Section 0 is closed. Summary of state at Week 1 start:
   Anthropic Console (dev+prod keys), Sentry, PostHog, Cloudflare Registrar
   (domain registered), Google Workspace, Resend, Framer
 - Founder agreement (YC template) signed
-- Both founders' local dev environments fully set up
+- Muhammed's local dev environment fully set up; Sulaiman has GitHub web access for PR review
 
 Deferred (funds reason):
 - Apple Developer enrollment ($99/year) — **not a v1 blocker.** iOS is
@@ -85,7 +87,7 @@ In flight at Week 1 start:
 - [ ] Google Workspace email on domain (founders@, support@)
 - [ ] 1Password (or similar) shared vault for secrets
 
-### Tools installed on both founders' machines
+### Tools installed (Muhammed's machine — Sulaiman reviews PRs via the GitHub web UI, no local dev environment needed)
 
 - [ ] Node 22 LTS, pnpm 9+ (Node 20 is EOL as of 2026-04; current Active LTS is 22)
 - [ ] VS Code (free, code.visualstudio.com)
@@ -118,6 +120,8 @@ In flight at Week 1 start:
 ## Week 1 — Foundation and contracts
 
 The whole week is about deciding things on paper so weeks 2-12 don't get rewritten.
+
+> **Note (applies to all weeks):** "Platform founder" tasks describe Platform-area work owned by Sulaiman and implemented by Muhammed in this repo. "App founder" tasks describe App-area work owned and implemented by Muhammed. "Together" tasks are joint decisions, documentation, or testing — neither coded solely.
 
 ### Platform founder
 - [ ] Create both Supabase projects, enable extensions (pgcrypto, pg_cron, pgvector, pg_trgm)
@@ -153,7 +157,7 @@ The whole week is about deciding things on paper so weeks 2-12 don't get rewritt
 
 
 ### Definition of done — Week 1
-- Both founders can run the codebase locally
+- Muhammed can run the codebase locally
 - Both Supabase projects exist with v1 schema applied
 - App can log in via magic link against dev Supabase
 - AI Agent Contract doc exists and is shared with agent project
@@ -356,7 +360,7 @@ The week most likely to surface contract gaps. Plan for friction.
 
 The unglamorous week that decides whether the app feels professional.
 
-### Both, splitting screens
+### App founder
 - [ ] Every screen: empty, loading, error, offline states
 - [ ] Edge cases:
   - First user, device paired, no drives yet
@@ -499,7 +503,7 @@ Do not fill this week with new features.
 
 ### Daily
 - 15-min standup at fixed time
-- Push at least one PR per founder per day
+- Push at least one PR per day
 - Check Sentry for new crashes
 
 ### Weekly (Friday)
@@ -516,7 +520,7 @@ Do not fill this week with new features.
 
 ### Per-PR
 - Lint, typecheck, tests via GitHub Actions
-- One founder reviews other's PR
+- Sulaiman reviews PRs in the web UI; Muhammed merges after approval
 - Squash merge
 - EAS preview auto-built for mobile PRs
 
