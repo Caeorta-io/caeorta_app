@@ -6,7 +6,7 @@ This is the **app & web build** repo. Hardware, firmware, AI agent, and business
 
 ## Getting started
 
-Both founders should be running locally in under 30 minutes.
+Muhammed should be running locally in under 30 minutes. Sulaiman does not run this codebase locally; he reviews PRs in the GitHub web UI.
 
 ```sh
 # 1. Node + pnpm (one-time setup)
@@ -14,7 +14,7 @@ fnm install 22 && fnm default 22
 corepack enable && corepack prepare pnpm@latest --activate
 
 # 2. Clone and install
-git clone https://github.com/Caeorta-AI/caeorta_app.git
+git clone https://github.com/Caeorta-io/caeorta_app.git
 cd caeorta_app
 pnpm install
 
@@ -54,7 +54,7 @@ Read [`docs/00_README.md`](docs/00_README.md) first to find the right file for w
 
 - Branches: `feat/...`, `fix/...`, `chore/...`, `docs/...`, `refactor/...`
 - Commits: [Conventional Commits](https://www.conventionalcommits.org/)
-- PRs: reviewed by the other founder; squash-merged into `main`
+- PRs: reviewed by Sulaiman before merge; squash-merged into `main` by Muhammed after approval
 - Migrations are immutable once applied — write a new one and update [`docs/05_Database_Schema.md`](docs/05_Database_Schema.md) in the same PR
 
 ## License

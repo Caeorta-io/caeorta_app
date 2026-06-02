@@ -12,6 +12,8 @@ Two founders: Muhammed Raslan Thalassery and Sulaiman Shiyas Ali. Both embedded 
 
 Markets: GCC (UAE / Saudi Arabia) primary, India secondary.
 
+For the caeorta_app repository specifically, Muhammed is the sole code author; Sulaiman owns Platform-area decisions and reviews all Platform-area PRs.
+
 ## What this project builds
 
 The **mobile app, admin web dashboard, marketing site, and the Supabase backend pieces those touch** for the Caeorta v1 product. Specifically:
@@ -37,7 +39,9 @@ If a question crosses into these areas, ask which project should own it before a
 ## Stage when this project starts
 
 - **Week 1 starting 2026-05-18.** Repository exists at
-  github.com/Caeorta-AI/caeorta_app, both founders cloned locally.
+  github.com/Caeorta-io/caeorta_app. Local dev environment fully
+  set up on Muhammed's machine; Sulaiman has GitHub web access for
+  PR review.
 - **Section 0 closed.** Accounts created, founder agreement signed,
   tooling set up. See `08_12_Week_Action_Plan.md` Section 0 status.
 - **Designer is engaged.** Figma in progress; kickoff brief drafted,

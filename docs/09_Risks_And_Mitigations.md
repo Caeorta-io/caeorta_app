@@ -218,31 +218,33 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 
 ---
 
-## R14: Two founders' coding styles diverge, codebase becomes inconsistent
+## R14: Sole code author for caeorta_app — bus factor / unavailability
 
-**Risk:** Different patterns, conventions, file structures emerge between Platform and App halves. Future maintenance is harder.
+**Risk:** Muhammed is the only code author in this repo. If he is unavailable (illness, travel, burnout, departure), no one can ship code, fix urgent bugs, or cut releases. Sulaiman owns Platform-area decisions and reviews PRs but does not author code here and is not familiar with the codebase at the implementation level.
 
-**Likelihood:** Medium
+**Likelihood:** Low for short-term unavailability (days); medium across the 12-week build; rises again once the pilot is live and on-call obligations begin.
 
 **Mitigations:**
-- Shared ESLint + Prettier config (enforced in CI)
-- Shared TS config
-- Mutual PR review (no self-merge)
-- Friday retro covers any consistency drift
-- ADRs for any pattern decision worth remembering
+- Sulaiman reviews every PR and stays current on architectural shape, file layout, and non-obvious patterns even though he does not write code in this repo.
+- `CLAUDE.md` + `docs/` are deliberately rich so any future contributor (or Sulaiman in emergency) gets the full project brief loaded into a Claude Code session immediately.
+- ADRs for any non-obvious pattern decision so reasoning survives the author.
+- Strict TypeScript, Zod at boundaries, and tests on critical paths (auth, device pairing) reduce "only Muhammed knows what this does" zones.
+- EAS Update + EAS Build runbook lives in `docs/` so an emergency JS-only update can be cut without Muhammed if the build is already on `main`.
+- Friday retro includes a standing "what breaks if I disappear this week?" check whenever Muhammed has touched a critical path for the first time.
+- Long-term: as Caeorta grows past the pilot, hiring a second app developer is the durable fix. This risk explicitly stays open until that hire.
 
-**Status:** Active.
+**Status:** Active. Reframed 2026-06-02 from the prior R14 ("Two founders' coding styles diverge"), which is obsolete now that the execution model has collapsed to a single code author. The original divergence-of-style risk no longer applies.
 
 ---
 
 ## R15: AI tools generate plausible-but-wrong code that ships unnoticed
 
-**Risk:** Cursor and Claude Code generate code that compiles, passes tests, but has a subtle bug. Founders, learning mobile, don't catch it. Bug ships to pilot.
+**Risk:** Cursor and Claude Code generate code that compiles, passes tests, but has a subtle bug. Muhammed, learning mobile, doesn't catch it during authoring; Sulaiman, reviewing the PR, can miss it in mobile-specific territory where he is also non-expert. Bug ships to pilot.
 
 **Likelihood:** Medium
 
 **Mitigations:**
-- Mutual PR review (the other founder is reading too)
+- Sulaiman reviews every PR; second pair of eyes specifically catches AI-generated subtle bugs Muhammed missed during authoring
 - Strict TypeScript, no `any` types
 - Zod schema validation at boundaries (DB ↔ app, API ↔ UI)
 - Sentry catches runtime errors fast
@@ -262,7 +264,7 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 **Mitigations:**
 - The version check has a hard timeout (3 seconds); if it fails, app launches anyway
 - Manual rollback via EAS Update is documented and tested
-- Two founders both have access to publish updates
+- Both founders have EAS access; Sulaiman can publish an emergency rollback via the documented runbook if Muhammed is unavailable
 - Don't introduce force-update logic until Week 8 when it's been tested
 
 **Status:** Active. Specifically watched.

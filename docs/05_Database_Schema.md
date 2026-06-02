@@ -409,6 +409,6 @@ Enable in v1:
 
 ## Backups
 
-Supabase free tier does not include automatic backups. Until upgraded, the platform founder runs weekly `pg_dump` to a private encrypted backup location.
+Supabase free tier does not include automatic backups. Until upgraded, Sulaiman (Platform founder, owns Supabase admin access) runs weekly `pg_dump` to a private encrypted backup location.
 
 When upgraded to Supabase Pro (after pilot, before commercial launch), enable automatic point-in-time recovery.

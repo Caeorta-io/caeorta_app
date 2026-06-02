@@ -1,0 +1,72 @@
+# Normalize line endings to LF for all text files by default.
+# Windows-specific scripts keep CRLF. Binaries are explicit.
+* text=auto eol=lf
+
+# Source
+*.md      text eol=lf
+*.mdx     text eol=lf
+*.json    text eol=lf
+*.jsonc   text eol=lf
+*.js      text eol=lf
+*.jsx     text eol=lf
+*.ts      text eol=lf
+*.tsx     text eol=lf
+*.mjs     text eol=lf
+*.cjs     text eol=lf
+*.css     text eol=lf
+*.scss    text eol=lf
+*.html    text eol=lf
+*.yaml    text eol=lf
+*.yml     text eol=lf
+*.toml    text eol=lf
+*.sql     text eol=lf
+*.sh      text eol=lf
+*.svg     text eol=lf
+.gitignore     text eol=lf
+.gitattributes text eol=lf
+.nvmrc         text eol=lf
+.editorconfig  text eol=lf
+
+# Windows-specific scripts: must keep CRLF
+*.ps1     text eol=crlf
+*.psm1    text eol=crlf
+*.psd1    text eol=crlf
+*.bat     text eol=crlf
+*.cmd     text eol=crlf
+
+# Lock files: LF, never merge, mark generated
+pnpm-lock.yaml     text eol=lf -merge linguist-generated=true
+package-lock.json  text eol=lf -merge linguist-generated=true
+yarn.lock          text eol=lf -merge linguist-generated=true
+
+# Binary assets
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.webp    binary
+*.ico     binary
+*.bmp     binary
+*.pdf     binary
+*.mov     binary
+*.mp4     binary
+*.webm    binary
+*.zip     binary
+*.tar     binary
+*.gz      binary
+
+# Fonts
+*.woff    binary
+*.woff2   binary
+*.ttf     binary
+*.otf     binary
+*.eot     binary
+
+# Mobile build artifacts and signing material
+*.apk       binary
+*.aab       binary
+*.ipa       binary
+*.keystore  binary
+*.jks       binary
+*.p8        binary
+*.p12       binary

@@ -37,16 +37,16 @@ Tools intentionally **not** installed (per project decisions or scope):
 
 ## Repository facts
 
-- **GitHub**: [Caeorta-AI/caeorta_app](https://github.com/Caeorta-AI/caeorta_app) — **private**
-- **Local working path**: `C:\Code\caeorta_app` (NOT OneDrive)
+- **GitHub**: [Caeorta-io/caeorta_app](https://github.com/Caeorta-io/caeorta_app) — **private** (org renamed from `Caeorta-AI` on 2026-05-15; see decisions log)
+- **Local working path** (App founder): `c:\Users\muham\Documents\#1_Caeorta_dev\caeorta_app` (NOT OneDrive; path updated 2026-05-15 — see decisions log)
 - **Default branch**: `main`
 - **Workspace manager**: pnpm 11 workspaces (`apps/*`, `packages/*`)
 - **Founder roles**:
-  - **App** — Muhammed Raslan Thalassery: Expo mobile app, UI, AI agent output integration, design implementation
-  - **Platform** — Sulaiman Shiyas Ali: Supabase schema/RLS/Edge Functions, Next.js admin, Framer marketing, OTA, push backend, device pairing, CI/CD
+  - **App founder — Muhammed Raslan Thalassery:** owns and implements the Expo mobile app, UI, AI agent output integration, design implementation. Sole code author for this repo.
+  - **Platform founder — Sulaiman Shiyas Ali:** owns Supabase schema, RLS, Edge Functions, admin web (Next.js), marketing site (Framer), OTA, push backend, device pairing, CI/CD as decision-maker. Reviews all Platform-area PRs. Code in this repo is authored by Muhammed under Sulaiman's ownership.
 - **Founders' commit identities**:
-  - App (Muhammed Raslan): `user.name` = `Muhammed_Raslan` (repo-scoped — global `user.name` currently empty), `user.email` = `muhammedraslanthalassery@gmail.com` (global)
-  - Platform (Sulaiman Shiyas Ali): TBD when they make their first commit
+  - App (Muhammed Raslan): `user.name` = `Muhammed_Raslan` (repo-scoped); `user.name` = `Muhammed Raslan` (global, set 2026-05-15); `user.email` = `muhammedraslanthalassery@gmail.com` (global)
+  - Platform (Sulaiman Shiyas Ali): does not author commits in this repo; PR review only
 
 ---
 
@@ -68,6 +68,9 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-05-13 | **R18 logged: Apple Developer will eventually enroll as Individual, not Organization.** No D-U-N-S; Caeorta not yet incorporated. Acceptable for pilot; plan org transfer Weeks 12–16 post-incorporation. | No incorporated entity at enrollment time | `docs/09_Risks_And_Mitigations.md` R18 |
 | 2026-05-13 | **Week 1 start: Monday 2026-05-18.** | Next-Monday cadence from today (Wed 2026-05-13). Subject to founder revision. | `docs/01_Project_Identity.md` Stage section |
 | 2026-05-13 | **iOS app development paused for v1 pilot — Android-only confirmed.** Apple Developer enrollment is not a Week 1–12 blocker; it's a post-pilot requirement. Google Play Console remains a Week-10 dependency for the Android pilot distribution. Resolves the Section 0 status block contradiction. | Founder confirmation after I surfaced the conflict between the new Section 0 status text and the earlier Android-only decision. | `docs/08_12_Week_Action_Plan.md` Section 0 status block (deferred-items list rewritten) |
+| 2026-05-15 | **GitHub org renamed from `Caeorta-AI` to `Caeorta-io`.** Old org no longer accessible to App founder; new org created and MuhammedRaslan granted access. Repo recreated at `github.com/Caeorta-io/caeorta_app`; local history (4 commits) pushed as new initial remote main. | Founder decision (organizational rename; old org effectively retired for this project). | `README.md`, `CLAUDE.md` (indirect via docs), `docs/01_Project_Identity.md`, `docs/04_Repository_Structure.md`, `docs/08_12_Week_Action_Plan.md` Section 0 status block, this file's Repository facts |
+| 2026-05-15 | **App founder's working path updated to `c:\Users\muham\Documents\#1_Caeorta_dev\caeorta_app`** (was `C:\Code\caeorta_app` per session 1). Path appears to have moved between sessions; this entry captures current truth without rewriting historical session 1 / session 2 narration. | Path moved on App founder's machine; reason TBD by founder. Documenting the current reality. | `docs/08_12_Week_Action_Plan.md` Section 0 status block, this file's Repository facts |
+| 2026-06-02 | **Execution model clarified: Muhammed is sole code author for caeorta_app; Sulaiman reviews PRs and owns Platform-area decisions.** Role accountability (App vs Platform) preserved; only the execution split changes. | Founder bandwidth + working preference. | All Week 1+ work. Reflected in `CLAUDE.md`, `README.md`, `docs/00_README.md`, `docs/01_Project_Identity.md`, `docs/02_Working_Agreements.md`, `docs/04_Repository_Structure.md`, `docs/05_Database_Schema.md`, `docs/08_12_Week_Action_Plan.md`, `docs/09_Risks_And_Mitigations.md` (R14 reframed), this file's Repository facts |
 
 ---
 
@@ -197,6 +200,57 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 - The Edit tool tracks file state per absolute path. After copying files to `C:\Code\caeorta_app\`, even copies of files I'd read earlier (at the OneDrive path or the real-Documents path) required a fresh Read at the new path before Edit would accept them.
 - When a founder provides a structured list of doc edits with exact text, the right move is to match their text verbatim and flag contradictions separately, not to smooth conflicts silently. Doing so preserves their authorship over the project's source of truth.
 - Section 0 status block style — "summary at top, original checklist preserved below" — is a useful pattern for converting checklist docs into living state docs without losing history. Worth reusing for future week-end retros.
+
+---
+
+### 2026-05-15 — GitHub auth swap + Week 0 soft blockers (session 3)
+
+**Goal of session:** Switch VS Code's GitHub auth to the correct account, verify push, and clear App-founder soft blockers from session-1/2 open items so Week 1 can start cleanly.
+
+**Done:**
+- gh CLI confirmed already authed as `MuhammedRaslan`. Surfaced an org change the docs hadn't caught up to: `Caeorta-AI` is no longer accessible to MuhammedRaslan; a new org `Caeorta-io` has been created and MuhammedRaslan has been granted access.
+- VS Code GitHub session refreshed (sign-out + sign-in) as `MuhammedRaslan`.
+- Git global identity set: `user.name = "Muhammed Raslan"`, `user.email = muhammedraslanthalassery@gmail.com`. Repo-scoped `Muhammed_Raslan` (underscore) continues to override commits inside this repo, as session 1 set up.
+- `.gitattributes` added at repo root: LF normalization for source files; CRLF kept for `*.ps1`/`*.psm1`/`*.psd1`/`*.bat`/`*.cmd`; lock files marked `linguist-generated` with `-merge` so they collapse in PR diffs; explicit binary list for assets, fonts, and mobile signing material.
+- CLAUDE.md doc-path references fixed (11 references): `docs/##-name-with-dashes.md` (which didn't exist on disk) → `docs/##_Capitalized_Underscored.md` (the actual filenames). Closes the inconsistency flagged in session 1.
+- `docs/08_12_Week_Action_Plan.md` Section 0:
+  - Obsolete `Expo CLI` tooling-checklist line struck through with reason (`**OBSOLETE (Expo SDK 50+ uses ``npx expo``; no global install needed):** ~~Expo CLI~~`), matching the strikethrough-with-reason style used for deferred iOS items.
+  - Working path in the status block updated to current App-founder path.
+- Org rename `Caeorta-AI` → `Caeorta-io` applied to `README.md` clone URL, `docs/01_Project_Identity.md` Stage section, `docs/04_Repository_Structure.md` line 5, and `docs/08_12_Week_Action_Plan.md` Section 0 status block.
+- Workdiary: Repository facts updated (new org slug + new working path with provenance notes); two new decisions-log rows added (2026-05-15) for the rename and the path change. Historical session 1 / session 2 diary entries left intact — they record events of 2026-05-13 and shouldn't be retconned.
+- Old `Caeorta-AI/caeorta_app` returns 404 from MuhammedRaslan's view. Created fresh `Caeorta-io/caeorta_app` (private). Pushed local main (4 prior commits) as initial remote main; cut `chore/week0-soft-blockers` from main; committed all the above as `a6d6e85`; pushed branch.
+- PR #1 opened against `Caeorta-io/caeorta_app:main`, authored by `MuhammedRaslan` (verified via GitHub API). Ready for Sulaiman to review and squash-merge.
+
+**Tools / versions touched (no inventory changes; harness-shell caveats noted):**
+- The Claude Code harness shell doesn't auto-load fnm via `$PROFILE`, so it resolved `node` to the legacy system Node 24 (`C:\Program Files\nodejs\node.exe`) and couldn't find `pnpm` at all. Founder's interactive PowerShell with `$PROFILE` should still see fnm-managed Node 22.22.2 / pnpm 11.1.1 per session 1. **Verification step for founders: run `node --version` and `pnpm --version` in a fresh PowerShell window to confirm.**
+- Git 2.37.1 still emits `git: 'credential-manager' is not a git command` on push. Benign; push succeeds. Tracked since session 1.
+
+**Files / commits:**
+- Branch `chore/week0-soft-blockers`, commit `a6d6e85`: `.gitattributes` (new), `CLAUDE.md`, `README.md`, `docs/01_Project_Identity.md`, `docs/04_Repository_Structure.md`, `docs/08_12_Week_Action_Plan.md`, `docs/workdiary.md` (Repository facts + decisions log only).
+- This session-3 diary entry committed in a follow-up on the same branch.
+- PR #1: https://github.com/Caeorta-io/caeorta_app/pull/1
+
+**Decisions taken (also in Decisions log):**
+- 2026-05-15 — GitHub org renamed from `Caeorta-AI` to `Caeorta-io`. Repo recreated; local history pushed as new initial main.
+- 2026-05-15 — App founder's working path updated to `c:\Users\muham\Documents\#1_Caeorta_dev\caeorta_app` (was `C:\Code\caeorta_app` per session 1). Reason for the move TBD by founder.
+
+**Open items rolled forward:**
+- **Branch protection on `main` unavailable** on `Caeorta-io` under GitHub Free for private repos (`403 — Upgrade to GitHub Pro`). Convention-only enforcement per CLAUDE.md ("no direct commits to main except in emergencies") for now. Revisit when team scales or paid plan is otherwise justified.
+- Update Git from 2.37.1 to current (silences `credential-manager` deprecation noise on every push). `winget upgrade Git.Git` at convenience.
+- Google Play Console ($25 one-time) — blocker for Week 10 Play Internal Testing; aim to activate by end of Week 9.
+- Designer kickoff brief — send ≥48h before Week 1 designer session.
+- AI Agent Contract v0 — Week 1 deliverable.
+- Working-agreement decisions still pending: daily 15-min sync time, Friday 60-min retro time, branch strategy + PR review cadence, GitHub Issues + project board setup.
+- WhatsApp Business account setup.
+- Cleanup of `C:\Users\muham\Documents\Caeorta_App\` (original source) and `C:\Users\muham\OneDrive\Documents\Caeorta_App\` (empty stub) — destructive, still awaiting explicit go-ahead.
+- Long-term: move PowerShell `$PROFILE` out of OneDrive-redirected Documents.
+- Section 0 doc checklist items (preserved as history below the status block) — Platform founder confirmation of which are physically true; consider a future cleanup pass to checkmark them.
+
+**Notes / lessons:**
+- **PowerShell 5.1 + native `git` + `@'...'@` here-strings is unreliable when the message body contains double quotes.** Embedded `"Expo CLI"` terminated `-m` early; git interpreted the remainder as pathspecs and errored with `error: pathspec '...' did not match any file(s)`. Fix that always works: write the message to a file inside `.git/` (untracked by definition) and run `git commit -F .git/COMMIT_MSG.txt`. Same trick for PR bodies with `gh pr create --body-file`. Worth adopting as the default for any non-trivial multi-line message on Windows.
+- When external state (org slug, working path) drifts away from what living docs say, fold the doc fixes into whatever PR is already touching docs. Keeps `main` internally consistent and avoids a churny follow-up PR. Historical narration in dated diary entries stays as-is — it's a record of what happened, not a description of current state.
+- Branch protection on GitHub private repos requires a paid plan. Worth knowing before assuming "main is protected" as part of the workflow — at Caeorta's current scale, the two-founder PR-review convention is the enforcement mechanism, not GitHub rules.
+- Old org was 404 from the new account's view (not visible, not transferable, no admin access). For session 1's record-keeping discipline this is a useful lesson: when an org is recreated/renamed, the previous remote URL is dead from the new identity's perspective, and the cleanest recovery is a fresh `gh repo create --source=. --push` after removing the stale `origin` — local history is preserved end-to-end because the commits never lived on the dead remote, only on local + the dead remote.
 
 ---
 

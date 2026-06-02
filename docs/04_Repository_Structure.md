@@ -2,7 +2,7 @@
 
 ## Monorepo layout
 
-Single repository: `caeorta_app`. Hosted on GitHub under the **Caeorta-AI** organization (not personal accounts).
+Single repository: `caeorta_app`. Hosted on GitHub under the **Caeorta-io** organization (not personal accounts).
 
 ```
 caeorta/
@@ -135,7 +135,7 @@ Apps reference packages via workspace protocol:
 
 - `main` is always deployable. Web deploys automatically from main; mobile uses EAS Update for JS-only changes.
 - Feature branches: `feat/short-description`, `fix/short-description`, `chore/short-description`
-- PRs require at least one founder's review (other founder)
+- PRs in the App area are reviewed by Sulaiman before merge. PRs in the Platform area are reviewed by Sulaiman before merge. Both founders must agree on cross-cutting changes (schema, agent contract, CI architecture).
 - Squash merge into main
 - No direct commits to main except in genuine emergencies; document if it happens
 
@@ -161,7 +161,7 @@ Examples:
 Three environments. Strictly separated.
 
 ### Local development
-- Each founder runs Expo Go on their phone (or simulator/emulator) hitting their own local machine
+- Muhammed runs Expo Go on his phone (or simulator/emulator) hitting his local machine
 - Local machine connects to **dev Supabase**
 - Edge Functions tested locally via `supabase functions serve`
 - Migrations applied to dev Supabase via `supabase db push`
@@ -236,7 +236,7 @@ node: 22.x LTS
 pnpm: 11.x (latest stable; managed via corepack, not installed globally)
 ```
 
-Both founders use the same versions to avoid environment-specific bugs.
+Versions are pinned so Muhammed's local environment matches CI and any future contributor inherits the same setup.
 
 ## CI/CD pipeline
 
@@ -272,7 +272,7 @@ GitHub Actions handles:
 
 ## Local dev setup checklist
 
-A new contributor (or a founder on a new machine) should be able to follow this and be running in under 30 minutes:
+A new contributor (or Muhammed on a new machine) should be able to follow this and be running in under 30 minutes:
 
 1. Install Node 22 (current Active LTS as of 2026; Node 20 went EOL 2026-04), pnpm 9
 2. Clone repo
@@ -305,4 +305,4 @@ Subfolder `CLAUDE.md` files (e.g., `apps/mobile/CLAUDE.md`) are supported for
 area-specific conventions. Start with just the root one; add subfolder ones
 only if a real need emerges.
 
-Commit it to git. Both founders should get the same instructions.
+Commit it to git so every Claude Code session in this repo (current and future) gets the same instructions.
