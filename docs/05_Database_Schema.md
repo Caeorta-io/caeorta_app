@@ -293,8 +293,8 @@ Version gating. App queries on launch to check if forced update needed.
 
 | Column | Type | Notes |
 |---|---|---|
-| version | text | PK, e.g. '1.0.5' |
-| platform | text | 'ios' \| 'android' |
+| version | text | PK part, e.g. '1.0.5'. Composite PK with `platform` so the same version can ship on both stores. |
+| platform | text | PK part. 'ios' \| 'android' |
 | is_supported | bool | False = force update |
 | force_update_below_this | bool | True = block app launch below this version |
 | release_notes | text | |
