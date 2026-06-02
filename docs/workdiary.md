@@ -254,6 +254,59 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 
 ---
 
+### 2026-06-02 — Founder split reframe (session 4)
+
+**Goal of session:** Reframe the founder split across project docs to reflect reality — Muhammed Raslan is the sole code author for `caeorta_app`; Sulaiman Shiyas Ali is co-founder, owns Platform-area decisions, and reviews PRs but does not author code in this repo. Two-role accountability preserved; only the execution model changes.
+
+**Done:**
+- Reviewed all six explicitly-listed files (`docs/01`, `02`, `04`, `08`, `workdiary`, `CLAUDE.md`) plus spot-checked the auxiliary docs (`05`, `06`, `07`, `09`, `10`) for two-founder execution language. Surfaced findings outside the original scope before editing: `README.md`, `docs/00_README.md`, `docs/05_Database_Schema.md` (pg_dump), `docs/09_Risks_And_Mitigations.md` (R14 entire risk, plus R15 and R16 mitigations), and a handful of `docs/04` lines (local dev env, version-pinning rationale, CLAUDE.md sharing). Founder approved expanded scope to fold all of these into one PR.
+- Reframed 10 files in total in commit `06014f1`:
+  - `CLAUDE.md` — "talking to one of two co-founders" → explicit Muhammed-as-sole-author; PR-review line names Sulaiman.
+  - `README.md` — getting-started + PR conventions lines.
+  - `docs/00_README.md` — "Who" line.
+  - `docs/01_Project_Identity.md` — Founders section adds execution clarifier; Stage section reworded (Sulaiman has GitHub web access for PR review, not a local clone).
+  - `docs/02_Working_Agreements.md` — Founder constraints section. Intentionally left the "Two people, full-time, 12-week target" line untouched; honest team-size-vs-timeline retro is a separate conversation.
+  - `docs/04_Repository_Structure.md` — branch strategy, local dev env, version pinning rationale, CLAUDE.md sharing rationale, local dev checklist heading.
+  - `docs/05_Database_Schema.md` — pg_dump backup line names Sulaiman explicitly (he owns Supabase admin access).
+  - `docs/08_12_Week_Action_Plan.md` — role-split header (adds explicit "Execution model" statement), Section 0 status block, Section 0 tools heading, Week 1 annotation `> Note` callout that applies implicitly to all weeks, Week 1 Definition of Done, Week 8 `### Both, splitting screens` → `### App founder` (only Week-level "Both" that assumed dual coding), Operational rhythms (PR cadence + reviewer/merger split).
+  - `docs/09_Risks_And_Mitigations.md` — R14 rewritten in place from "Two founders' coding styles diverge" to "Sole code author for caeorta_app — bus factor / unavailability." R15 risk description and mitigation, and R16 mitigation, also reworded.
+  - `docs/workdiary.md` — Repository facts Founder roles rewritten; commit-identities updated (the now-stale "global user.name currently empty" was corrected to record the 2026-05-15 set value); decisions-log row added (2026-06-02).
+- PR #2 stacked on PR #1's `chore/week0-soft-blockers` because PR #1 was still open. Stacking kept the per-PR diff clean and made GitHub auto-collapse the diff once PR #1 merged.
+- Both PRs merged: PR #1 went in as fast-forward / rebase-merge (individual commits `a6d6e85`, `da0b2f4` on main); PR #2 came in via a merge commit (`0dd69f5 Merge pull request #2 ...`). Deviation from the squash-merge convention in `CLAUDE.md` / `docs/04` — flagged in this session's notes; fixable by restricting allowed merge strategies in the GitHub repo settings.
+
+**Tools / versions touched:** none — docs only. Tool inventory unchanged.
+
+**Files / commits:**
+- Branch `docs/reframe-founder-split` → PR #2: https://github.com/Caeorta-io/caeorta_app/pull/2
+- Commit `06014f1 docs: reframe founder split - Muhammed sole code author, Sulaiman PR reviewer`
+- Merge commit `0dd69f5 Merge pull request #2 from Caeorta-io/docs/reframe-founder-split`
+- This session-4 entry committed on `docs/session-4-workdiary` (separate small PR; couldn't add to the merged PR after the fact).
+
+**Decisions taken (also in Decisions log, row added in the merged PR):**
+- 2026-06-02 — Execution model clarified: Muhammed is sole code author for caeorta_app; Sulaiman reviews PRs and owns Platform-area decisions. Role accountability (App vs Platform) preserved; only the execution split changes.
+
+**Open items rolled forward:**
+- **Repo settings:** Enable "Allow squash merging only" in Caeorta-io/caeorta_app Settings → General → Pull Requests, so the squash-merge convention can't be deviated from accidentally. Branch protection on `main` itself is still unavailable on Free plan.
+- **Merged-branch cleanup:** Local and remote branches `chore/week0-soft-blockers` and `docs/reframe-founder-split` still exist; both can be deleted now that their PRs are merged. Destructive; awaiting explicit go-ahead. Suggested commands recorded in session 4 conversation.
+- **R14 mitigation work-out:** The new "sole code author bus factor" R14 lists mitigations that don't yet exist as artifacts — particularly the EAS Update + EAS Build emergency-release runbook for Sulaiman. Track as a Week-1-or-2 follow-up so the mitigation is real, not just listed.
+- Update Git from 2.37.1 to current (still emitting `credential-manager` deprecation noise on every push).
+- Google Play Console ($25 one-time) — pre-Week 10.
+- Designer kickoff brief — send ≥48h before Week 1 designer session.
+- AI Agent Contract v0 — Week 1 deliverable.
+- Working-agreement decisions still pending: daily 15-min sync time, Friday 60-min retro time, GitHub Issues + project board setup.
+- WhatsApp Business account setup.
+- Cleanup of `C:\Users\muham\Documents\Caeorta_App\` (original source) and `C:\Users\muham\OneDrive\Documents\Caeorta_App\` (empty stub) — destructive, still awaiting go-ahead.
+- Long-term: move PowerShell `$PROFILE` out of OneDrive-redirected Documents.
+- Section 0 doc checklist items (preserved as history below the status block) — confirm with Sulaiman which are physically true; consider checkmarking in a future cleanup pass.
+
+**Notes / lessons:**
+- **Stacked PRs work, even on a private repo without branch protection.** Cutting PR #2 off PR #1's branch (rather than `main`) kept each PR's diff focused on its own changes. Once PR #1 merged, PR #2's diff auto-collapsed. Worth using again whenever a follow-up touches the same files as an in-flight PR. The cost is a dependency: PR #2 can't merge before PR #1 (or before #1's content lands on main some other way).
+- **Rewriting a numbered risk in place** (R14: "Two founders' coding styles diverge" → "Sole code author bus factor") preserved the risk register slot while killing the obsolete framing. Used the Status line to record the rewrite date and what the old text said, so the audit trail isn't lost. Pattern reusable for any risk whose framing breaks when reality shifts.
+- **Squash-merge convention isn't enforced by GitHub Free private repos.** Both merge strategies (merge commit, rebase) were available at click time. The "Squash merge into main" convention in `CLAUDE.md` / `docs/04` was honored in spirit (both PRs in cleanly) but not in mechanism. The fix is in repo Settings, not in process discipline; restricting allowed merge strategies removes the deviation surface entirely.
+- **Fact-level mentions of "two founders" are not the same as execution claims.** When sweeping for two-author language, found ~6 mentions that describe shared access or shared usage rather than dual coding (1Password vault, Expo org membership, admin dashboard users, EAS access, Cursor pricing, cross-cutting agreement requirement). Left them in place. Worth distinguishing in future sweeps — `both founders` in the predicate (do X) is usually wrong under the new model; `both founders` as subject of access/usage is usually fine.
+
+---
+
 ## Template for future entries
 
 When starting a new entry, copy this scaffold to the bottom of the file. Keep prose tight; cross-reference the decisions log and tool inventory rather than re-describing.
