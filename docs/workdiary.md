@@ -307,6 +307,58 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 
 ---
 
+### 2026-06-02 (later same day) — Dev Supabase link + extensions migration + Realtime smoke (session 5)
+
+**Goal of session:** Link the Supabase CLI on the App founder's machine to dev (defer prod), enable the four Postgres extensions on dev via a migration, and run a Realtime smoke test against dev. Light Week-1 prep work; nothing schema-substantive.
+
+**Done:**
+- **Tool versions matched the inventory exactly.** Node 22.22.2, pnpm 11.1.1, supabase 2.98.2. Same harness-shell caveat as session 3: the assistant's PowerShell doesn't auto-load fnm via `$PROFILE`, so every command needed `fnm env --use-on-cd --shell powershell | Out-String | Invoke-Expression; fnm use 22 | Out-Null` inlined. App founder's interactive PowerShell still resolves correctly.
+- `pnpm install` at root — no-op against the zero-dep workspace. `pnpm-lock.yaml` got generated locally but was intentionally not committed; it'll come in with the first real dep.
+- **Supabase CLI authenticated and linked to dev.** App founder ran `supabase login` interactively in their own terminal (browser OAuth flow, no token in chat). Assistant ran `supabase link --project-ref pseksdzkrimtzamcuzzh` against `caeorta-dev` (Mumbai). `supabase projects list` shows `caeorta-dev` marked LINKED and `caeorta-prod` (ref `blfovbkrkrgyrzkuycxr`, also Mumbai) listed but not linked — prod link deferred to later this week per founder instruction.
+- **Extensions migration applied to dev.** Wrote `supabase/migrations/20260602125801_enable_extensions.sql` with the four `CREATE EXTENSION IF NOT EXISTS` statements from `docs/05_Database_Schema.md` § Extensions. `supabase db push --linked --dry-run` showed the single migration; `supabase db push --linked` (no dry-run) applied cleanly. **pg_cron did NOT need the Dashboard fallback the docs warn about** — Supabase managed permitted the `CREATE EXTENSION` via SQL with the project's `postgres` role. pgcrypto reported `42710 already exists, skipping` (Supabase preinstalls it; the `IF NOT EXISTS` clause handled it). Verified via Dashboard SQL `SELECT extname, extversion FROM pg_extension`: pgcrypto 1.3, pg_cron 1.6.4, pg_trgm 1.6, vector (pgvector) 0.8.0. `supabase migration list --linked` shows Local == Remote at `20260602125801`.
+- **Added `supabase/.gitignore`** with `.temp/` and `.branches/` so the CLI's per-machine scratch (linked-project state, version probes, pooler URL) stays out of git. Did not run `supabase init` — `supabase db push --linked` doesn't require `config.toml`; it uses `supabase/.temp/linked-project.json` instead.
+- **Realtime smoke test passed.** App founder created `_realtime_smoke` table in dev via Dashboard SQL editor + `ALTER PUBLICATION supabase_realtime ADD TABLE _realtime_smoke`. Assistant installed `@supabase/supabase-js` in `%TEMP%\caeorta-realtime-smoke\` (out-of-repo, no pollution), wrote a 30-line `subscribe.mjs` script using the dev publishable key, ran it as a background process. Subscription reached `SUBSCRIBED` at 0.48s; INSERT delivered to the client at 25.59s of script lifetime with full payload `{"id":2,"msg":"hello from smoke test","inserted_at":"2026-06-02T07:53:45.168574+00:00"}`. Eyeball latency: indistinguishable from instant. Temp dir wiped after.
+- **PR #4 opened.** `feat/enable-extensions` → `main`, branched off `origin/main` (not stacked on PR #3 — the migration is unrelated to the session-4 workdiary entry, no benefit to stacking). Commit `54f4018 feat(db): enable pgcrypto, pg_cron, pgvector, pg_trgm extensions`, two files, ten lines: the migration and `supabase/.gitignore`.
+
+**Tools / versions touched:** None — no installs/upgrades/replacements. Inventory table unchanged. Two upgrades surfaced for a future tooling pass: supabase CLI 2.98.2 → 2.104.0, pnpm 11.1.1 → 11.5.0.
+
+**Files / commits:**
+- Branch `feat/enable-extensions`, commit `54f4018` — `supabase/.gitignore` (new), `supabase/migrations/20260602125801_enable_extensions.sql` (new). PR #4 against `main`.
+- This session-5 diary entry committed on `docs/session-5-workdiary`, stacked on `docs/session-4-workdiary` (PR #3, still OPEN) because both touch this file. PR #5 targets `main`; diff auto-collapses to just the session-5 entry once PR #3 merges.
+
+**Decisions taken:** None this session — pure execution against existing decisions (Supabase, the extensions list, the migration discipline).
+
+**Open items rolled forward:**
+- **Drop temp table on dev** — App founder action: `DROP TABLE _realtime_smoke;` in Dashboard SQL editor. Surfaced mid-session; awaiting confirmation that it actually happened. Not load-bearing (table is small, RLS-default), but a clean-up loose end.
+- **Sulaiman review queue:** PR #3 (session-4 workdiary, OPEN since 2026-06-02 07:00 UTC), PR #4 (extensions migration, OPEN since 2026-06-02 13:xx UTC), PR #5 (this entry).
+- **Promote extensions migration to prod.** Link CLI to `caeorta-prod` (ref `blfovbkrkrgyrzkuycxr`), `supabase db push --linked`, verify with the same `SELECT FROM pg_extension`. Targeted later this week (Week 0 wrap, pre-Week-1).
+- **Possible doc edit:** `docs/05_Database_Schema.md` § Extensions — the assistant's task brief had a defensive note about pg_cron possibly needing a Dashboard fallback. Reality: it didn't. The schema doc itself doesn't carry that caveat (the doc just lists the four), so no change required. Lesson logged below for future task briefs.
+- **Repo settings:** "Allow squash merging only" still not set on `Caeorta-io/caeorta_app` (session-4 carry-over). Branch protection on `main` still requires a paid plan.
+- **Merged-branch cleanup:** `chore/week0-soft-blockers`, `docs/reframe-founder-split` still unpurged locally and remotely. After this session also: `docs/session-4-workdiary`, `docs/session-5-workdiary`, `feat/enable-extensions` once merged. Destructive, awaiting explicit go-ahead.
+- **R14 mitigation work-out:** EAS Update / EAS Build emergency-release runbook for Sulaiman. Still a paper mitigation.
+- Supabase CLI 2.98.2 → 2.104.0 — bundle with future tooling pass.
+- pnpm 11.1.1 → 11.5.0 — bundle similarly.
+- Update Git from 2.37.1 to current (still emitting `credential-manager` deprecation noise on every push; session-1 origin).
+- Google Play Console ($25 one-time) — pre-Week 10.
+- Designer kickoff brief — pre-Week 1.
+- AI Agent Contract v0 — Week 1 deliverable.
+- Working-agreement decisions still pending: daily 15-min sync time, Friday 60-min retro time, GitHub Issues + project board.
+- WhatsApp Business account setup.
+- Cleanup of `C:\Users\muham\Documents\Caeorta_App\` (original source) and `C:\Users\muham\OneDrive\Documents\Caeorta_App\` (empty stub) — destructive, awaiting go-ahead.
+- Long-term: move PowerShell `$PROFILE` out of OneDrive-redirected Documents.
+- Section 0 doc checklist items physical-truth pass with Sulaiman.
+
+**Notes / lessons:**
+- **pg_cron on Supabase managed enables via migration without superuser fuss.** The "you may need Dashboard fallback" warning in the task brief turned out to be unnecessary — Supabase grants the project `postgres` role enough to enable pg_cron via SQL, so it slots into a normal migration. Worth remembering when writing future task briefs: don't pre-warn about a Supabase-managed superuser limitation that the managed plan actually handles for you. Defensive caveats have a cost; they bias execution toward Dashboard side-channels that won't reproduce in CI.
+- **Supabase's new `sb_publishable_...` key works transparently with supabase-js v2.** The dev project's Settings → API panel now exposes the publishable+secret key pair (not the legacy `anon` + `service_role` JWTs). The supabase-js Realtime client accepted the publishable key without configuration changes; websocket auth succeeded and INSERT events flowed to the client. For docs that still reference the anon key (e.g., `docs/04_Repository_Structure.md` env-var sections naming `EXPO_PUBLIC_SUPABASE_ANON_KEY`), the env-var name can stay — the *value* is just the publishable key. No doc edit needed yet; flag if Supabase ever sunsets the old name.
+- **Out-of-repo temp dir for one-off scripts that pull deps.** Installing `@supabase/supabase-js` in `%TEMP%\caeorta-realtime-smoke\` kept the repo clean: no incidental `package.json` change, no pnpm-lock churn, no node_modules tracked or to `.gitignore`. Cleanup was `Remove-Item -Recurse -Force` on one directory. Reusable for any future one-off verification that pulls deps but shouldn't live in the repo. (For verifications using only the standard library or pre-installed tools, no temp dir needed — write straight into `%TEMP%` directly.)
+- **`run_in_background` + tailable output file is a clean async pattern.** Spawning the subscribe script in background and tailing its output file (`Read` mid-run) made human-in-the-loop timing painless: assistant could confirm "SUBSCRIBED" was reached before asking App founder to INSERT, and the script's exit notification triggered cleanup. Cheaper than polling.
+- **Human-in-the-loop async tests need ≥90s of runway, not 60s.** First subscribe run had a 60s window that closed before App founder's first INSERT landed in chat (their first SQL block had errored on a second invocation — recovery took longer than expected). The second run bumped to 120s caught the event cleanly at 25.59s. Lesson: when an external human action is on the critical path of a smoke test, default the listener to ≥120s and let it idle if the action completes early. Re-running was cheap because the script + temp dir survived; just bumped `RUN_MS` and re-launched.
+- **`supabase link` doesn't run a full `supabase init` scaffold.** It creates only `supabase/.temp/` with linked-project state. `supabase db push --linked` is happy with that — it doesn't need `config.toml`. If we later want `supabase functions serve` locally, or seed-data scaffolding, we'll need `supabase init` separately. Adding `supabase/.gitignore` manually now should merge cleanly with a future `supabase init`.
+- **Re-staging the same task brief for a different shell.** Two of this session's pre-flight steps (versions check, then every supabase call) had to re-run `fnm env … | Invoke-Expression; fnm use 22` because PowerShell state doesn't persist between Bash-tool invocations. This is identical to session 3's harness-shell observation; it's just now load-bearing on every CLI tool call rather than a one-time gotcha. Two reasonable long-term fixes: (a) install fnm-managed Node at a path the harness shell finds without `$PROFILE`, or (b) accept the inline-init pattern as standard. Doing (b) for now; revisit if it becomes annoying.
+
+---
+
 ## Template for future entries
 
 When starting a new entry, copy this scaffold to the bottom of the file. Keep prose tight; cross-reference the decisions log and tool inventory rather than re-describing.
