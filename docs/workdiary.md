@@ -75,6 +75,7 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-06-02 | **v2 community placeholders + `vehicle_modifications` shipped with minimum shape** — `id` PK + key FKs + `created_at` only, no domain columns. v2 will add columns via additive migrations (non-destructive). | Schema doc explicitly defers detail to v2 planning; locking in column shapes today would risk a destructive v2 migration. Founder approved via "Minimum: id PK + key FKs + created_at" pick. | `supabase/migrations/20260602130000_initial_schema.sql` (the seven tables: `vehicle_modifications`, `posts`, `comments`, `groups`, `group_members`, `events`, `event_attendees`) |
 | 2026-06-02 | **Community placeholders get `ENABLE ROW LEVEL SECURITY` with no policies** (deny-all to non-service-role) rather than RLS-off as the brief literally said. Defense-in-depth: tables exist with no UI in v1, but PostgREST exposes them by default; RLS-off would leave them readable/writable by any authenticated user. v2 adds policies additively when community UI ships. | Brief's "skip community placeholders" interpreted as a v1-no-policies goal, not a literal RLS-off goal. Founder approved via "Recommended" pick. | `supabase/migrations/20260602150000_rls_policies.sql` — Community placeholders section |
 | 2026-06-02 | **`devices` UPDATE policy is row-level only; column-level restriction deferred to a Week-2 follow-up migration.** Owner can UPDATE any column on owned devices rows at the DB level; columns the owner should not write (`device_secret`, `claimed_by_user_id`, `claimed_at`, `created_at`, `last_seen_at`, `firmware_version`, `last_sync_at`) are application-layer-enforced for now. Column-level GRANT/REVOKE waits for `mint_device_token` + Edge Function column-write contract to firm up. | Postgres RLS is row-level only; column scope is a separate concern. Locking column GRANTs in before the device-JWT contract is built risks a fixup migration in Week 2. Founder approved via "Recommended" pick. | `supabase/migrations/20260602150000_rls_policies.sql` — `devices` UPDATE policy comment + this row |
+| 2026-06-03 | **Captured 13 working-pattern items into `docs/conventions.md`, `docs/05_Database_Schema.md`, `docs/04_Repository_Structure.md`, `CLAUDE.md`.** Codifies patterns that emerged through Week 1 sessions: RLS regression suite, `supabase/seed.sql` plan, dev→prod migration promotion ritual, spec-deviation protocol, stacked-PR discipline, squash-only repo-settings enforcement, self-merge ban, `ask_user_input_v0` usage, scope-mismatch protocol, PR description template, PR queue management, test coverage triage. | Patterns were lived through Weeks 0–1 but not yet written down; future sessions inherit them without re-derivation. | `docs/conventions.md` (new), `docs/05_Database_Schema.md` (Migration discipline § Promoting a migration to prod, new Testing § and Test fixtures §), `docs/04_Repository_Structure.md` (Branch strategy § squash-only enforcement), `CLAUDE.md` (Behavior expectations + new Claude Code never self-merges section) |
 
 ---
 
@@ -454,6 +455,55 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 - **`WITH CHECK (false)` policies are clearer than no-INSERT-policy** for tables where INSERT is intentionally blocked. With RLS enabled, no-INSERT-policy also blocks INSERTs, but the explicit `WITH CHECK (false)` documents intent and shows up in `pg_policies`. Used for `users`, `vehicles`, `devices` — three tables where Edge Functions own the INSERT path.
 - **PostgreSQL RLS row-level vs column-level distinction matters for spec interpretation.** The brief's "UPDATE limited fields by owner" reads like a column-level constraint, which RLS can't enforce directly. The judgment call (row-level now + flag, vs lock in column GRANTs before the device contract exists) is a real spec-vs-mechanism gap. Surfaced via AskUserQuestion before writing SQL — pattern repeats from session 6's placeholder shape question. When the brief implies a constraint Postgres RLS can't express alone, that's a question to surface, not a license to silently weaken the constraint.
 - **Stacked-PR chain length is now five (PR #6, #7, #8, #9 open against various bases).** Each PR's base resolves to the previous in its chain; once a base merges, the child's base auto-rebases to main. No conflicts because the two stacks (workdiary vs schema) touch different file trees. Worth a brief sanity check before opening PR #10 (whenever it comes) — confirm GitHub still resolves the chain cleanly. If chain depth ever stalls reviews, an alternative is "merge then rebase the children" but that requires Sulaiman to merge in dependency order.
+
+---
+
+### 2026-06-03 — Week 1 working-pattern conventions captured (session 8)
+
+**Goal of session:** Codify 13 working-pattern items that emerged across Week 1 sessions but weren't yet in `docs/`, so future Claude Code sessions inherit them without re-derivation.
+
+**Done:**
+- **Conflict pre-check.** Before writing, checked the three areas the brief flagged as possible-overlap risks:
+  - PR description template (Item 11) vs existing `CLAUDE.md` / `docs/02`: no collision. `docs/02` has a "what 'complete' looks like for a build task" checklist (deliverable / DoD / ownership / dependencies / blocks / time estimate / risks), which is build-scoping, not PR-description. The new PR template covers a different slot.
+  - `ask_user_input_v0` (Item 8): `docs/02` line 22 already mentions the tool; CLAUDE.md didn't. New CLAUDE.md text adds the "2–4 options" and "≤3 questions per call" constraints, reinforcing 02 without restating it.
+  - Self-merge ban (Item 7): CLAUDE.md line 78 had "No self-merge." as a generic workflow rule; new section sharpens it specifically to Claude Code agent behavior ("never merges PRs even when asked, session ends after PR open"). Reinforces, doesn't conflict.
+- **Created `docs/conventions.md`** with 5 sections: Spec deviations (item 4), PR stacking (item 5), PR description template (item 11), PR queue management (item 12), Test coverage in early build (item 13). One-line intro: "Working patterns and conventions that span multiple areas. Updated as new patterns emerge."
+- **Updated `docs/05_Database_Schema.md`:**
+  - Expanded **Migration discipline** with a new **Promoting a migration to prod** subsection (8-step ritual + an "Currently outstanding promotions" callout for the three dev-only migrations).
+  - Added **Testing** section at the end with the 12-step pg-side RLS isolation suite. Each test reconstructed from `supabase/migrations/20260602150000_rls_policies.sql` (not invented), grouped: authenticated-user scoping (tests 1–3), direct-INSERT blocks (4–6), cross-user write attempts (7), anon-role gating (8–9), deny-all on service-role-only tables (10–11), service-role bypass (12). Each entry has the query body, expected result, and a one-line note on what would automate it.
+  - Added **Test fixtures** section right after Testing — `supabase/seed.sql` plan, what goes in v1, when to build (Week 2 after Edge Functions land), and an open question about whether to keep PR-#8's ad-hoc fixtures or wipe and reseed.
+- **Updated `docs/04_Repository_Structure.md`** Branch strategy with the squash-only repo-settings enforcement procedure (item 6).
+- **Updated `CLAUDE.md`** Behavior expectations with:
+  - `ask_user_input_v0` usage (item 8).
+  - Scope-mismatch protocol — flag conflicts between session prompt and docs rather than silently re-interpreting (item 9).
+  - Cross-link to `docs/conventions.md` § Spec deviations (item 10).
+  - New top-level section **Claude Code never self-merges** between Behavior expectations and Scope discipline (item 7).
+- **Updated workdiary** — this entry + a decisions-log row above.
+
+**Tools / versions touched:** None — docs only.
+
+**Files / commits:**
+- Branch `docs/week1-conventions`, stacked on `docs/session-7-workdiary` (PR #9 still OPEN). Single commit per the task brief: `docs: capture Week 1 working-pattern conventions (RLS tests, seed.sql plan, migration promotion, PR discipline, etc.)`.
+- Files: `docs/conventions.md` (new), `docs/05_Database_Schema.md`, `docs/04_Repository_Structure.md`, `CLAUDE.md`, `docs/workdiary.md`.
+
+**Decisions taken (also in Decisions log):**
+- 2026-06-03 — Captured 13 working-pattern items into `docs/conventions.md`, `docs/05`, `docs/04`, `CLAUDE.md`.
+
+**Open items rolled forward:**
+- None new from this session. Carry-forwards from session 7 stand unchanged:
+  - **Sulaiman review queue:** PR #6, #7, #8, #9 OPEN; this session adds a sixth (the conventions PR), stacked on #9. Workdiary stack now #7 → #9 → this PR; schema stack #6 → #8.
+  - **Promote outstanding migrations to prod:** extensions (PR #4 — merged on main, applied on dev, not prod), initial schema (PR #6 — open), RLS (PR #8 — open). Bundle into one prod-link session per the new ritual in `docs/05`.
+  - **`supabase/seed.sql`** — Week 2, after Edge Functions land.
+  - **`devices` column-scope follow-up migration** — Week 2, after `mint_device_token` contract firms up.
+  - **Device JWT claim format finalization** — Week 2 (`mint_device_token`).
+  - **`agent_role` Postgres read-only role** — separate migration with AI Agent Contract v0.
+  - Long-running carry-overs unchanged from session 7.
+
+**Notes / lessons:**
+- **"Conflict check before writing" is the right opening move for a multi-file docs PR.** The brief explicitly listed three overlap risks; running through each before touching files surfaced that they all reinforced rather than collided. Would have been easy to add duplicate language otherwise (e.g. an `ask_user_input_v0` paragraph in CLAUDE.md that nearly word-for-word matches the one already in `docs/02`). Keep the brief's "ASK BEFORE PROCEEDING" list as a literal pre-flight checklist on future docs PRs of this shape.
+- **Reconstruct, don't invent, when documenting tests.** The brief was explicit: "RECONSTRUCT the queries from the schema doc and the RLS migration file, not invent them." Source was the actual RLS migration file (read via `git show`) plus the test script run in session 7 (since deleted with the temp dir). Every test in the new "Testing" section maps to a specific policy in the migration and a specific assertion that was actually observed pass on dev. Mark "TODO" if reconstruction isn't possible rather than guessing — none needed here because the migration file is complete and the session 7 script was straightforward to redrive.
+- **`docs/conventions.md` is the right home for cross-cutting patterns.** Items 4/5/11/12/13 don't belong in any single numbered doc — they span schema, CI/CD, PR discipline, session conduct. A separate `conventions.md` keeps them findable without bloating any one numbered file. Worth re-checking on future sessions whether new conventions accumulate or whether some should graduate to a numbered doc (e.g. PR template might eventually become its own `.github/pull_request_template.md`).
+- **One PR, five files, no new code.** Docs-only PRs of this size are exempt from the "queue depth ≤ 3 code PRs" rule that this very PR codifies, but worth tracking the meta-pattern: a single docs PR that captures a batch of session learnings is much easier to review than five small ones because the reviewer can read it linearly. The "Workdiary-only PRs can be brief" carve-out in the new PR template covers the smaller docs PRs; this kind of "captured-conventions" PR should follow the full template.
 
 ---
 

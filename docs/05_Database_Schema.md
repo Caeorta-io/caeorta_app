@@ -393,9 +393,25 @@ Enable in v1:
 - File naming: `YYYYMMDDHHMMSS_descriptive_name.sql`
 - Migrations are immutable once applied. Never edit an applied migration; write a new one.
 - Apply to dev with `supabase db push --linked`
-- Promote to prod manually after dev verification
+- Promote to prod manually after dev verification (see **Promoting a migration to prod** below).
 - Generate TS types after every migration: `supabase gen types typescript --linked > packages/supabase/database.types.ts`
 - Update `docs/schema.md` (this file) in the same PR
+
+### Promoting a migration to prod
+
+1. Confirm the migration has been on dev for at least 24 hours (use this as a smoke window for any RLS or trigger interactions to surface).
+2. Run `supabase link --project-ref <prod-ref>` (the prod ref is in 1Password; link only when promoting, then unlink).
+3. `supabase db push --linked --dry-run` and read the entire output. STOP if anything looks wrong (extra DROPs, unexpected ALTERs).
+4. If the migration adds policies or triggers, mentally simulate: "does this change behavior for any currently-running query?" Document the conclusion in the prod-promotion entry of the workdiary.
+5. `supabase db push --linked`
+6. Re-link back to dev: `supabase link --project-ref <dev-ref>`.
+7. Regenerate types from dev to keep `packages/supabase/src/database.types.ts` in sync (no-op if dev and prod schemas are identical, which they should be after promotion).
+8. Workdiary entry: log the prod promotion with date, migration filename, and any anomalies observed.
+
+**Currently outstanding promotions** (dev-only at time of writing):
+- Extensions migration (PR #4 — merged to main, applied on dev, not on prod)
+- Initial schema migration (PR #6 — open)
+- RLS policies migration (PR #8 — open)
 
 ## Data retention
 
@@ -412,3 +428,153 @@ Enable in v1:
 Supabase free tier does not include automatic backups. Until upgraded, Sulaiman (Platform founder, owns Supabase admin access) runs weekly `pg_dump` to a private encrypted backup location.
 
 When upgraded to Supabase Pro (after pilot, before commercial launch), enable automatic point-in-time recovery.
+
+## Testing
+
+The RLS migration (PR #8) is verified against a 12-step pg-side isolation suite. Tests are currently run manually via `supabase db query --linked -f <file>` against the dev project — the Management API runs each invocation against a role that bypasses RLS, so each test impersonates a target role with `SET LOCAL ROLE` + `set_config('request.jwt.claims', …, true)` inside a transaction, captures the result into a temp table, then `RESET ROLE` and selects from the temp table at the end. The Dashboard SQL editor can run the same scripts (founder action) when the CLI path is unavailable.
+
+The suite assumes the fixtures from the **Test fixtures** section below (three test users with UUIDs `<u1>` / `<u2>` / `<u3>`, one vehicle each with ids `<v1>` / `<v2>` / `<v3>`). When the suite is automated (see Test fixtures → when to build), it lands as `supabase/tests/rls.sql` and runs via `supabase test db` or a CI job.
+
+### Authenticated-user scoping
+
+1. **`user1 SELECT vehicles` — owner-scope visibility**
+   - Verifies: an authenticated user sees only their own vehicles via `vehicles_select_own` (`USING (owner_user_id = auth.uid())`).
+   - Today:
+     ```sql
+     SET LOCAL ROLE authenticated;
+     PERFORM set_config('request.jwt.claims',
+       '{"sub":"<u1>","role":"authenticated"}', true);
+     SELECT count(*), string_agg(nickname, ',') FROM public.vehicles;
+     -- expect: count=1, names='user1 car'
+     ```
+   - Automation: same query in `supabase/tests/rls.sql`; assertion via `pgtap` or a `RAISE EXCEPTION` if the expected shape doesn't match.
+
+2. **`user2 SELECT vehicles` — owner-scope visibility (second user, to rule out single-user-only false positives)**
+   - Verifies: scoping is per-user, not "show first user".
+   - Today: identical to test 1 with `sub="<u2>"`, expect `nickname='user2 car'`.
+   - Automation: parameterized loop over the three fixture users.
+
+3. **`user1 SELECT users` — own profile only**
+   - Verifies: `users_select_own` (`USING (id = auth.uid())`) hides other users' rows.
+   - Today:
+     ```sql
+     SET LOCAL ROLE authenticated;
+     PERFORM set_config('request.jwt.claims',
+       '{"sub":"<u1>","role":"authenticated"}', true);
+     SELECT count(*), max(display_name) FROM public.users;
+     -- expect: count=1, name='rls test 1'
+     ```
+
+### Direct-INSERT blocks (Edge-Function-only writes)
+
+4. **`user1 direct INSERT vehicles` — blocked**
+   - Verifies: `vehicles_no_direct_insert` (`WITH CHECK (false)`) prevents direct user inserts. INSERT path lives in `pair_device` Edge Function (service role).
+   - Today:
+     ```sql
+     SET LOCAL ROLE authenticated;
+     PERFORM set_config('request.jwt.claims',
+       '{"sub":"<u1>","role":"authenticated"}', true);
+     INSERT INTO public.vehicles (owner_user_id, nickname)
+     VALUES ('<u1>', 'should fail');
+     -- expect: ERROR new row violates row-level security policy
+     ```
+   - Automation: wrap in `BEGIN … EXCEPTION WHEN OTHERS THEN … END` and assert the exception fired with the expected `SQLERRM`.
+
+5. **`user1 cross-owner INSERT vehicles` — blocked**
+   - Verifies: even spoofing `owner_user_id` to another user's id doesn't bypass `WITH CHECK (false)`. Covers an attempt to write to another user's namespace via owner spoofing.
+   - Today: same as test 4 but `VALUES ('<u2>', 'cross-owner hijack')`; expect the same RLS error.
+
+6. **`authenticated INSERT firmware_versions` — blocked**
+   - Verifies: `firmware_versions` has no INSERT policy, so RLS denies the insert. Writes are ops-only via service role.
+   - Today:
+     ```sql
+     SET LOCAL ROLE authenticated;
+     PERFORM set_config('request.jwt.claims',
+       '{"sub":"<u1>","role":"authenticated"}', true);
+     INSERT INTO public.firmware_versions (version, binary_url, checksum)
+     VALUES ('99.0.0', 'https://example.com/fake', 'fake');
+     -- expect: ERROR new row violates row-level security policy
+     ```
+
+### Cross-user write attempts
+
+7. **`user1 cross-user UPDATE` — returns 0 rows**
+   - Verifies: `vehicles_update_own` `USING (owner_user_id = auth.uid())` hides user2's vehicle from user1's UPDATE scope. The UPDATE doesn't error; it simply matches no rows.
+   - Today:
+     ```sql
+     SET LOCAL ROLE authenticated;
+     PERFORM set_config('request.jwt.claims',
+       '{"sub":"<u1>","role":"authenticated"}', true);
+     WITH upd AS (
+       UPDATE public.vehicles SET nickname='HIJACK' WHERE id='<v2>' RETURNING id
+     )
+     SELECT count(*) FROM upd;
+     -- expect: 0
+     ```
+   - Automation: same query; assert the result is exactly 0 (positive count = test fails — the row was visible and updatable).
+
+### Anon-role gating
+
+8. **`anon SELECT app_versions` — allowed**
+   - Verifies: `app_versions_select_public` (`TO authenticated, anon USING (true)`) allows pre-login force-update checks.
+   - Today:
+     ```sql
+     SET LOCAL ROLE anon;
+     SELECT count(*) FROM public.app_versions;
+     -- expect: succeeds (rows >= 0)
+     ```
+   - Automation: assert no exception; row count irrelevant.
+
+9. **`anon SELECT vehicles` — 0 rows**
+   - Verifies: no `vehicles` policy has `anon` in its `TO` list, so RLS denies the read entirely (returns 0 rows, no error).
+   - Today: `SET LOCAL ROLE anon; SELECT count(*) FROM public.vehicles;` → expect 0.
+
+### Deny-all on service-role-only tables
+
+10. **`authenticated SELECT audit_log` — 0 rows**
+    - Verifies: `audit_log` has RLS enabled with no policies; non-service-role roles get nothing.
+    - Today:
+      ```sql
+      SET LOCAL ROLE authenticated;
+      PERFORM set_config('request.jwt.claims',
+        '{"sub":"<u1>","role":"authenticated"}', true);
+      SELECT count(*) FROM public.audit_log;
+      -- expect: 0
+      ```
+
+11. **`authenticated SELECT posts` — 0 rows (community deny-all)**
+    - Verifies: v2 community placeholders (`posts`, `comments`, `groups`, `group_members`, `events`, `event_attendees`) have RLS enabled with no policies as defense-in-depth; deny-all for authenticated/anon until v2 ships UI + policies.
+    - Today: same as test 10 with `FROM public.posts`; expect 0.
+
+### Service-role bypass
+
+12. **`service-role/migration sees all 3 vehicles` — RLS bypass**
+    - Verifies: the migration role (or `service_role`, used by Edge Functions) bypasses RLS entirely. Critical for confirming that Edge-Function write paths (`pair_device`, `device_sync_*`, etc.) won't be blocked once they exist.
+    - Today: with no `SET ROLE` (the default `supabase db query --linked` role), `SELECT count(*) FROM public.vehicles` returns 3.
+    - Automation: TODO once we extend the test suite to cover every service-role-only INSERT path table-by-table (currently only `vehicles` is asserted via bypass; expanding to every service-role-only table is a Week-2 task once `supabase/tests/rls.sql` exists).
+
+### Deferred until Week 2 infrastructure exists
+
+The following classes of test require infrastructure that doesn't exist yet; they are explicitly listed here so we don't forget:
+
+- **Device-JWT INSERT/UPSERT paths** (`telemetry`, `current_state`, `sync_sessions`, `dtcs`, `device_events`): need `mint_device_token` to issue a JWT with a `device_id` claim. Once available, test that the device JWT can write only to its own vehicle's rows and cannot cross-vehicle insert.
+- **`current_state` UPSERT semantics under device JWT**: paired INSERT-WITH-CHECK + UPDATE-USING + UPDATE-WITH-CHECK policies must all pass for `INSERT … ON CONFLICT DO UPDATE`. Testable end-to-end only when a real device JWT exists.
+- **`agent_role` read-only verification**: TODO until the AI Agent Contract v0 lands and the role is created in a follow-up migration.
+
+## Test fixtures
+
+We need a `supabase/seed.sql` file so dev can be reset to a known-good state with `supabase db reset --linked`. Until then, the dev project carries the three ad-hoc fixtures inserted during PR #8 verification (UUIDs `11111111-…` / `22222222-…` / `33333333-…`), which can drift.
+
+**What goes in `supabase/seed.sql` v1**:
+
+- 3 test users (auth.users + public.users rows) with stable UUIDs and obviously-fake emails (`rls-test-1@caeorta.local` etc.).
+- 3 test vehicles, one per user, each paired with a device.
+- 1 unclaimed device (to test pairing flow).
+- A handful of fake telemetry rows per vehicle (enough to exercise the per-vehicle index path).
+- **No diagnostic outputs.** The AI Agent Contract v0 isn't finalized; seeding diagnostics now would lock in a shape we'd churn later.
+
+Use `INSERT … ON CONFLICT DO NOTHING` everywhere so the seed file is safe to re-run and works whether or not the existing PR-#8 fixtures are still present.
+
+**When to build it**: Week 2, after the first Edge Functions land. The seed file should exercise the device-JWT and pairing paths end-to-end (otherwise it's just a static dump that doesn't catch policy regressions in those flows).
+
+**Open question — deferred to Week 2**: do we keep the existing 3 ad-hoc fixtures in dev when `seed.sql` arrives, or wipe and reseed? The seed file's `ON CONFLICT DO NOTHING` clauses make both options safe; the decision is whether we want a clean slate or continuity with the PR-#8 fixtures already used in mobile-auth testing. Document the choice in the workdiary entry that introduces `seed.sql`.
