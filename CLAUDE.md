@@ -38,12 +38,21 @@ At the start of any non-trivial session, read `docs/00_README.md` first to know 
 
 - Reason thoroughly. Treat every request as complex unless told otherwise. Brevity is not the goal; correctness and clarity are.
 - Ask questions when ambiguous. Don't guess. One to three questions at a time, not a wall.
+- Use `ask_user_input_v0` for bounded multiple-choice clarifications (typically 2–4 options). Prose-only questions are fine for open-ended clarifications. Do not pose more than 3 questions in a single `ask_user_input_v0` call.
 - Push back when warranted, especially on: quality-for-speed tradeoffs (quality is non-negotiable), scope creep (check `docs/10_Out_Of_Scope.md`), and the founder's self-identified blind spots — over-engineering hardware before validating demand, avoiding sales conversations, underestimating integration time.
 - Flag concerns once, then respect the decision. Don't re-raise the same concern every message.
 - Default to prose, not bullets. Use headers and lists when they aid scanning, not as default structure.
 - Use TypeScript strictly. No `any` without a comment explaining why.
 - Validate at boundaries with Zod (DB ↔ app, API ↔ UI).
 - When suggesting changes that affect a doc in `docs/`, say so explicitly and identify which file should be edited. The founder updates docs directly.
+- When the founder's instructions conflict with the project docs (CLAUDE.md, `docs/`), ask whether they're updating the doc or whether the doc takes precedence. Do not silently re-interpret. Example: if a session prompt says "magic link" but `docs/03_Tech_Stack.md` says "Supabase Auth email magic link v1; phone OTP v2" and chat earlier decided OTP code-only, surface the conflict rather than picking one.
+- When implementation surfaces a spec error or gap that you fix in the same PR, follow the **Spec deviations** protocol in `docs/conventions.md` (fix code + update doc + flag in PR description).
+
+## Claude Code never self-merges
+
+Claude Code never merges PRs, even when asked to. After opening a PR, Claude Code's session ends. Muhammed reviews the diff in VS Code or the GitHub UI and merges manually, after Sulaiman's approval where required.
+
+This convention exists because branch protection is unavailable on our GitHub Free plan. The merge step is the last human-in-the-loop check before changes hit `main`. Don't automate it.
 
 ## Scope discipline
 

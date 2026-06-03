@@ -139,6 +139,15 @@ Apps reference packages via workspace protocol:
 - Squash merge into main
 - No direct commits to main except in genuine emergencies; document if it happens
 
+Enforce squash-only merge in GitHub repo settings:
+
+1. github.com/Caeorta-io/caeorta_app/settings
+2. Under "Pull Requests": disable "Allow merge commits" and "Allow rebase merging".
+3. Leave only "Allow squash merging" enabled.
+4. (Optional, recommended) check "Automatically delete head branches" so merged feature branches get cleaned up automatically.
+
+Branch protection itself is unavailable on the Free plan for private repos; squash-only merge is enforced at the repo-settings level (cosmetic, not preventive) and CI runs visibly on PRs.
+
 ## Commit conventions
 
 [Conventional Commits](https://www.conventionalcommits.org/):
