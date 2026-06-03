@@ -38,7 +38,7 @@ Tools intentionally **not** installed (per project decisions or scope):
 ## Repository facts
 
 - **GitHub**: [Caeorta-io/caeorta_app](https://github.com/Caeorta-io/caeorta_app) — **private** (org renamed from `Caeorta-AI` on 2026-05-15; see decisions log)
-- **Local working path** (App founder): `c:\Users\muham\Documents\#1_Caeorta_dev\caeorta_app` (NOT OneDrive; path updated 2026-05-15 — see decisions log)
+- **Local working path** (App founder): `c:\Users\muham\Documents\1_Caeorta_dev\caeorta_app` (NOT OneDrive; the `#` prefix was dropped on 2026-06-03 because Tailwind 4's oxide compiler corrupts paths containing `#` — see decisions log)
 - **Default branch**: `main`
 - **Workspace manager**: pnpm 11 workspaces (`apps/*`, `packages/*`)
 - **Founder roles**:
@@ -76,6 +76,11 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-06-02 | **Community placeholders get `ENABLE ROW LEVEL SECURITY` with no policies** (deny-all to non-service-role) rather than RLS-off as the brief literally said. Defense-in-depth: tables exist with no UI in v1, but PostgREST exposes them by default; RLS-off would leave them readable/writable by any authenticated user. v2 adds policies additively when community UI ships. | Brief's "skip community placeholders" interpreted as a v1-no-policies goal, not a literal RLS-off goal. Founder approved via "Recommended" pick. | `supabase/migrations/20260602150000_rls_policies.sql` — Community placeholders section |
 | 2026-06-02 | **`devices` UPDATE policy is row-level only; column-level restriction deferred to a Week-2 follow-up migration.** Owner can UPDATE any column on owned devices rows at the DB level; columns the owner should not write (`device_secret`, `claimed_by_user_id`, `claimed_at`, `created_at`, `last_seen_at`, `firmware_version`, `last_sync_at`) are application-layer-enforced for now. Column-level GRANT/REVOKE waits for `mint_device_token` + Edge Function column-write contract to firm up. | Postgres RLS is row-level only; column scope is a separate concern. Locking column GRANTs in before the device-JWT contract is built risks a fixup migration in Week 2. Founder approved via "Recommended" pick. | `supabase/migrations/20260602150000_rls_policies.sql` — `devices` UPDATE policy comment + this row |
 | 2026-06-03 | **Captured 13 working-pattern items into `docs/conventions.md`, `docs/05_Database_Schema.md`, `docs/04_Repository_Structure.md`, `CLAUDE.md`.** Codifies patterns that emerged through Week 1 sessions: RLS regression suite, `supabase/seed.sql` plan, dev→prod migration promotion ritual, spec-deviation protocol, stacked-PR discipline, squash-only repo-settings enforcement, self-merge ban, `ask_user_input_v0` usage, scope-mismatch protocol, PR description template, PR queue management, test coverage triage. | Patterns were lived through Weeks 0–1 but not yet written down; future sessions inherit them without re-derivation. | `docs/conventions.md` (new), `docs/05_Database_Schema.md` (Migration discipline § Promoting a migration to prod, new Testing § and Test fixtures §), `docs/04_Repository_Structure.md` (Branch strategy § squash-only enforcement), `CLAUDE.md` (Behavior expectations + new Claude Code never self-merges section) |
+| 2026-06-03 | **Accept latest scaffolder majors: Expo SDK 56 (not 53) + Next.js 16 (not 15).** Both `create-expo-app` and `create-next-app` now emit a full major beyond the docs; by mid-2026 SDK 53 / Next 15 are stale. The brief's "SDK 53+" anticipated this. | Founder picked "Accept latest (56/16)" when the drift was surfaced. SDK 53 likely outside Expo's active support window now. | `docs/03_Tech_Stack.md` (Expo 56, Next 16, reanimated 4 rows), `docs/01_Project_Identity.md` (Next 16 line), `apps/mobile` (SDK 56), `apps/admin` (Next 16) |
+| 2026-06-03 | **Standardize TypeScript on 5.9.3 across the monorepo** via `pnpm.overrides`. Expo 56's template pins TS ~6.0.3, Next 16 pins ~5.9; `@typescript-eslint` and NativeWind don't support TS 6 yet. | Avoid a split TS major and bleeding-edge `@typescript-eslint` incompatibility; TS 6 buys nothing here. Part of the "pin one TS version" path the founder approved. | root `package.json` `pnpm.overrides.typescript`, all package/app `typescript` devDeps |
+| 2026-06-03 | **Drop the `#` from the repo folder name** (`#1_Caeorta_dev` → `1_Caeorta_dev`). Tailwind 4's `@tailwindcss/oxide` injects a null byte at the `#` in the absolute path, 500-ing every admin CSS compile. Founder removes the folder `#`; admin CSS then compiles with zero code changes. | Known Tailwind-v4 special-character-in-path bug; only robust fix is a `#`-free path. Also de-risks EAS / Metro caching. | Repository facts path above; founder action (folder rename), no code change |
+| 2026-06-03 | **NativeWind workaround: `react-native-css-interop@0.2.4` added as a direct dep of `@caeorta/mobile`.** NativeWind's babel JSX transform emits `import 'react-native-css-interop/jsx-runtime'`, which pnpm's strict isolated linker doesn't expose (it's a transitive dep of nativewind). Pinned to nativewind's exact version. | Keeps pnpm's strict isolated linking (the reason pnpm was chosen) instead of switching to `node-linker=hoisted`; Android export then bundles cleanly (1493 modules). Re-check the pin when bumping nativewind. | `apps/mobile/package.json` |
+| 2026-06-03 | **Catch-up PRs #11/#12 to reconcile `main`.** The Week-1 stacked PRs (#6–#10) had merged into their base branches, not `main`, so `main` was missing the schema + RLS migrations, `database.types.ts`, and docs sessions 6–8. Replayed the reviewed commits onto `main` via two rebase-merged PRs. | Stacked-merge trap (flagged as a risk in session 7's notes). Founder explicitly authorized the merge ("merge it, like it should be") — one-off override of the no-self-merge rule for already-reviewed content. | `main` history (commits `6b40baa`, `4fad9a7`, `86a748e`, `56db595`, `6e23d5b`) |
 
 ---
 
@@ -504,6 +509,56 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 - **Reconstruct, don't invent, when documenting tests.** The brief was explicit: "RECONSTRUCT the queries from the schema doc and the RLS migration file, not invent them." Source was the actual RLS migration file (read via `git show`) plus the test script run in session 7 (since deleted with the temp dir). Every test in the new "Testing" section maps to a specific policy in the migration and a specific assertion that was actually observed pass on dev. Mark "TODO" if reconstruction isn't possible rather than guessing — none needed here because the migration file is complete and the session 7 script was straightforward to redrive.
 - **`docs/conventions.md` is the right home for cross-cutting patterns.** Items 4/5/11/12/13 don't belong in any single numbered doc — they span schema, CI/CD, PR discipline, session conduct. A separate `conventions.md` keeps them findable without bloating any one numbered file. Worth re-checking on future sessions whether new conventions accumulate or whether some should graduate to a numbered doc (e.g. PR template might eventually become its own `.github/pull_request_template.md`).
 - **One PR, five files, no new code.** Docs-only PRs of this size are exempt from the "queue depth ≤ 3 code PRs" rule that this very PR codifies, but worth tracking the meta-pattern: a single docs PR that captures a batch of session learnings is much easier to review than five small ones because the reviewer can read it linearly. The "Workdiary-only PRs can be brief" carve-out in the new PR template covers the smaller docs PRs; this kind of "captured-conventions" PR should follow the full template.
+
+---
+
+### 2026-06-03 (later same day) — Monorepo scaffold (session 9)
+
+**Goal of session:** Scaffold the monorepo per `docs/04_Repository_Structure.md` — `apps/mobile`, `apps/admin`, `packages/config`, `packages/types`, `packages/supabase` as functioning pnpm workspaces; both dev servers bootable; shared TS/ESLint/Prettier configs; `.env.example` in both apps.
+
+**Reconciled `main` first (catch-up PRs #11/#12).** Discovered the scaffold's prerequisite (`packages/supabase/src/database.types.ts`) wasn't on `main`: the Week-1 stacked PRs (#6–#10) had merged into their *base branches*, not `main`, so `main` was stuck at session-4 state minus the schema/RLS migrations, `database.types.ts`, and docs sessions 6–8. Surfaced to founder; on the founder's explicit instruction ("merge it, like it should be") replayed the already-reviewed commits onto `main` via two rebase-merged PRs (#11 schema stack, #12 docs stack). Verified `main` whole: 3 migrations, `database.types.ts`, `conventions.md`, workdiary 1–8, and `docs/05` carrying BOTH the `app_versions` PK fix and the Testing/Fixtures sections (clean union). Then branched `feat/monorepo-scaffold` off the reconciled `main`.
+
+**Scaffolders had drifted a full major** (surfaced + founder chose "accept latest"):
+- Mobile: `create-expo-app` → **Expo SDK 56** (React 19.2, RN 0.85, reanimated 4, `src/app/` layout, TS 6.0). Stripped the demo template to a minimal NativeWind placeholder.
+- Admin: `create-next-app` → **Next.js 16.2.7**, Tailwind 4 (✓, no v3 problem), ESLint 9 flat config.
+- Standardized TS on **5.9.3** monorepo-wide via `pnpm.overrides` (TS 6 unsupported by `@typescript-eslint`/NativeWind).
+
+**Packages.** `@caeorta/config` (strict tsconfig base composed via `extends` array; flat ESLint config for packages + rules-only `eslint-strict` fragment for apps to avoid double-registering `@typescript-eslint`; Prettier config). `@caeorta/types` (zod + 6 placeholder domain files, ships TS source). `@caeorta/supabase` (universal `createSupabaseClient` factory parameterized for Expo/Next env; re-exports `Database` + helpers; **`database.types.ts` left untouched**). Apps consume packages as TS source (`transpilePackages` in Next; Metro transpiles for mobile).
+
+**Three environmental gotchas hit and resolved/flagged:**
+1. **pnpm 11 reads build-script allowlist + settings from `pnpm-workspace.yaml`, not `package.json`/`.npmrc`.** `onlyBuiltDependencies` in `package.json` was ignored; pnpm auto-rewrote `pnpm-workspace.yaml` with an `allowBuilds:` map. Set `allowBuilds` for `@tailwindcss/oxide`, `esbuild`, `msgpackr-extract`, `sharp`, `unrs-resolver`. (`pnpm.overrides` in `package.json` *is* still read — TS override worked.)
+2. **Tailwind 4 + `#` in the repo path** → `@tailwindcss/oxide` null-byte path corruption, 500 on every admin CSS compile. Founder is removing the `#` from the folder name (decision logged). **Admin CSS is unverified until that move**; it compiles with zero code changes once the path is `#`-free.
+3. **NativeWind + pnpm isolated linker** → `react-native-css-interop/jsx-runtime` unresolved. Fixed surgically by adding `react-native-css-interop@0.2.4` as a direct mobile dep (vs. switching to `node-linker=hoisted`, which would weaken pnpm's strictness).
+
+**shadcn 4.x changed materially** — no `--style`/`--base-color` flags (preset-based now), and its init hung non-interactively. Set it up manually for Tailwind 4: `components.json` (new-york, gray, css-variables), `lib/utils.ts` (`cn`), the standard oklch token block in `globals.css`, and deps (`class-variance-authority`, `clsx`, `tailwind-merge`, `lucide-react`, `tw-animate-css`). Placeholder until the designer's Sunday session.
+
+**Verification.**
+- `pnpm install` resolves clean (exit 0; native build scripts run).
+- `pnpm -r typecheck` — green across all 5 projects.
+- `pnpm -r lint` — green across all 5 projects.
+- Mobile: `expo start` boots the dev server; `expo export --platform android` bundles successfully (1493 modules, 3.7 MB hbc) — NativeWind included. Android is the pilot target.
+- Admin: `next dev` boots on :3000; route renders 500 **only** due to the `#`-path Tailwind bug (see gotcha 2). Everything else (structure, typecheck, lint, build graph) is green.
+
+**Tools / versions touched:** none installed/upgraded on the machine (used `pnpm dlx`). Inventory unchanged. Same harness-shell `fnm`-not-auto-loaded pattern; every node/pnpm call inlines the fnm bootstrap.
+
+**Files / commits:** Branch `feat/monorepo-scaffold` off `main`. One commit: `feat: monorepo scaffold (apps/mobile, apps/admin, packages/config, packages/types, packages/supabase)`. ~85 files (mostly official scaffolder output) + the version/doc edits + this entry. PR opened against `main`.
+
+**Decisions taken (also in Decisions log):** accept Expo 56 / Next 16; TS 5.9.3 monorepo-wide; drop `#` from folder; `react-native-css-interop` direct-dep workaround; catch-up PRs #11/#12.
+
+**Open items rolled forward:**
+- **Founder: remove the `#` from the repo folder** (`#1_Caeorta_dev` → `1_Caeorta_dev`), then re-verify `next dev` serves the admin placeholder. No code change needed.
+- **Re-run `database.types.ts` codegen** is unaffected (left untouched this session).
+- shadcn theming is a placeholder — designer reworks it Sunday.
+- Wire Sentry / PostHog / i18next — Prompt 5 (next), explicitly out of scope here.
+- Mobile placeholders don't yet import `@caeorta/types`/`@caeorta/supabase` (deps declared only); first real import will exercise cross-package resolution end-to-end.
+- Long-running carry-overs unchanged from session 8 (prod migration promotion, `seed.sql`, `devices` column-scope follow-up, device JWT claim, `agent_role`, Google Play Console, etc.).
+
+**Notes / lessons:**
+- **Stacked PRs merge into their base, not `main`.** When the base branch still exists at merge time, GitHub advances *that* branch; `main` only moves if the base itself merges to `main`. Five stacked PRs showing "merged" left `main` three stacks behind. Fix: fresh PRs from the stack tips → `main`, rebase-merged to preserve the reviewed commits. Worth a `git ls-tree origin/main <path>` sanity check after any stacked-merge session.
+- **pnpm 11 centralizes config in `pnpm-workspace.yaml`.** Build-script approval is `allowBuilds:` there (not `onlyBuiltDependencies` in `package.json`), and `.npmrc`'s `node-linker` was silently ignored (`pnpm config get node-linker` → undefined). `pnpm.overrides` in `package.json` still works. Check `pnpm config get <key>` to confirm a setting actually took effect before assuming it did.
+- **`#` (and `[`, `(`) in an absolute path breaks Tailwind 4's oxide.** It surfaced as a null byte injected at the `#` in the compiler's path string. Latent landmine for any path-sensitive native tool (EAS, Metro cache). Keep project paths free of shell/url metacharacters.
+- **Expo SDK 56 bundles fine under pnpm's isolated linker** (1493 modules) — only NativeWind's `react-native-css-interop/jsx-runtime` needed a direct-dep nudge. Reach for `node-linker=hoisted` only if a cascade of phantom-dep failures appears; a single targeted dep preserved pnpm strictness here.
+- **Verify Expo bundling with `expo export --platform android`, not a hand-built `/index.bundle` URL.** The manual URL produced a misleading `./index` resolution error (wrong entry); `export` uses the real `main` entry and is the authoritative check.
 
 ---
 

@@ -9,10 +9,10 @@ If a future conversation proposes changing one of these, the burden is on the pr
 | Layer | Tool | Notes |
 |---|---|---|
 | Package manager | pnpm 9+ | Workspaces are first-class |
-| Mobile framework | Expo SDK 53+ | Bare React Native is not needed |
+| Mobile framework | Expo SDK 56+ | Bare React Native is not needed |
 | Mobile router | expo-router | File-based, mirrors Next.js mental model |
 | Mobile styling | NativeWind 4 | Tailwind for React Native |
-| Web framework | Next.js 15 (App Router) | Standard choice |
+| Web framework | Next.js 16 (App Router) | Standard choice |
 | Web styling | Tailwind 4 + shadcn/ui | Standard choice |
 | Web hosting | Vercel | Native fit for Next.js |
 | Backend platform | Supabase | DB + Auth + Realtime + Storage + Edge Functions |
@@ -26,7 +26,7 @@ If a future conversation proposes changing one of these, the burden is on the pr
 | Server state | TanStack Query | Caching, retry, optimistic updates |
 | Charts | Victory Native (v1) | Re-evaluate to react-native-skia in Week 9 if perf demands |
 | Icons | lucide-react-native + lucide-react | Same icon set both platforms |
-| Animation | react-native-reanimated 3 | Industry standard |
+| Animation | react-native-reanimated 4 | Industry standard; uses react-native-worklets |
 | QR scanning | expo-camera | Built-in |
 | Wi-Fi provisioning | react-native-wifi-reborn | Android-first; iOS limitations documented |
 | Push notifications | Expo Notifications + Expo Push API | APNs + FCM under the hood |
