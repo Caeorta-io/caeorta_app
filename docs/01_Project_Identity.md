@@ -61,7 +61,7 @@ These decisions were made through careful conversation and should not be revisit
 
 - **Mobile framework: Expo (React Native) with TypeScript.** Not Flutter. Reasoning: AI coding tools (Cursor, Claude Code) are better at React Native; Supabase JS SDK is first-class; future code-share with Next.js admin; team is JS-learnable, not motivated to learn Dart.
 - **Backend: Supabase.** Not Firebase, not custom Node, not AWS IoT. Already has working ESP32 → Supabase pipeline. Postgres + Auth + Realtime + Storage + Edge Functions in one product.
-- **Web framework: Next.js 15 (App Router) on Vercel** for admin dashboard. Framer for marketing site.
+- **Web framework: Next.js 16 (App Router) on Vercel** for admin dashboard. Framer for marketing site.
 - **Monorepo with pnpm workspaces.** Not Turborepo, not Nx — those add tooling complexity not justified at this scale.
 
 ### Device data model

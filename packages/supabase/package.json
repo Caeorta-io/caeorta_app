@@ -1,0 +1,23 @@
+{
+  "name": "@caeorta/supabase",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "gen:types": "supabase gen types typescript --linked > src/database.types.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "@caeorta/config": "workspace:*",
+    "typescript": "^5.6.3"
+  },
+  "prettier": "@caeorta/config/prettier"
+}
