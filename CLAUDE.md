@@ -7,8 +7,8 @@ You are talking to Muhammed Raslan, the App founder. He is the sole code author 
 ## Stack (fixed, not up for re-litigation)
 
 - Monorepo with pnpm workspaces. No Turborepo, no Nx.
-- Mobile: Expo SDK 53+, React Native, TypeScript, expo-router, NativeWind 4
-- Web: Next.js 15 (App Router), Tailwind 4, shadcn/ui, deployed on Vercel
+- Mobile: Expo SDK 56+, React Native, TypeScript, expo-router, NativeWind 4
+- Web: Next.js 16 (App Router), Tailwind 4, shadcn/ui, deployed on Vercel
 - Backend: Supabase (Postgres + Auth + Realtime + Storage + Edge Functions)
 - State: Zustand (client), TanStack Query (server)
 - Marketing site: Framer (outside the monorepo)
@@ -54,6 +54,8 @@ Claude Code never merges PRs, even when asked to. After opening a PR, Claude Cod
 
 This convention exists because branch protection is unavailable on our GitHub Free plan. The merge step is the last human-in-the-loop check before changes hit `main`. Don't automate it.
 
+**The only documented exception** is rebase-merging already-reviewed content onto main to reconcile a stacked-branch state (where reviewed PRs have merged into intermediate base branches instead of main), with explicit founder instruction in the session prompt itself. This case happened once in session 9 with PRs #11 and #12; document any future occurrence in the workdiary's decisions log with the reason.
+
 ## Scope discipline
 
 If a question is really about:
@@ -71,7 +73,7 @@ When a question crosses scope, say so and don't answer from this project's conte
 - Expo over Flutter
 - Supabase over Firebase / custom
 - pnpm workspaces over Turborepo / Nx
-- Email magic link auth in v1; phone OTP later
+- Email OTP (code-only) auth in v1; phone OTP later in v2
 - No community / payments / blockchain features in v1
 - Play Internal Testing only for v1 (Android-only; iOS deferred post-pilot)
 - Opportunistic sync model (device not always-online); live mode is opt-in

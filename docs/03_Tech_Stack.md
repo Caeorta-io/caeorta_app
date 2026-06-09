@@ -110,6 +110,12 @@ available, the case for Cursor has weakened:
 
 If you ever need to switch, your CLAUDE.md and .claude/ config travel with the repo.
 
+## Handling scaffolder drift between doc and reality
+
+The stack table in this document records the *intent* and the *floor* (e.g., "Expo SDK 53+" means "53 or later, where '+' is a forward-permissive operator"). When the actual scaffolder version at the time of `pnpm dlx create-*` is meaningfully ahead of what this doc records, accept the newest stable major (e.g., session 9 took Expo 56 and Next.js 16 rather than pinning to 53/15). Update the floor in this doc in the same session that does the scaffolding, and note the bump in the workdiary entry.
+
+Do not pin to a specific version in this doc unless a known incompatibility forces it. Floor-only with "+" means "this or later."
+
 ## Stack additions to plan for (post-MVP, not now)
 
 These are not in v1 but will likely come:

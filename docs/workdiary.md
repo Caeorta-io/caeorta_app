@@ -81,6 +81,7 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-06-03 | **Drop the `#` from the repo folder name** (`#1_Caeorta_dev` → `1_Caeorta_dev`). Tailwind 4's `@tailwindcss/oxide` injects a null byte at the `#` in the absolute path, 500-ing every admin CSS compile. Founder removes the folder `#`; admin CSS then compiles with zero code changes. | Known Tailwind-v4 special-character-in-path bug; only robust fix is a `#`-free path. Also de-risks EAS / Metro caching. | Repository facts path above; founder action (folder rename), no code change |
 | 2026-06-03 | **NativeWind workaround: `react-native-css-interop@0.2.4` added as a direct dep of `@caeorta/mobile`.** NativeWind's babel JSX transform emits `import 'react-native-css-interop/jsx-runtime'`, which pnpm's strict isolated linker doesn't expose (it's a transitive dep of nativewind). Pinned to nativewind's exact version. | Keeps pnpm's strict isolated linking (the reason pnpm was chosen) instead of switching to `node-linker=hoisted`; Android export then bundles cleanly (1493 modules). Re-check the pin when bumping nativewind. | `apps/mobile/package.json` |
 | 2026-06-03 | **Catch-up PRs #11/#12 to reconcile `main`.** The Week-1 stacked PRs (#6–#10) had merged into their base branches, not `main`, so `main` was missing the schema + RLS migrations, `database.types.ts`, and docs sessions 6–8. Replayed the reviewed commits onto `main` via two rebase-merged PRs. | Stacked-merge trap (flagged as a risk in session 7's notes). Founder explicitly authorized the merge ("merge it, like it should be") — one-off override of the no-self-merge rule for already-reviewed content. | `main` history (commits `6b40baa`, `4fad9a7`, `86a748e`, `56db595`, `6e23d5b`) |
+| 2026-06-09 | Captured 5 new patterns from sessions 8-9 (stacked-merge reconciliation, scaffolder drift policy, environmental gotchas, pnpm.overrides, dev-vs-prod migration tracking) and fixed 6 staleness issues across CLAUDE.md and 04. Documented self-merge exception clause. | Targeted gap-fix/pattern-capture pass so sessions 8-9 learnings land in the source-of-truth docs before Week 2. | `CLAUDE.md`, `docs/03_Tech_Stack.md`, `docs/04_Repository_Structure.md`, `docs/05_Database_Schema.md`, `docs/conventions.md` |
 
 ---
 
@@ -559,6 +560,39 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 - **`#` (and `[`, `(`) in an absolute path breaks Tailwind 4's oxide.** It surfaced as a null byte injected at the `#` in the compiler's path string. Latent landmine for any path-sensitive native tool (EAS, Metro cache). Keep project paths free of shell/url metacharacters.
 - **Expo SDK 56 bundles fine under pnpm's isolated linker** (1493 modules) — only NativeWind's `react-native-css-interop/jsx-runtime` needed a direct-dep nudge. Reach for `node-linker=hoisted` only if a cascade of phantom-dep failures appears; a single targeted dep preserved pnpm strictness here.
 - **Verify Expo bundling with `expo export --platform android`, not a hand-built `/index.bundle` URL.** The manual URL produced a misleading `./index` resolution error (wrong entry); `export` uses the real `main` entry and is the authoritative check.
+
+---
+
+### 2026-06-09 — Gap-fix + pattern-capture pass after sessions 8-9 (session 10)
+
+**Goal of session:** Targeted update pass — fix six staleness issues in existing docs and capture five new patterns that emerged in sessions 8-9. Docs-only; no new files; one PR.
+
+**Done:**
+- **CLAUDE.md** — three fixes: corrected the auth decision (`Email magic link auth in v1` → `Email OTP (code-only) auth in v1; phone OTP later in v2`) to match the OTP-code-only decision taken in chat before Prompt 5; bumped the Stack section (Expo `53+` → `56+`, Next.js `15` → `16`); added a self-merge **exception clause** to the "Claude Code never self-merges" section documenting the session-9 catch-up-PR precedent (rebase-merge already-reviewed content to reconcile stacked-branch drift, only with explicit founder instruction).
+- **docs/04_Repository_Structure.md** — `pnpm 9` → `pnpm 11` in the dev-setup checklist; example commit bumped to `SDK 56.0.5`; added `conventions.md` to the docs/ tree listing; new **Known environmental gotchas** section (pnpm 11 build-script config moved to `pnpm-workspace.yaml`; Tailwind 4 oxide `#`-in-path corruption; NativeWind needs `react-native-css-interop@0.2.4` as a direct mobile dep); new **Monorepo-wide version pinning via pnpm.overrides** subsection.
+- **docs/conventions.md** — added the session-9 incident paragraph to the PR stacking section, plus a new **Reconciliation when stacks merge into base branches instead of main** subsection (the catch-up-PR procedure).
+- **docs/03_Tech_Stack.md** — new **Handling scaffolder drift between doc and reality** section (floor-with-`+` semantics; accept newest stable major; update the floor in the same scaffolding session).
+- **docs/05_Database_Schema.md** — new **Tracking dev-only state across weeks** subsection under Migration discipline; rewrote the **Currently outstanding promotions** callout to current state (all three migrations now on `main` and dev, none on prod).
+
+**Surfaced one discrepancy before editing (per CLAUDE.md spec-conflict protocol):** Item 8's prescribed text attached "reconciled via PR #11" to the extensions migration, but the workdiary shows PR #4 (extensions) merged to `main` directly in session 5/6 — it was not part of the session-9 reconciliation (only schema #6 and RLS #8 were). Founder chose to drop "reconciled via PR #11" from the extensions line only; schema and RLS lines keep it.
+
+**Known item flagged for Prompt 9 (Friday retro):** `docs/08_12_Week_Action_Plan.md` Week 1 deliverables may still say "magic link." Intentionally not touched this session — that's the retro's job. Called out in the PR description.
+
+**Tools / versions touched:** none — docs only. Inventory unchanged.
+
+**Files / commits:** Branch `docs/gap-fix-sessions-8-9` off `main`. One commit: `docs: gap-fix sessions 8-9 conventions (versions, self-merge exception, scaffolder drift, env gotchas, pnpm.overrides, migration state)`. Files: `CLAUDE.md`, `docs/03_Tech_Stack.md`, `docs/04_Repository_Structure.md`, `docs/05_Database_Schema.md`, `docs/conventions.md`, `docs/workdiary.md`.
+
+**Decisions taken (also in Decisions log):**
+- 2026-06-09 — Captured 5 new patterns from sessions 8-9 + fixed 6 staleness issues + documented the self-merge exception clause.
+
+**Open items rolled forward:**
+- **Prod promotion of all three migrations** (extensions, initial schema, RLS) — procedure documented in `docs/05`; execution still pending; do all three in one prod-link session before any prod-touching Week 2 work.
+- **`docs/03_Tech_Stack.md` scope-tightening pass** — deferred until the tech stack stabilizes through Week 2.
+- **Action-plan "magic link" reference** — for Prompt 9 (Friday retro) to reconcile.
+- Long-running carry-overs unchanged from session 9 (`seed.sql`, `devices` column-scope follow-up, device JWT claim, `agent_role`, repo squash-only setting, Google Play Console, source-folder cleanup, etc.).
+
+**Notes / lessons:**
+- **A prescribed verbatim edit can still carry a factual error.** Item 8's text would have written a wrong provenance (extensions "reconciled via PR #11") into the schema doc. Cross-checking the named PR numbers against the workdiary before writing caught it. When a task dictates exact text for a factual callout, still verify the facts against the source of truth — the source-of-truth doc is exactly where silent drift is most expensive.
 
 ---
 
