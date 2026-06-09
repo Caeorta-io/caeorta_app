@@ -17,7 +17,7 @@ If a future conversation proposes changing one of these, the burden is on the pr
 | Web hosting | Vercel | Native fit for Next.js |
 | Backend platform | Supabase | DB + Auth + Realtime + Storage + Edge Functions |
 | Database | Postgres (via Supabase) | Includes pgvector, pg_cron extensions |
-| Auth | Supabase Auth | Email magic link v1; phone OTP v2 |
+| Auth | Supabase Auth | Email OTP (code-only) v1; phone OTP v2 |
 | Realtime | Supabase Realtime | For live mode + diagnostic_outputs subscriptions |
 | File storage | Supabase Storage | Firmware binaries, user uploads if any |
 | Edge functions | Supabase Edge Functions (Deno) | Device pairing, OTA, push triggers |

@@ -4,6 +4,7 @@ packages:
 
 # Native packages allowed to run install/build scripts (pnpm blocks these by default).
 allowBuilds:
+  '@sentry/cli': true
   '@tailwindcss/oxide': true
   esbuild: true
   msgpackr-extract: true
