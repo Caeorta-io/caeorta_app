@@ -27,6 +27,20 @@ Rule of thumb:
 - 4+ open code PRs: pause new code prompts, push for merges first
 - Always fine to stack docs-only PRs
 
+The session-9 incident concretized this: a 7-PR stack with intermediate branch merges resulted in main being three stacks behind reality. Reconciliation required two catch-up PRs (see Reconciliation subsection below). The lesson is not just "don't stack too deep" — it's "when stacking, the merge target on every PR in the stack must be main, never an intermediate branch, unless you're prepared to do a catch-up reconciliation later."
+
+### Reconciliation when stacks merge into base branches instead of main
+
+This happened in session 9 (PRs #6, #8 stacked on `feat/enable-extensions`; that branch merged into `feat/enable-extensions` rather than main during review, leaving main three stacks behind). The fix:
+
+1. Identify the gap: list commits in stacked branches that should be in main but aren't (use `git log main..<branch>` for each branch).
+2. Branch a catch-up PR off main containing the reviewed-and-merged-elsewhere commits.
+3. Open the PR; in the description, name it as a catch-up reconciliation and reference the original PR numbers that were already reviewed.
+4. With explicit founder instruction, the catch-up PR can be self-merged (see the self-merge exception in CLAUDE.md). The content was already reviewed; the catch-up is purely a topology fix.
+5. After main is reconciled, all new work branches off the up-to-date main, NOT off the old stack tips.
+
+The deeper lesson: deep stacks (4+ code PRs deep) make you vulnerable to base-branch-merged-but-not-main drift. Sulaiman's GitHub web UI doesn't make the merge target obvious; "Squash and merge" defaults to the immediate base branch. When in doubt, branch off main and rebase often, even at the cost of more frequent rebase work.
+
 ## PR description template
 
 Every PR description should include:

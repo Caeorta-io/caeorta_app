@@ -408,10 +408,16 @@ Enable in v1:
 7. Regenerate types from dev to keep `packages/supabase/src/database.types.ts` in sync (no-op if dev and prod schemas are identical, which they should be after promotion).
 8. Workdiary entry: log the prod promotion with date, migration filename, and any anomalies observed.
 
+### Tracking dev-only state across weeks
+
+A migration applied to dev but not yet promoted to prod is "dev-only." Week N+1 work that depends on a migration must verify dev-only vs prod-promoted state. The Action Plan's week-end Definition of Done implicitly assumes prod-promoted; in practice, prod promotion has often slipped by 1-3 days. Workdiary entries should note both states for any migration touched in that session.
+
 **Currently outstanding promotions** (dev-only at time of writing):
-- Extensions migration (PR #4 — merged to main, applied on dev, not on prod)
-- Initial schema migration (PR #6 — open)
-- RLS policies migration (PR #8 — open)
+- Extensions migration — merged to main (PR #4), applied on dev, NOT on prod
+- Initial schema migration — merged to main (PR #6, reconciled via PR #11), applied on dev, NOT on prod
+- RLS policies migration — merged to main (PR #8, reconciled via PR #11), applied on dev, NOT on prod
+
+All three should be promoted to prod in one session per the procedure above, before any prod-touching Week 2 work begins.
 
 ## Data retention
 

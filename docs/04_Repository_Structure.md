@@ -89,6 +89,7 @@ caeorta/
 │   ├── 09_Risks_And_Mitigations.md
 │   ├── 10_Out_Of_Scope.md
 │   ├── workdiary.md               # Living session log + decisions log
+│   ├── conventions.md             # Cross-cutting working patterns
 │   ├── ai-agent-contract.md       # Contract with the AI agent project
 │   ├── schema.md                  # Human-readable schema doc
 │   ├── api-contracts.md           # Edge Function input/output contracts
@@ -131,6 +132,22 @@ Apps reference packages via workspace protocol:
 }
 ```
 
+### Monorepo-wide version pinning via pnpm.overrides
+
+When a dependency must be pinned across all workspaces (e.g., TypeScript, where mismatched versions in apps and packages cause subtle type-checking divergence), use `pnpm.overrides` in the root package.json:
+
+```json
+{
+  "pnpm": {
+    "overrides": {
+      "typescript": "5.9.3"
+    }
+  }
+}
+```
+
+This enforces the version at install time regardless of what individual workspaces specify. Use sparingly; only when a real cross-workspace consistency requirement exists. Current overrides at time of writing: `typescript: 5.9.3` (pinned in session 9 to standardize across Expo 56, Next.js 16, and packages).
+
 ## Branch strategy
 
 - `main` is always deployable. Web deploys automatically from main; mobile uses EAS Update for JS-only changes.
@@ -163,7 +180,7 @@ Branch protection itself is unavailable on the Free plan for private repos; squa
 Examples:
 - `feat(mobile): add QR scanner to pairing flow`
 - `fix(admin): correct device offline timestamp display`
-- `chore: bump expo to SDK 53.0.5`
+- `chore: bump expo to SDK 56.0.5`
 
 ## Environments
 
@@ -283,7 +300,7 @@ GitHub Actions handles:
 
 A new contributor (or Muhammed on a new machine) should be able to follow this and be running in under 30 minutes:
 
-1. Install Node 22 (current Active LTS as of 2026; Node 20 went EOL 2026-04), pnpm 9
+1. Install Node 22 (current Active LTS as of 2026; Node 20 went EOL 2026-04), pnpm 11
 2. Clone repo
 3. `pnpm install` at root
 4. Install Supabase CLI
@@ -296,6 +313,16 @@ A new contributor (or Muhammed on a new machine) should be able to follow this a
 11. (Web) `pnpm --filter admin dev` opens at localhost:3000
 
 The `README.md` at the repo root contains exactly these steps.
+
+## Known environmental gotchas
+
+These surfaced during session 9's monorepo scaffold. Capture so they don't bite again on a fresh setup.
+
+**pnpm 11 build-script config moved**. In pnpm 9, certain build-script approvals lived in package.json. In pnpm 11, they moved into `pnpm-workspace.yaml` under an `ignoredBuiltDependencies` or `onlyBuiltDependencies` key. Watch for unexpected "skipping build script" warnings during install; check the workspace file's documented schema, not the package.json one.
+
+**Tailwind 4 oxide compiler corrupts paths containing `#`**. The Tailwind 4 oxide compiler used by NativeWind 4 and Next.js 15+ corrupts paths that contain a literal `#` character. The repo working directory is renamed to `1_Caeorta_dev` (not `#1_Caeorta_dev`) for this reason. If a future contributor uses a path with `#`, they will hit baffling CSS-not-found errors in admin. Fix: rename the directory.
+
+**NativeWind under pnpm strict linker**. pnpm's strict module-resolution requires `react-native-css-interop@0.2.4` to be a direct dependency of `apps/mobile`, not a transitive one through NativeWind. Without it, you get module-not-found errors at Expo bundle time despite NativeWind appearing to install correctly.
 
 ## CLAUDE.md — Claude Code's project brief
 
