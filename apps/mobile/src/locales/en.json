@@ -1,0 +1,32 @@
+{
+  "common": {
+    "appName": "Caeorta",
+    "loading": "Loading…"
+  },
+  "auth": {
+    "signInTitle": "Sign in",
+    "signInSubtitle": "Enter your email and we'll send you a 6-digit code.",
+    "emailLabel": "Email",
+    "emailPlaceholder": "you@example.com",
+    "sendCode": "Send code",
+    "sendingCode": "Sending…",
+    "verifyTitle": "Enter your code",
+    "verifySubtitle": "We sent a 6-digit code to {{email}}.",
+    "codeLabel": "6-digit code",
+    "codePlaceholder": "123456",
+    "verify": "Verify",
+    "verifying": "Verifying…",
+    "changeEmail": "Use a different email",
+    "invalidEmail": "Enter a valid email address.",
+    "invalidCode": "Enter the 6-digit code.",
+    "sendCodeError": "Couldn't send the code. Check your connection and try again.",
+    "verifyError": "That code didn't work. Check it and try again."
+  },
+  "home": {
+    "greeting": "Hello {{email}}",
+    "signOut": "Sign out",
+    "throwTestError": "Throw test error",
+    "testErrorSentTitle": "Test error sent",
+    "testErrorSentBody": "A test error was reported to Sentry. Check the dashboard."
+  }
+}

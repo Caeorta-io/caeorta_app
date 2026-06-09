@@ -82,6 +82,9 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-06-03 | **NativeWind workaround: `react-native-css-interop@0.2.4` added as a direct dep of `@caeorta/mobile`.** NativeWind's babel JSX transform emits `import 'react-native-css-interop/jsx-runtime'`, which pnpm's strict isolated linker doesn't expose (it's a transitive dep of nativewind). Pinned to nativewind's exact version. | Keeps pnpm's strict isolated linking (the reason pnpm was chosen) instead of switching to `node-linker=hoisted`; Android export then bundles cleanly (1493 modules). Re-check the pin when bumping nativewind. | `apps/mobile/package.json` |
 | 2026-06-03 | **Catch-up PRs #11/#12 to reconcile `main`.** The Week-1 stacked PRs (#6–#10) had merged into their base branches, not `main`, so `main` was missing the schema + RLS migrations, `database.types.ts`, and docs sessions 6–8. Replayed the reviewed commits onto `main` via two rebase-merged PRs. | Stacked-merge trap (flagged as a risk in session 7's notes). Founder explicitly authorized the merge ("merge it, like it should be") — one-off override of the no-self-merge rule for already-reviewed content. | `main` history (commits `6b40baa`, `4fad9a7`, `86a748e`, `56db595`, `6e23d5b`) |
 | 2026-06-09 | Captured 5 new patterns from sessions 8-9 (stacked-merge reconciliation, scaffolder drift policy, environmental gotchas, pnpm.overrides, dev-vs-prod migration tracking) and fixed 6 staleness issues across CLAUDE.md and 04. Documented self-merge exception clause. | Targeted gap-fix/pattern-capture pass so sessions 8-9 learnings land in the source-of-truth docs before Week 2. | `CLAUDE.md`, `docs/03_Tech_Stack.md`, `docs/04_Repository_Structure.md`, `docs/05_Database_Schema.md`, `docs/conventions.md` |
+| 2026-06-09 | **Sentry SDK = `@sentry/react-native`** (not the deprecated/archived `sentry-expo`). Wired manually (DSN-only `Sentry.init`, `Sentry.wrap`, `@sentry/react-native/expo` config plugin); did NOT run `@sentry/wizard` (it configures sourcemap upload/release tracking, deferred to Week 10). | Expo's current "Using Sentry" guide points to `@sentry/react-native`; `sentry-expo` archived post-SDK-50. Brief asked to confirm the current recommendation. | `apps/mobile/src/lib/sentry.ts`, `apps/mobile/app.json`, `apps/mobile/package.json` |
+| 2026-06-09 | **expo-router protected routes = `Stack.Protected` guards**, not the older `(auth)/_layout.tsx` + `<Redirect>` pattern the brief assumed. The guard flip is the navigation (no manual redirect after verify/sign-out). | Expo Router v6 (SDK 56) recommended pattern per Expo's auth guide; founder chose it when the difference was surfaced (gated item in the brief). | `apps/mobile/src/app/_layout.tsx` |
+| 2026-06-09 | **`docs/03_Tech_Stack.md` auth row corrected** `Email magic link v1` → `Email OTP (code-only) v1`. | Spec-deviation fix: CLAUDE.md was corrected in session 10 but this table row was missed; OTP is what's now implemented. | `docs/03_Tech_Stack.md` |
 
 ---
 
@@ -593,6 +596,56 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 
 **Notes / lessons:**
 - **A prescribed verbatim edit can still carry a factual error.** Item 8's text would have written a wrong provenance (extensions "reconciled via PR #11") into the schema doc. Cross-checking the named PR numbers against the workdiary before writing caught it. When a task dictates exact text for a factual callout, still verify the facts against the source of truth — the source-of-truth doc is exactly where silent drift is most expensive.
+
+---
+
+### 2026-06-09 (later same day) — Mobile cross-cutting: OTP auth, i18n, Sentry, state providers (session 11)
+
+**Goal of session:** Wire the mobile app's foundational cross-cutting concerns so Week 1 DoD "App can log in against dev Supabase" is met: SecureStore-backed Supabase client, email OTP (code-only) login, "Hello {email}" home, i18next, Sentry, Zustand + TanStack Query providers.
+
+**Two decisions surfaced before building (both gated in the brief):**
+- **Sentry SDK = `@sentry/react-native`** (not deprecated `sentry-expo`). Confirmed against Expo's current "Using Sentry" guide. Wired manually — DSN-only `Sentry.init` (`tracesSampleRate 1.0` dev, `enabled: Boolean(dsn)` so DSN-less dev still boots), `Sentry.wrap` at root, `@sentry/react-native/expo` config plugin in `app.json`. Did **not** run `@sentry/wizard` (it configures auth + sourcemap upload/release tracking → Week 10). Metro `getSentryExpoConfig` wrap + org/project/sourcemaps also Week 10.
+- **expo-router protected routes = `Stack.Protected` guards** (Expo Router v6 / SDK 56 recommendation), not the `(auth)/_layout.tsx` + `<Redirect>` pattern the brief assumed. Surfaced the difference; founder chose Stack.Protected. Root `_layout.tsx` wraps `(app)` in `guard={!!session}` and `(auth)` in `guard={!session}`; the guard flip is the navigation (no manual `router.replace` after verify/sign-out).
+
+**Expo Go + Sentry caveat (verified, not a blocker):** `@sentry/react-native` native crash capture needs a dev build — Expo Go can't load the native module — but JS errors via `Sentry.captureException` still reach the dashboard from Expo Go. So the home "Throw test error" button calls `captureException(new Error(...))` explicitly (not an uncaught throw), keeping the item-10 Expo Go test valid.
+
+**Built:**
+- **Deps (apps/mobile):** `expo-secure-store`, `expo-localization`, `@sentry/react-native` (via `expo install`, SDK-56-pinned); `i18next`, `react-i18next`, `zustand`, `@tanstack/react-query`, `react-native-url-polyfill`, `zod@^3.24.1` (via `pnpm add`). `@supabase/supabase-js` reused through the `@caeorta/supabase` workspace dep — not re-installed. All compatible with the TS 5.9.3 pin (none need TS 6).
+- **`@caeorta/supabase`:** re-exported `Session`, `User`, `AuthChangeEvent`, `AuthError`, `SupabaseClientOptions` from `index.ts` so mobile types auth without a direct supabase-js dep.
+- **`src/lib/supabase.ts`:** process-wide client via the factory; `expo-secure-store` storage adapter; `react-native-url-polyfill/auto`; `persistSession`/`autoRefreshToken` on, `detectSessionInUrl` off; reads `EXPO_PUBLIC_SUPABASE_URL/ANON_KEY`.
+- **`src/lib/store.ts`:** single Zustand auth slice (`session`, `user`, `loading`; `setSession`, `clearSession`, `setLoading`). No other slices.
+- **`src/lib/i18n.ts` + `src/locales/en.json`:** i18next init, device locale via expo-localization (→ `en`), `fallbackLng: en`. All UI text via `t()`.
+- **`src/lib/sentry.ts`** and **`src/lib/validation.ts`** (zod email + 6-digit OTP schemas).
+- **`src/hooks/useAuthLifecycle.ts`:** boot `getSession()` restore → store + flips `loading`; `onAuthStateChange` keeps the store authoritative; cleanup unsubscribes.
+- **`src/app/_layout.tsx`:** providers (GestureHandlerRootView, SafeAreaProvider, QueryClientProvider), `initSentry()` + `Sentry.wrap`, native splash held via `preventAutoHideAsync`/`hideAsync` until `loading` false, `Stack.Protected` guards.
+- **Screens:** `(auth)/sign-in.tsx` (zod email → `signInWithOtp({shouldCreateUser:true, emailRedirectTo:undefined})`, inline errors, push `/verify`), `(auth)/verify.tsx` (6-digit zod → `verifyOtp({type:'email'})`, inline errors), `(app)/index.tsx` (`Hello {email}`, sign out, `__DEV__`-only Throw test error). `(auth)/_layout.tsx` sets `initialRouteName: 'sign-in'`. Deleted the old `src/app/index.tsx` placeholder.
+- **Spec deviation:** `docs/03_Tech_Stack.md` auth row `Email magic link v1` → `Email OTP (code-only) v1` (CLAUDE.md fixed in session 10; table row was missed).
+
+**Verification (no device needed):**
+- `pnpm install` clean (exit 0). Added `@sentry/cli: true` to `pnpm-workspace.yaml` `allowBuilds` so install is deterministic/exit-0 (the binary is what Week-10 sourcemaps need anyway). Needed `CI=true` so pnpm wouldn't prompt to purge `node_modules` in the no-TTY harness shell.
+- `pnpm -r typecheck` green across all 5 projects.
+- `pnpm --filter @caeorta/mobile lint` green (0 errors, 0 warnings).
+- `expo export --platform android` bundles cleanly (2182 modules, 6.4 MB hbc) — Sentry/i18next/TanStack included; the plugin's "missing org/project" line is the expected Week-10 deferral (exit 0).
+
+**Tools / versions touched:** No machine-tool inventory changes (new entries are npm deps, listed above). Same harness-shell fnm-not-auto-loaded pattern; every node/pnpm call inlined the fnm bootstrap.
+
+**Files / commits:** Branch `feat/mobile-auth-i18n-sentry` off `origin/main`. One commit: `feat(mobile): OTP email auth, i18next, Sentry, Zustand + TanStack Query providers`. PR against `main`, tagged `@22SHY`.
+
+**Decisions taken (also in Decisions log):** Sentry = `@sentry/react-native`; expo-router = `Stack.Protected` guards; `docs/03` auth-row OTP correction.
+
+**Open items rolled forward:**
+- **Real-device E2E (item 10) — FOUNDER ACTION, not yet run.** Expo Go on Android against dev Supabase: sign-in → email code → verify → "Hello {email}" → throw test error → confirm in Sentry → sign out → relaunch (session restored) → sign out. Use a fresh personal email (`shouldCreateUser:true` creates the row); the `rls-test-*`/`111…`/`222…`/`333…` seeded users are not OTP-claimable.
+- **Supabase Dashboard OTP config (item 9) — FOUNDER ACTION.** Auth → Providers → Email: enable Email OTP, disable confirm-via-link if separable. If Supabase emails carry both code and link regardless, accept it (app uses the code only) and note the dual-emission next entry.
+- **SecureStore 2048-byte caveat.** If a Supabase session exceeds it on a device and persistence fails (would break the restart step), swap the adapter for a LargeSecureStore (AES-in-SecureStore + ciphertext-in-AsyncStorage) wrapper.
+- **Sentry Week-10 work:** metro `getSentryExpoConfig`, org/project/auth-token + sourcemap upload, release tracking, tuned prod `tracesSampleRate`.
+- **CI typed-routes ordering:** expo-router writes `.expo/types/router.d.ts` (gitignored, ephemeral); `expo start` regenerates it, `expo export` (prod mode) does not. A `tsc`-only CI job must generate router types first or it fails on a fresh checkout against a stale/absent file.
+- **PostHog** not set up (env vars present, unused) — separate task.
+- Long-running carry-overs unchanged from session 10 (prod migration promotion, `seed.sql`, `devices` column-scope, device JWT claim, `agent_role`, repo squash-only setting, Google Play Console, source-folder cleanup, action-plan "magic link" reference for Friday retro).
+
+**Notes / lessons:**
+- **First typed-route navigation surfaced a latent typecheck trap.** `router.push('/verify')` failed `tsc` against session 9's stale `.expo/types/router.d.ts` (which only knew `/` and `/_sitemap`). `expo export` doesn't regenerate it; a brief `expo start` does. A fresh clone with *no* file gets the permissive `Href` and passes — so the only failing state is "stale-and-present." Worth remembering before wiring CI typecheck.
+- **`pnpm` in the no-TTY harness shell needs `CI=true`.** `expo install` → `pnpm install` aborted on "Aborted removal of modules directory due to no TTY"; `CI=true` (pnpm's documented escape) unblocked it. Also surfaced pnpm 11's `allowBuilds` gate (`@sentry/cli` build script) — same pattern session 9 hit with oxide/esbuild.
+- **Re-export shared library types from the workspace package, not the app.** Putting `Session`/`User` re-exports in `@caeorta/supabase` kept `apps/mobile` free of a direct `@supabase/supabase-js` dependency (honoring the brief's "don't re-install supabase-js") while still giving the app full auth types.
 
 ---
 

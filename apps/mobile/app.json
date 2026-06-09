@@ -34,7 +34,8 @@
             "imageWidth": 76
           }
         }
-      ]
+      ],
+      "@sentry/react-native/expo"
     ],
     "experiments": {
       "typedRoutes": true,
