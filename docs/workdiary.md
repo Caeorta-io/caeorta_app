@@ -623,3 +623,37 @@ When starting a new entry, copy this scaffold to the bottom of the file. Keep pr
 **Notes / lessons:**
 - …
 ```
+
+---
+
+### 2026-06-14 — Platform setup + Week 1 verification (session 3)
+
+**Goal of session:** Set up Shiyas's machine, verify Week 1 Platform work is complete.
+
+**Done:**
+- Installed Git, Homebrew, Supabase CLI 2.106.0 on Shiyas's Ubuntu machine
+- Installed GitHub CLI, authenticated as Caeorta-dev
+- Cloned repo to ~/caeorta_app
+- Linked Supabase CLI to dev project (ref: pseksdzkrimtzamcuzzh)
+- Confirmed all 26 tables live in dev Supabase
+- Confirmed RLS enabled on all 26 tables
+- Generated TypeScript types and pushed to main (commit a6c0601)
+- Confirmed packages/supabase/src/client.ts already exists and is complete
+- Set git identity: Sulaiman_Shiyas / sulaiman@caeorta.com
+
+**Tools / versions touched:**
+- Supabase CLI 2.106.0 (new install, Homebrew)
+- GitHub CLI (new install, Homebrew)
+- Git global config set for Shiyas
+
+**Decisions taken:**
+- Week 1 Platform work confirmed complete — schema, RLS, TS types, client factory all done
+
+**Open items rolled forward:**
+- Week 2: pair_device, mint_device_token, submit_wifi_credentials, ota_check Edge Functions
+- GitHub Actions CI still not set up
+- Seed data for dev Supabase still missing
+
+**Notes / lessons:**
+- supabase status and db diff require Docker — use db query --linked for remote checks instead
+- supabase db push --dry-run is the right way to check migration state without Docker
