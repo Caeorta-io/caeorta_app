@@ -19,7 +19,6 @@ serve(async (req) => {
       return errorResponse('device_id, ssid and password are required', 400);
     }
 
-    // Verify the caller owns this device
     const userClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
@@ -51,13 +50,21 @@ serve(async (req) => {
       return errorResponse('You do not own this device', 403);
     }
 
-    // Encrypt the password using pgcrypto via a DB function
-    // We store it encrypted at rest — the device retrieves it via
-    // mint_device_token + a separate secure endpoint (not exposed to app)
-    const encryptionKey = Deno.env.get('WIFI_CREDENTIAL_ENCRYPTION_KEY')!;
+    // Read encryption key from Vault
+    const { data: secret, error: vaultError } = await adminClient
+      .from('vault.decrypted_secrets')
+      .select('decrypted_secret')
+      .eq('name', 'wifi_credential_encryption_key')
+      .single();
+
+    if (vaultError || !secret) {
+      console.error('Vault error:', vaultError);
+      return errorResponse('Failed to retrieve encryption key', 500);
+    }
+
+    const encryptionKey = secret.decrypted_secret;
     const encrypted = await encryptPassword(password, encryptionKey);
 
-    // Upsert — replace existing credentials for this SSID on this device
     const { error: upsertError } = await adminClient
       .from('device_wifi_credentials')
       .upsert(
@@ -84,7 +91,6 @@ serve(async (req) => {
   }
 });
 
-// AES-GCM encryption using the Web Crypto API (available in Deno)
 async function encryptPassword(plaintext: string, keyHex: string): Promise<string> {
   const keyBytes = hexToBytes(keyHex);
   const cryptoKey = await crypto.subtle.importKey(
@@ -101,7 +107,6 @@ async function encryptPassword(plaintext: string, keyHex: string): Promise<strin
     cryptoKey,
     encoded,
   );
-  // Store as iv:ciphertext both base64-encoded
   const ivB64 = btoa(String.fromCharCode(...iv));
   const ctB64 = btoa(String.fromCharCode(...new Uint8Array(ciphertext)));
   return `${ivB64}:${ctB64}`;
