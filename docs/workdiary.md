@@ -710,3 +710,22 @@ When starting a new entry, copy this scaffold to the bottom of the file. Keep pr
 - djwt@v2.8 does not export 'sign' — use Web Crypto API instead, it is built into Deno
 - supabase functions logs subcommand not available in CLI 2.106.0 — use dashboard logs instead
 - Test devices must have status='active' for mint_device_token to succeed
+
+---
+
+### 2026-06-14 — GitHub Actions CI (session 6)
+
+**Goal of session:** Set up GitHub Actions CI.
+
+**Done:**
+- Created .github/workflows/ci.yml
+- Jobs: lint + typecheck + migration count validation
+- CI triggered on push to main and on every PR
+- First run green (commit 6de33a4)
+
+**Decisions taken:**
+- Week 1 and Week 2 Platform work fully complete
+
+**Open items rolled forward:**
+- Supabase Vault for Wi-Fi credential encryption (defer to Week 7)
+- pair_device and submit_wifi_credentials need real user JWT test — defer to when Raslan builds pairing flow
