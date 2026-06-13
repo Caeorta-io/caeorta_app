@@ -729,3 +729,29 @@ When starting a new entry, copy this scaffold to the bottom of the file. Keep pr
 **Open items rolled forward:**
 - Supabase Vault for Wi-Fi credential encryption (defer to Week 7)
 - pair_device and submit_wifi_credentials need real user JWT test — defer to when Raslan builds pairing flow
+
+---
+
+### 2026-06-14 — Week 3 admin dashboard (session 7)
+
+**Goal of session:** Build admin dashboard skeleton — auth, login, devices table.
+
+**Done:**
+- Created apps/admin/lib/supabase/client.ts and server.ts
+- Installed @supabase/ssr
+- Built proxy.ts (Next.js 16 auth guard — locks to founder emails only)
+- Built login page with OTP magic link
+- Built devices dashboard — summary cards + full devices table
+- Added auth/callback route for magic link session exchange
+- Set Supabase redirect URLs for localhost
+
+**Open items rolled forward:**
+- Test full login flow once email rate limit resets (1 hour)
+- Deploy admin dashboard to Vercel
+- Supabase Vault for Wi-Fi credential encryption (Week 7)
+
+**Notes / lessons:**
+- Next.js 16 renamed middleware to proxy — function must also be named proxy not middleware
+- shouldCreateUser: false blocks first-time logins — use true for dev, restrict via allowed emails in proxy
+- Magic link requires auth/callback route to exchange code for session
+- Supabase email rate limit is 3 per hour on free tier
