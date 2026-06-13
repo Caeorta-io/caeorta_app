@@ -682,3 +682,31 @@ When starting a new entry, copy this scaffold to the bottom of the file. Keep pr
 **Notes / lessons:**
 - Docker not needed for function deployment — supabase functions deploy works directly against remote
 - mint_device_token and ota_check use --no-verify-jwt because devices use their own auth scheme
+
+---
+
+### 2026-06-14 — Week 2 testing + seed data (session 5)
+
+**Goal of session:** Verify Edge Functions work end to end, add seed data.
+
+**Done:**
+- Added dev seed data: 2 test devices, 2 firmware versions, 1 app version
+- Fixed mint_device_token — replaced djwt library with Web Crypto API (no external deps)
+- Created docs/testing/device_simulation.sh — 4 tests all passing
+- Redeployed mint_device_token (commit a736624)
+
+**Test results:**
+- mint_device_token valid device — PASS
+- mint_device_token wrong secret — PASS (401)
+- ota_check no update available — PASS
+- ota_check update available — PASS (returns binary_url + checksum)
+
+**Open items rolled forward:**
+- GitHub Actions CI still not set up
+- Supabase Vault for Wi-Fi credentials (defer to Week 7)
+- pair_device and submit_wifi_credentials need real user JWT — test from app once Raslan builds pairing flow
+
+**Notes / lessons:**
+- djwt@v2.8 does not export 'sign' — use Web Crypto API instead, it is built into Deno
+- supabase functions logs subcommand not available in CLI 2.106.0 — use dashboard logs instead
+- Test devices must have status='active' for mint_device_token to succeed
