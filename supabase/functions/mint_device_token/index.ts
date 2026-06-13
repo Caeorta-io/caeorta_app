@@ -1,6 +1,5 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { sign } from 'https://deno.land/x/djwt@v2.8/mod.ts';
 import { corsHeaders } from '../_shared/cors.ts';
 import { errorResponse, okResponse } from '../_shared/errors.ts';
 
@@ -16,13 +15,11 @@ serve(async (req) => {
       return errorResponse('device_id and device_secret are required', 400);
     }
 
-    // Service role client — bypasses RLS
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // Verify device exists, secret matches, and device is active
     const { data: device, error } = await supabase
       .from('devices')
       .select('id, status, device_secret')
@@ -41,33 +38,49 @@ serve(async (req) => {
       return errorResponse('Device is not active', 403);
     }
 
-    // Update last_seen_at
     await supabase
       .from('devices')
       .update({ last_seen_at: new Date().toISOString() })
       .eq('id', device_id);
 
-    // Mint a short-lived JWT (15 minutes) with device_id claim
+    // Mint JWT using Web Crypto — no external library needed
     const signingSecret = Deno.env.get('DEVICE_JWT_SIGNING_SECRET')!;
+    const now = Math.floor(Date.now() / 1000);
+    const expiresAt = now + 15 * 60;
+
+    const header = { alg: 'HS256', typ: 'JWT' };
+    const payload = { device_id, iat: now, exp: expiresAt };
+
+    const encode = (obj: unknown) =>
+      btoa(JSON.stringify(obj))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+    const headerB64 = encode(header);
+    const payloadB64 = encode(payload);
+    const signingInput = `${headerB64}.${payloadB64}`;
+
     const key = await crypto.subtle.importKey(
       'raw',
       new TextEncoder().encode(signingSecret),
       { name: 'HMAC', hash: 'SHA-256' },
       false,
-      ['sign', 'verify'],
+      ['sign'],
     );
 
-    const now = Math.floor(Date.now() / 1000);
-    const expiresAt = now + 15 * 60; // 15 minutes
-
-    const jwt = await sign(
-      {
-        device_id,
-        iat: now,
-        exp: expiresAt,
-      },
+    const signature = await crypto.subtle.sign(
+      'HMAC',
       key,
+      new TextEncoder().encode(signingInput),
     );
+
+    const sigB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    const jwt = `${signingInput}.${sigB64}`;
 
     return okResponse({ jwt, expires_at: new Date(expiresAt * 1000).toISOString() });
 
