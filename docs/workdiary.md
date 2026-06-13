@@ -782,3 +782,24 @@ When starting a new entry, copy this scaffold to the bottom of the file. Keep pr
 - Vercel Hobby plan blocks private repos owned by GitHub orgs — must be public or use Pro
 - Output directory must be .next not apps/admin/.next when root dir is apps/admin
 - Supabase free tier email rate limit is 3 OTP emails per hour
+
+---
+
+### 2026-06-14 — Week 3 Supabase Vault (session 9)
+
+**Goal of session:** Set up Supabase Vault for Wi-Fi credential encryption key.
+
+**Done:**
+- Enabled supabase_vault extension (v0.3.1)
+- Stored wifi_credential_encryption_key in Vault (ID: c910374b-7d0f-4863-b596-e9fb5a566308)
+- Updated submit_wifi_credentials to read key from Vault instead of env var
+- Redeployed submit_wifi_credentials
+- Added both localhost and Vercel URLs to Supabase auth redirect list
+
+**Decisions taken:**
+- Week 3 Platform work fully complete
+- Vault secret ID stored here for reference — key itself never in git
+
+**Open items rolled forward:**
+- Test full admin login flow on https://caeorta-admin.vercel.app once email rate limit resets
+- Tell Raslan to pull main — he has everything for Week 2 pairing flow
