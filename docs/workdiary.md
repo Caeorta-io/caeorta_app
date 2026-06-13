@@ -657,3 +657,28 @@ When starting a new entry, copy this scaffold to the bottom of the file. Keep pr
 **Notes / lessons:**
 - supabase status and db diff require Docker — use db query --linked for remote checks instead
 - supabase db push --dry-run is the right way to check migration state without Docker
+
+---
+
+### 2026-06-14 — Week 2 Edge Functions (session 4)
+
+**Goal of session:** Build and deploy the four Week 2 Edge Functions.
+
+**Done:**
+- Created supabase/functions/_shared/cors.ts and errors.ts
+- Built and deployed mint_device_token (no-verify-jwt)
+- Built and deployed pair_device
+- Built and deployed submit_wifi_credentials
+- Built and deployed ota_check (no-verify-jwt)
+- Set DEVICE_JWT_SIGNING_SECRET and WIFI_CREDENTIAL_ENCRYPTION_KEY in Supabase secrets
+- Committed and pushed all functions (commit 6f2c0df)
+
+**Open items rolled forward:**
+- Supabase Vault setup for Wi-Fi credential encryption
+- Postman/curl test scripts simulating device calls
+- GitHub Actions CI still not set up
+- Seed data for dev Supabase still missing
+
+**Notes / lessons:**
+- Docker not needed for function deployment — supabase functions deploy works directly against remote
+- mint_device_token and ota_check use --no-verify-jwt because devices use their own auth scheme
