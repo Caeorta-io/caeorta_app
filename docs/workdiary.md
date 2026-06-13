@@ -755,3 +755,30 @@ When starting a new entry, copy this scaffold to the bottom of the file. Keep pr
 - shouldCreateUser: false blocks first-time logins — use true for dev, restrict via allowed emails in proxy
 - Magic link requires auth/callback route to exchange code for session
 - Supabase email rate limit is 3 per hour on free tier
+
+---
+
+### 2026-06-14 — Vercel deployment (session 8)
+
+**Goal of session:** Deploy admin dashboard to Vercel.
+
+**Done:**
+- Fixed git commit email to sulaimanshiyasali@gmail.com
+- Made repo public (was: private org repo — blocked by Vercel Hobby plan)
+- Added @supabase/supabase-js to admin dependencies
+- Configured Vercel build settings for monorepo
+- Admin dashboard live at https://caeorta-admin.vercel.app
+
+**Decisions taken:**
+- Repo made public — no secrets in git, all sensitive values in Supabase + Vercel env vars
+- Vercel Hobby plan does not support private org repos — noted for when we upgrade post-pilot
+
+**Open items rolled forward:**
+- Test full login flow on live URL once email rate limit resets (1 hour)
+- Add custom domain (caeorta.com/admin or admin.caeorta.com) post-pilot
+- Supabase Vault for Wi-Fi credential encryption (Week 7)
+
+**Notes / lessons:**
+- Vercel Hobby plan blocks private repos owned by GitHub orgs — must be public or use Pro
+- Output directory must be .next not apps/admin/.next when root dir is apps/admin
+- Supabase free tier email rate limit is 3 OTP emails per hour
