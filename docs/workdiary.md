@@ -803,3 +803,26 @@ When starting a new entry, copy this scaffold to the bottom of the file. Keep pr
 **Open items rolled forward:**
 - Test full admin login flow on https://caeorta-admin.vercel.app once email rate limit resets
 - Tell Raslan to pull main — he has everything for Week 2 pairing flow
+
+---
+
+### 2026-06-14 — Week 4 sync pipeline (session 10)
+
+**Goal of session:** Build and deploy the three sync Edge Functions.
+
+**Done:**
+- Built device_sync_start — creates sync session, verifies device owns vehicle
+- Built device_sync_chunk — inserts telemetry batch, deduplicates DTCs, tracks progress
+- Built device_sync_complete — drive boundary detection, computes peak/avg metrics, notifies AI agent
+- Added notify_agent migration (pg_notify on agent_trigger channel)
+- All three deployed to dev Supabase (commit 629507a)
+
+**Open items rolled forward:**
+- Add vehicle creation to seed data (needed for sync pipeline testing)
+- Update device simulation test script to cover sync flow
+- Test admin login on Vercel once email rate limit resets
+- Week 4 app work (Raslan): drives list, drive detail, charts
+
+**Notes / lessons:**
+- 524 timeout on deploy is a Supabase server-side issue — just retry, code is fine
+- notify_agent is non-fatal in device_sync_complete — agent polls as fallback if pg_notify fails
