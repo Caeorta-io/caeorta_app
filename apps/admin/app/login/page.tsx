@@ -20,7 +20,10 @@ function LoginForm() {
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { shouldCreateUser: true },
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
     });
     if (error) {
       setError(error.message);
