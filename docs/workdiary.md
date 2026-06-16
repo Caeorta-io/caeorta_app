@@ -631,14 +631,14 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 
 **Tools / versions touched:** No machine-tool inventory changes (new entries are npm deps, listed above). Same harness-shell fnm-not-auto-loaded pattern; every node/pnpm call inlined the fnm bootstrap.
 
-**Files / commits:** Branch `feat/mobile-auth-i18n-sentry` off `origin/main`. One commit: `feat(mobile): OTP email auth, i18next, Sentry, Zustand + TanStack Query providers`. PR against `main`, tagged `@22SHY`.
+**Files / commits:** Branch `feat/mobile-auth-i18n-sentry` off `origin/main`. PR #15 against `main`, tagged `@22SHY`. Four commits: `69ef524` feat(mobile): OTP email auth, i18next, Sentry, Zustand + TanStack Query providers · `5e11635` chore(mobile): add expo-dev-client · `a443e88` chore(mobile): configure EAS (projectId, app id, expo-updates) · `e2927f0` docs: record on-device E2E results (the last three came from the on-device verification below).
 
 **Decisions taken (also in Decisions log):** Sentry = `@sentry/react-native`; expo-router = `Stack.Protected` guards; `docs/03` auth-row OTP correction.
 
-**Open items rolled forward:**
-- **Real-device E2E (item 10) — FOUNDER ACTION, not yet run.** Expo Go on Android against dev Supabase: sign-in → email code → verify → "Hello {email}" → throw test error → confirm in Sentry → sign out → relaunch (session restored) → sign out. Use a fresh personal email (`shouldCreateUser:true` creates the row); the `rls-test-*`/`111…`/`222…`/`333…` seeded users are not OTP-claimable.
-- **Supabase Dashboard OTP config (item 9) — FOUNDER ACTION.** Auth → Providers → Email: enable Email OTP, disable confirm-via-link if separable. If Supabase emails carry both code and link regardless, accept it (app uses the code only) and note the dual-emission next entry.
-- **SecureStore 2048-byte caveat.** If a Supabase session exceeds it on a device and persistence fails (would break the restart step), swap the adapter for a LargeSecureStore (AES-in-SecureStore + ciphertext-in-AsyncStorage) wrapper.
+**Open items rolled forward:** *(items 9 & 10 were completed later the same session — see the "On-device E2E" + "Updated open items from E2E" subsections below, which supersede the pre-test framing here.)*
+- ~~**Real-device E2E (item 10) — FOUNDER ACTION, not yet run.**~~ **DONE** (all DoD verified on physical Android — see E2E subsection). Note: had to pivot from Expo Go to an **EAS development build** (SDK 56 isn't on the store Expo Go).
+- ~~**Supabase Dashboard OTP config (item 9) — FOUNDER ACTION.**~~ **DONE on dev** (Magic Link template → `{{ .Token }}`, "Confirm email" off, OTP length 8→6 — see E2E subsection). Prod needs the same.
+- **SecureStore 2048-byte caveat.** Observed OK on the test device, but if a Supabase session exceeds it on another device and persistence fails (would break the restart step), swap the adapter for a LargeSecureStore (AES-in-SecureStore + ciphertext-in-AsyncStorage) wrapper.
 - **Sentry Week-10 work:** metro `getSentryExpoConfig`, org/project/auth-token + sourcemap upload, release tracking, tuned prod `tracesSampleRate`.
 - **CI typed-routes ordering:** expo-router writes `.expo/types/router.d.ts` (gitignored, ephemeral); `expo start` regenerates it, `expo export` (prod mode) does not. A `tsc`-only CI job must generate router types first or it fails on a fresh checkout against a stale/absent file.
 - **PostHog** not set up (env vars present, unused) — separate task.
