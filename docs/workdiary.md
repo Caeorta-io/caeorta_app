@@ -87,6 +87,11 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-06-09 | **`docs/03_Tech_Stack.md` auth row corrected** `Email magic link v1` → `Email OTP (code-only) v1`. | Spec-deviation fix: CLAUDE.md was corrected in session 10 but this table row was missed; OTP is what's now implemented. | `docs/03_Tech_Stack.md` |
 | 2026-06-09 | **On-device testing requires an EAS development build, not Expo Go** — SDK 56 isn't on the Play Store Expo Go yet (ships SDK 54; SDK 56 awaiting store approval, no timeline). Added `expo-dev-client`; `expo-updates` + EAS Update config came in automatically with the dev profile's channel. `eas init` created Expo project `@caeorta/caeorta` (projectId `2128c1a3-de52-4a34-958f-5bb988150003`, app id `com.caeorta.caeorta`). | SDK 56 outpaces the public Expo Go; dev builds are Expo's recommended path anyway and also enable native Sentry. | `apps/mobile/app.json`, `apps/mobile/package.json`, `apps/mobile/eas.json` (existing profile), Expo dashboard |
 | 2026-06-09 | **Dev Supabase email/OTP config for code-only OTP** (done on dev project, not in repo): Magic Link template → `{{ .Token }}`; "Confirm email" turned OFF; Email OTP Length 8 → 6. | Default templates emitted a magic link not a code; confirm-on would route new users through a signup-confirm link needing `type:'signup'` (app uses `type:'email'`); length 8 mismatched the 6-digit app/spec. | dev Supabase Dashboard (Auth → Email templates + provider settings) |
+| 2026-06-16 | **AI Agent Contract v0 produced unilaterally as a live, versioned repo doc** (`docs/ai-agent-contract.md`), distinct from the immutable project-knowledge spec (`docs/06_AI_Agent_Contract.md`, frozen as v0.1). The live file is the source of truth going forward; agent project reviews async. | Agent project not ready for joint Week-1 review; R1 (contract drift) is the risk being managed — a written, versioned, jointly reviewable contract is the mitigation. | `docs/ai-agent-contract.md` (new); R1 in `docs/09_Risks_And_Mitigations.md` |
+| 2026-06-16 | **Six open-question defaults proposed** in the v0 contract: (1) trigger = Postgres `NOTIFY` from `device_sync_complete` + a "completed-with-no-outputs" sweep backstop; (2) one vehicle per run; (3) deep analysis weekly Sundays 02:00 UTC via `pg_cron`; (4) insufficient_data threshold = 30 min telemetry w/ valid ECU profile (flagged as the agent project's call, not dictated); (5) dedup = separate outputs, deduped in app UI by category + active state; (6) `agent_request_queue` deferred to v2 unless a Week-6 finding says otherwise. | Lowest-friction, debuggable, simplest-to-reason-about defaults; each is a proposal the agent project can accept or push back on. | `docs/ai-agent-contract.md` § Open questions |
+| 2026-06-16 | **Primary-trigger reconciliation:** NOTIFY is emitted by the `device_sync_complete` Edge Function (its last step), not a separate `sync_sessions` table trigger. Resolves the divergence between `06_AI_Agent_Contract.md` (reads like a table trigger) and `07_Sync_Architecture.md` (Edge-Function-driven). | Keep trigger logic in the function that already owns the completion transaction; avoid firing on intermediate UPDATEs. | `docs/ai-agent-contract.md` § Primary trigger |
+| 2026-06-16 | **Async handoff channel = GitHub issue on the AI agent project's repo** (contract markdown pasted + linked). Filing is PENDING — no agent repo (`caeorta_ai_agent`/`caeorta_agent`) is reachable from the app founder's `gh` account; only `caeorta_app` is visible under `Caeorta-io`. Founder action: confirm repo name + grant access, or have the agent owner file it. | Founder choice (over Notion/email/chat); puts review next to agent code, threaded + async, aligns with "both-sides PR approval" mitigation. | `docs/ai-agent-contract.md` § Review process |
+| 2026-06-16 | **Weekly AI-agent sync = Friday 16:00 IST, 30 min, recurring** (both founders + agent lead). The R1 standing mitigation. Calendar invite NOT yet created — Claude has no calendar integration; founder action, also gated on reaching the agent lead. | Founder choice; standing cross-project sync to catch contract drift before Week-6 integration day. | `docs/ai-agent-contract.md` § Review process |
 
 ---
 
@@ -674,6 +679,43 @@ The brief assumed Expo Go, but **SDK 56 isn't on the Play Store Expo Go** (it sh
 **Notes / lessons (E2E):**
 - **Expo Go has an SDK ceiling tied to the store build.** A monorepo on the newest SDK (we took 56 in session 9) can't use public Expo Go until the store catches up. Plan for a dev build as the default on-device path on bleeding-edge SDKs — it's also required the moment any non-Expo-Go native module (Sentry, wifi-reborn, etc.) is added.
 - **Supabase "OTP vs magic link" is 100% a template decision, not an API flag.** The same `signInWithOtp` call sends whatever the email template renders; `{{ .Token }}` = code, `{{ .ConfirmationURL }}` = link. And "Confirm email" ON changes the verify `type` for new users. Config, not code, was the whole gap here — the app code was correct as written.
+
+---
+
+### 2026-06-16 — AI Agent Contract v0 (async-review draft) (session 12)
+
+**Goal of session:** Produce a clean, shareable AI Agent Contract v0 as a live versioned repo doc (`docs/ai-agent-contract.md`), distinct from the project-knowledge spec; propose defaults for the six open questions; decide the async handoff channel and the weekly sync cadence. This is the active mitigation for **R1 (contract drift)**.
+
+**Read first (in full):** `docs/06_AI_Agent_Contract.md`, the diagnostics section of `docs/05_Database_Schema.md` (dtcs, diagnostic_outputs, diagnostic_feedback, agent_status). **Partially:** the `device_sync_complete` trigger section of `docs/07_Sync_Architecture.md`, and R1 in `docs/09_Risks_And_Mitigations.md`. Plus the full workdiary tail through session 11.
+
+**Done:**
+- **Created `docs/ai-agent-contract.md` (v0, draft, awaiting AI agent project review).** Status block + date stamp at top; relationship note framing `06_AI_Agent_Contract.md` as the immutable v0.1 starting point and this file as the evolving source of truth; all sections copied from the spec; a **Changelog** block at the bottom; a new **Review process** section.
+- **Annotated all six open questions** with a "This project's current proposal" line each (see decisions log for the list). Trigger proposal carries an explicit honest caveat about `NOTIFY`'s fire-and-forget lossiness and the sweep backstop that compensates.
+- **Reconciled the primary-trigger divergence** between `06` (reads like a `sync_sessions` table trigger) and `07` (`device_sync_complete` Edge Function): v0 says `pg_notify` is emitted by the Edge Function as its last step, not a table trigger.
+- **Documented the async handoff channel** (GitHub issue on the agent repo) and the **weekly sync cadence** (Friday 16:00 IST, 30 min) in the Review process section.
+
+**Two items flagged and NOT executed (per the brief's "ask/flag before proceeding"):**
+- **Handoff issue not filed — agent repo unreachable.** No `caeorta_ai_agent` / `caeorta_agent` resolves from the app founder's `gh` account; only `caeorta_app` is visible under `Caeorta-io`. Channel is decided + documented; filing is a founder action (confirm repo name + access, or have the agent owner file it).
+- **Weekly sync not on calendars — no calendar integration available to Claude.** Cadence is agreed + documented; the recurring invite (both founders + agent lead) is a founder action and also depends on reaching the agent lead.
+
+**Side flag (tangential, not acted on):** `gh repo view` reports `caeorta_app` is now **public** (`isPrivate: false`); the Repository facts block above still says "private." A public repo makes this contract doc world-readable. Surfacing only — visibility is a founder decision outside this task's scope; Repository facts should be reconciled once the founder confirms the intended visibility.
+
+**Tools / versions touched:** none — docs only. Inventory unchanged.
+
+**Files / commits:** Branch `feat/mobile-auth-i18n-sentry` (current). New file `docs/ai-agent-contract.md`; `docs/workdiary.md` (this entry + 6 decisions-log rows). One commit proposed: `docs: AI Agent Contract v0 (async-review draft) + workdiary entry`. PR description references R1 in `docs/09_Risks_And_Mitigations.md` as the risk addressed.
+
+**Decisions taken (also in Decisions log):** v0 live contract created; six open-question defaults proposed; primary-trigger reconciliation; handoff channel = GitHub issue on agent repo (filing pending); weekly sync = Friday 16:00 IST / 30 min (calendar pending).
+
+**Open items rolled forward:**
+- **File the handoff issue** on the agent repo once it's reachable (founder action).
+- **Create the weekly-sync calendar invite** (founder action; needs the agent lead's contact).
+- **Reconcile repo visibility** in Repository facts (public vs. private) once the founder confirms intent.
+- **`agent_role` read-only migration** — still gated on this contract landing; now unblocked once v0 is reviewed/merged.
+- Long-running carry-overs unchanged from session 11 (prod migration promotion, `seed.sql`, `devices` column-scope, device JWT claim, repo squash-only setting, Google Play Console, source-folder cleanup, action-plan "magic link" reference for Friday retro, PostHog, Sentry Week-10 work).
+
+**Notes / lessons:**
+- **A unilateral contract is only safe if it's honestly annotated.** The value of v0 isn't that we decided six things — it's that each decision is labelled a *proposal* the other side can reject, so the agent project's review is a real fork point, not a rubber stamp. That's what keeps R1 managed rather than just deferred.
+- **The trigger doc divergence was latent until written down.** `06` and `07` had described the same trigger two different ways (table-watch vs. Edge-Function-emitted) and nobody had to choose until the contract forced it. Writing the contract is itself a drift-detector.
 
 ---
 
