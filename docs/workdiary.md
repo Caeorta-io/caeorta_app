@@ -85,6 +85,8 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-06-09 | **Sentry SDK = `@sentry/react-native`** (not the deprecated/archived `sentry-expo`). Wired manually (DSN-only `Sentry.init`, `Sentry.wrap`, `@sentry/react-native/expo` config plugin); did NOT run `@sentry/wizard` (it configures sourcemap upload/release tracking, deferred to Week 10). | Expo's current "Using Sentry" guide points to `@sentry/react-native`; `sentry-expo` archived post-SDK-50. Brief asked to confirm the current recommendation. | `apps/mobile/src/lib/sentry.ts`, `apps/mobile/app.json`, `apps/mobile/package.json` |
 | 2026-06-09 | **expo-router protected routes = `Stack.Protected` guards**, not the older `(auth)/_layout.tsx` + `<Redirect>` pattern the brief assumed. The guard flip is the navigation (no manual redirect after verify/sign-out). | Expo Router v6 (SDK 56) recommended pattern per Expo's auth guide; founder chose it when the difference was surfaced (gated item in the brief). | `apps/mobile/src/app/_layout.tsx` |
 | 2026-06-09 | **`docs/03_Tech_Stack.md` auth row corrected** `Email magic link v1` → `Email OTP (code-only) v1`. | Spec-deviation fix: CLAUDE.md was corrected in session 10 but this table row was missed; OTP is what's now implemented. | `docs/03_Tech_Stack.md` |
+| 2026-06-09 | **On-device testing requires an EAS development build, not Expo Go** — SDK 56 isn't on the Play Store Expo Go yet (ships SDK 54; SDK 56 awaiting store approval, no timeline). Added `expo-dev-client`; `expo-updates` + EAS Update config came in automatically with the dev profile's channel. `eas init` created Expo project `@caeorta/caeorta` (projectId `2128c1a3-de52-4a34-958f-5bb988150003`, app id `com.caeorta.caeorta`). | SDK 56 outpaces the public Expo Go; dev builds are Expo's recommended path anyway and also enable native Sentry. | `apps/mobile/app.json`, `apps/mobile/package.json`, `apps/mobile/eas.json` (existing profile), Expo dashboard |
+| 2026-06-09 | **Dev Supabase email/OTP config for code-only OTP** (done on dev project, not in repo): Magic Link template → `{{ .Token }}`; "Confirm email" turned OFF; Email OTP Length 8 → 6. | Default templates emitted a magic link not a code; confirm-on would route new users through a signup-confirm link needing `type:'signup'` (app uses `type:'email'`); length 8 mismatched the 6-digit app/spec. | dev Supabase Dashboard (Auth → Email templates + provider settings) |
 
 ---
 
@@ -646,6 +648,32 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 - **First typed-route navigation surfaced a latent typecheck trap.** `router.push('/verify')` failed `tsc` against session 9's stale `.expo/types/router.d.ts` (which only knew `/` and `/_sitemap`). `expo export` doesn't regenerate it; a brief `expo start` does. A fresh clone with *no* file gets the permissive `Href` and passes — so the only failing state is "stale-and-present." Worth remembering before wiring CI typecheck.
 - **`pnpm` in the no-TTY harness shell needs `CI=true`.** `expo install` → `pnpm install` aborted on "Aborted removal of modules directory due to no TTY"; `CI=true` (pnpm's documented escape) unblocked it. Also surfaced pnpm 11's `allowBuilds` gate (`@sentry/cli` build script) — same pattern session 9 hit with oxide/esbuild.
 - **Re-export shared library types from the workspace package, not the app.** Putting `Session`/`User` re-exports in `@caeorta/supabase` kept `apps/mobile` free of a direct `@supabase/supabase-js` dependency (honoring the brief's "don't re-install supabase-js") while still giving the app full auth types.
+
+**On-device E2E — completed same session (all Week-1 DoD met):**
+
+The brief assumed Expo Go, but **SDK 56 isn't on the Play Store Expo Go** (it ships SDK 54; SDK 56 awaits store approval per Expo's May-2026 changelog). Pivoted to an **EAS cloud development build** for Android: `eas login` → `eas init` (created `@caeorta/caeorta`, projectId `2128c1a3-…`, app id `com.caeorta.caeorta`) → `eas build --profile development --platform android`. `eas init`/build also added `expo-dev-client` and auto-installed + configured `expo-updates` (the dev profile uses a channel). Installed the APK on the App founder's physical Android. A dev build loads JS from local Metro, so `.env.local` `EXPO_PUBLIC_*` values flow at runtime — no EAS env vars needed.
+
+**Dev Supabase config needed for code-only OTP to actually work (item 9):** default templates sent a magic *link*, not a code → edited **Magic Link** template to `{{ .Token }}`; turned **"Confirm email" OFF** (so a new address gets one login OTP verifiable with `type:'email'`, not a signup-confirm link); **Email OTP Length 8 → 6** to match the app/spec. Hit Supabase's built-in **email rate limit** mid-testing (deliverability cap on the bundled SMTP).
+
+**Results (physical Android, dev build → dev Supabase), all PASS:**
+1. Sign-in → 6-digit code email → verify → **"Hello muhammedraslanthalassery@gmail.com"**.
+2. **Throw test error** → Sentry dashboard issue **and** email alert (`Caeorta Sentry test error (home screen button)`); Metro logged `Captured error event`. Native + JS capture both active in the dev build.
+3. Sign out → returns to sign-in.
+4. **Session persistence** — Metro `r` cold-reload (re-runs boot `getSession()`) returned to Hello with no re-login. SecureStore 2048-byte concern did **not** bite on this device.
+5. Sign out again.
+
+(Note: the dev build shows the dev-client "scan QR" launcher on a cold relaunch because it doesn't bundle JS — a preview/prod build bundles JS and reopens straight into the app. So that's dev-only behavior, not a pilot defect. The `r` reload is the valid persistence test.)
+
+**Updated open items from E2E:**
+- ~~Real-device E2E (item 10)~~ **DONE** — all DoD verified above.
+- ~~Supabase Dashboard OTP config (item 9)~~ **DONE on dev** — but **prod Supabase will need the same email-template + OTP-length + confirm-email config** when promoted (not just migrations).
+- **Resend custom SMTP** for Supabase Auth emails — removes the rate limit; the real path for the pilot. Platform-area (Sulaiman).
+- **`expo-updates` now in the project** (EAS Update configured) — earlier than the action plan scheduled, triggered by the dev-build channel; harmless and in the planned stack.
+- SecureStore 2048-byte caveat — observed OK on one device; re-check on the actual pilot devices.
+
+**Notes / lessons (E2E):**
+- **Expo Go has an SDK ceiling tied to the store build.** A monorepo on the newest SDK (we took 56 in session 9) can't use public Expo Go until the store catches up. Plan for a dev build as the default on-device path on bleeding-edge SDKs — it's also required the moment any non-Expo-Go native module (Sentry, wifi-reborn, etc.) is added.
+- **Supabase "OTP vs magic link" is 100% a template decision, not an API flag.** The same `signInWithOtp` call sends whatever the email template renders; `{{ .Token }}` = code, `{{ .ConfirmationURL }}` = link. And "Confirm email" ON changes the verify `type` for new users. Config, not code, was the whole gap here — the app code was correct as written.
 
 ---
 
