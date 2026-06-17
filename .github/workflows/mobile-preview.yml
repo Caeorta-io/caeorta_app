@@ -1,0 +1,18 @@
+name: Mobile Preview
+
+# Placeholder workflow. EAS preview builds get wired up in Week 10 of the
+# action plan (docs/08_12_Week_Action_Plan.md), once EAS Build is configured.
+# Until then this job is disabled so it never runs or shows as failing on PRs.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  preview:
+    name: EAS preview build
+    if: false # TODO: enable when EAS is configured in Week 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Placeholder
+        run: echo "EAS preview build will be configured in Week 10."
