@@ -10,7 +10,8 @@
   },
   "scripts": {
     "typecheck": "pnpm -r typecheck",
-    "lint": "pnpm -r lint"
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r run --if-present test"
   },
   "devDependencies": {
     "eslint": "^9.39.0",

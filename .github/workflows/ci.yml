@@ -7,22 +7,26 @@ on:
     branches: [main]
 
 jobs:
-  lint-and-typecheck:
-    name: Lint and Typecheck
+  lint-typecheck-test:
+    name: Lint, Typecheck, Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
+      # pnpm must be set up before setup-node so `cache: pnpm` can resolve the
+      # pnpm store path. Keep `version: 11` here — it matches the packageManager
+      # field (pnpm@11.1.1) and is what the green runs on main already use.
       - name: Setup pnpm
         uses: pnpm/action-setup@v3
         with:
           version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -32,6 +36,12 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      # `pnpm test` -> `pnpm -r run --if-present test`. `--if-present` precedes
+      # the script name so pnpm treats it as its own flag (not an arg forwarded
+      # to vitest); workspaces without a test script are skipped, not failed.
+      - name: Test
+        run: pnpm test
 
   validate-migrations:
     name: Validate Migrations

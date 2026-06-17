@@ -163,7 +163,7 @@ Enforce squash-only merge in GitHub repo settings:
 3. Leave only "Allow squash merging" enabled.
 4. (Optional, recommended) check "Automatically delete head branches" so merged feature branches get cleaned up automatically.
 
-Branch protection itself is unavailable on the Free plan for private repos; squash-only merge is enforced at the repo-settings level (cosmetic, not preventive) and CI runs visibly on PRs.
+Branch protection itself is unavailable on the Free plan for private repos; squash-only merge is enforced at the repo-settings level (cosmetic, not preventive) and CI runs visibly on PRs. Concretely: the status checks from `ci.yml` (lint, typecheck, test) appear on every PR but cannot be marked *required* on this plan, so a red run does not block merging. Enforcement is therefore honor-system, per `docs/02_Working_Agreements.md`: do not merge a PR with failing CI, and Sulaiman's review stays the human gate before `main`.
 
 ## Commit conventions
 
