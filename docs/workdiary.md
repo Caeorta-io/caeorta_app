@@ -87,6 +87,8 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-06-09 | **`docs/03_Tech_Stack.md` auth row corrected** `Email magic link v1` → `Email OTP (code-only) v1`. | Spec-deviation fix: CLAUDE.md was corrected in session 10 but this table row was missed; OTP is what's now implemented. | `docs/03_Tech_Stack.md` |
 | 2026-06-09 | **On-device testing requires an EAS development build, not Expo Go** — SDK 56 isn't on the Play Store Expo Go yet (ships SDK 54; SDK 56 awaiting store approval, no timeline). Added `expo-dev-client`; `expo-updates` + EAS Update config came in automatically with the dev profile's channel. `eas init` created Expo project `@caeorta/caeorta` (projectId `2128c1a3-de52-4a34-958f-5bb988150003`, app id `com.caeorta.caeorta`). | SDK 56 outpaces the public Expo Go; dev builds are Expo's recommended path anyway and also enable native Sentry. | `apps/mobile/app.json`, `apps/mobile/package.json`, `apps/mobile/eas.json` (existing profile), Expo dashboard |
 | 2026-06-09 | **Dev Supabase email/OTP config for code-only OTP** (done on dev project, not in repo): Magic Link template → `{{ .Token }}`; "Confirm email" turned OFF; Email OTP Length 8 → 6. | Default templates emitted a magic link not a code; confirm-on would route new users through a signup-confirm link needing `type:'signup'` (app uses `type:'email'`); length 8 mismatched the 6-digit app/spec. | dev Supabase Dashboard (Auth → Email templates + provider settings) |
+| 2026-06-17 | **CI enhanced, not created: added a Test step + pnpm-store caching to the existing `main` `ci.yml`** (Sulaiman's session-6 CI, which already ran lint + typecheck + `validate-migrations`). Test runner = **Vitest** via root `pnpm test` → `pnpm -r run --if-present test`; placeholder smoke test in `packages/types` (lightest workspace). Added a disabled `mobile-preview.yml` (`if: false`, Week-10 EAS). | The brief assumed no CI existed; one did — minimal additive change keeps Sulaiman's CI intact. CI is cross-cutting → needs Platform (Sulaiman) agreement. | `.github/workflows/ci.yml`, `.github/workflows/mobile-preview.yml`, root `package.json`, `packages/types/package.json` + `src/__tests__/smoke.test.ts`, `docs/04_Repository_Structure.md`; PR #18 |
+| 2026-06-17 | **Recursive test command = `pnpm -r run --if-present test`** (flag before the script name), not the brief's `pnpm -r test --if-present`. | The brief's form forwards `--if-present` to vitest as an unknown CLI option and fails the job; pnpm only treats it as a `run` flag when it precedes the script name. | `.github/workflows/ci.yml` Test step, root `package.json` `test` script |
 
 ---
 
@@ -674,6 +676,46 @@ The brief assumed Expo Go, but **SDK 56 isn't on the Play Store Expo Go** (it sh
 **Notes / lessons (E2E):**
 - **Expo Go has an SDK ceiling tied to the store build.** A monorepo on the newest SDK (we took 56 in session 9) can't use public Expo Go until the store catches up. Plan for a dev build as the default on-device path on bleeding-edge SDKs — it's also required the moment any non-Expo-Go native module (Sentry, wifi-reborn, etc.) is added.
 - **Supabase "OTP vs magic link" is 100% a template decision, not an API flag.** The same `signInWithOtp` call sends whatever the email template renders; `{{ .Token }}` = code, `{{ .ConfirmationURL }}` = link. And "Confirm email" ON changes the verify `type` for new users. Config, not code, was the whole gap here — the app code was correct as written.
+
+---
+
+### 2026-06-17 — GitHub Actions CI: add test step + caching (session 13)
+
+> **Numbering note:** session 12 (AI Agent Contract v0) lives on the unmerged `docs/ai-agent-contract-v0` branch and is not on `main` yet, so on `main` this entry follows session 11 with a 12-shaped gap until that branch merges/reconciles. Kept as 13 to preserve chronology (12 happened first, 2026-06-16).
+
+**Goal of session:** GitHub Actions CI running lint, typecheck, **and test** on every PR, verified green on a PR.
+
+**Key correction up front — local `main` was 28 commits stale.** Early analysis concluded `main` had no monorepo (no `apps/`, no `pnpm-lock.yaml`, only `packages/supabase`) and I asked the founder how to base the PR. That premise was wrong: it was read off a **stale local `main`** (`6e23d5b`). `git fetch` showed `origin/main` (`1360496`) is the real integration branch — full monorepo, lockfile, **and an existing `ci.yml`** (Sulaiman's session-6 CI). Reset local `main` to `origin/main` and redid the work correctly. Lesson logged below.
+
+**Done:**
+- **Reframed "create ci.yml" → "enhance ci.yml".** The `main` workflow already ran **Lint + Typecheck** (job `lint-and-typecheck`) plus a `validate-migrations` job, but had **no test step and no dependency caching**. Made a minimal additive change rather than replacing Sulaiman's CI.
+- **`ci.yml`:** added a **Test** step (`pnpm test` → `pnpm -r run --if-present test`); added **pnpm-store caching** (`cache: pnpm` on `setup-node`, which required reordering pnpm setup *before* `setup-node` so the store path resolves). Kept `version: 11` on `pnpm/action-setup@v3` (matches `packageManager`, already green). Renamed the job to *Lint, Typecheck, Test*; `validate-migrations` untouched.
+- **Vitest placeholder:** added `vitest@^4.1.9` devDep + `"test": "vitest run"` to `packages/types` (lightest workspace) and `src/__tests__/smoke.test.ts` (2 assertions: a zod schema parses a valid object and rejects an invalid one). Added root `"test": "pnpm -r run --if-present test"` to match the existing `lint`/`typecheck` root-script pattern.
+- **`mobile-preview.yml`:** disabled placeholder (`if: false`, `# TODO: enable when EAS is configured in Week 10`).
+- **`docs/04`:** documented that on the Free plan CI status shows on PRs but **cannot be a required check**, so merge enforcement is honor-system per `docs/02`.
+- **Closed the broken first attempt (PR #17).** It was cut from stale local `main`, so it add/add-conflicts with the existing `ci.yml` and was unmergeable; closed it and deleted its branch.
+
+**Verification:**
+- Locally (full monorepo off `origin/main`): `pnpm -r lint` (0 errors; one pre-existing unused-import *warning* in `apps/admin`, untouched), `pnpm -r typecheck`, `pnpm -r run --if-present test` (2/2) all green.
+- **CI on PR #18 ran GREEN** — Lint ✓ Typecheck ✓ **Test ✓**, `validate-migrations` ✓, **Mobile Preview correctly skipped** (`if: false`). DoD met. Not merged (Sulaiman reviews, Muhammed merges).
+
+**Tools / versions touched:** `vitest@^4.1.9` added as a `packages/types` devDep (npm dep, not a machine-tool inventory row — same convention as session 11). No machine-tool inventory changes.
+
+**Files / commits:** Branch `ci/add-test-and-cache` off `origin/main`. Commit `255c5d3` `ci: add test step + pnpm-store cache; Vitest placeholder; mobile-preview placeholder` + this workdiary commit. **PR #18** against `main`. PR #17 (stale-main attempt) closed + branch deleted.
+
+**Decisions taken (also in Decisions log):** CI enhanced not created (test step + caching + Vitest placeholder + mobile-preview placeholder, keeping Sulaiman's CI intact); recursive test command corrected to `pnpm -r run --if-present test`.
+
+**Open items rolled forward:**
+- **CI green lands on `main` only when PR #18 merges** (Sulaiman review → Muhammed merge). The workflow definition is correct and proven green on the PR.
+- **`actions/checkout@v4` runs on the now-deprecated Node 20** (GitHub annotation; forced to Node 24 since 2026-06-16, still working). Pre-existing in Sulaiman's CI — bump `checkout` (and revisit `setup-node`/`action-setup`) at convenience.
+- **Repository facts still say "private"** but a prior session flagged `gh repo view` reports the repo **public**; visibility + this Repository-facts line need founder reconciliation (carried from the AI-agent-contract session).
+- **`docs/ai-agent-contract-v0` workdiary is divergent** — it has session 12 but lacks Sulaiman's sessions 3–10. Whoever reconciles that branch onto `main` must merge both tracks (this `main`-based entry already preserves Sulaiman's track).
+- Long-running carry-overs unchanged (prod migration promotion, `seed.sql`, `devices` column-scope, device JWT claim, `agent_role`, Google Play Console pre-Week-10, source-folder cleanup, PostHog, Sentry Week-10 work, Resend custom SMTP).
+
+**Notes / lessons:**
+- **`git fetch` before reasoning about `main`.** A 28-commit-stale local `main` produced a confident-but-wrong "main has no monorepo" analysis and an unnecessary clarifying question to the founder. Stale local refs are silent; verify `origin/<branch>` before drawing conclusions about repo state — especially in this repo's stacked-branch workflow where `main` moves via reconciliation commits.
+- **Check for an existing workflow before "creating" one.** The brief said "create `ci.yml`"; one already existed (Sulaiman's session 6). Enhancing beats replacing — it preserves the `validate-migrations` job and the proven setup, and keeps the diff reviewable.
+- **`--if-present` is a pnpm `run` flag, not a script arg.** `pnpm -r test --if-present` forwards `--if-present` to vitest (unknown option → fail); `pnpm -r run --if-present test` is the correct form.
 
 ---
 
