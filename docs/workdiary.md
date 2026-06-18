@@ -949,3 +949,23 @@ When starting a new entry, copy this scaffold to the bottom of the file. Keep pr
 **Notes / lessons:**
 - 524 timeout on deploy is a Supabase server-side issue — just retry, code is fine
 - notify_agent is non-fatal in device_sync_complete — agent polls as fallback if pg_notify fails
+
+---
+
+### 2026-06-15 — Week 5 Platform functions (session 11)
+
+**Goal of session:** Build Week 5 Edge Functions and pg_cron retention jobs.
+
+**Done:**
+- Built get_drive_telemetry — fetches telemetry for a drive, downsamples to max 300 points server-side, supports single metric or all metrics query
+- Built send_diagnostic_notification — sends Expo push notifications for warning/critical diagnostics, respects user severity threshold preference, rate limited to 3 per user per hour
+- Added pg_cron migration (20260614000002) — 3 jobs: nightly telemetry downsampling (30 days), device_events cleanup (90 days), stale sync session cleanup (7 days)
+- Both functions deployed (commit 235f23b)
+
+**Open items rolled forward:**
+- Test admin login on Vercel once email rate limit resets
+- Week 6: agent_status subscription, diagnostic trigger wiring
+- Raslan: Week 2-4 app screens in progress
+
+**Notes / lessons:**
+- Supabase CLI v2.107.0 available — update at convenience with brew upgrade supabase
