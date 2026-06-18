@@ -24,3 +24,10 @@ export type {
   CompositeTypes,
 } from './database.types';
 export { Constants } from './database.types';
+export {
+  subscribeToCurrentState,
+  subscribeToAgentStatus,
+  subscribeToSyncSession,
+  subscribeToDiagnosticOutputs,
+  unsubscribe,
+} from './realtime';
