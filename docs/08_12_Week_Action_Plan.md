@@ -139,7 +139,7 @@ The whole week is about deciding things on paper so weeks 2-12 don't get rewritt
 - [ ] `packages/types`: shared zod schemas mirroring DB types
 - [ ] `packages/supabase`: client factory
 - [ ] Connect Expo app to dev Supabase
-- [ ] Implement email magic link login screen
+- [ ] Implement email OTP (code-only) login screen
 - [ ] Implement authenticated home screen: "Hello {user.email}"
 - [ ] Set up i18next with English; structure all UI text through it
 - [ ] Set up Sentry SDK in mobile app
@@ -159,7 +159,7 @@ The whole week is about deciding things on paper so weeks 2-12 don't get rewritt
 ### Definition of done — Week 1
 - Muhammed can run the codebase locally
 - Both Supabase projects exist with v1 schema applied
-- App can log in via magic link against dev Supabase
+- App can log in via email OTP (code-only) against dev Supabase
 - AI Agent Contract doc exists and is shared with agent project
 - CI runs green on a trivial PR
 
@@ -168,6 +168,20 @@ The whole week is about deciding things on paper so weeks 2-12 don't get rewritt
 ## Week 2 — Device pairing and provisioning
 
 Harder than it sounds because it touches firmware, Supabase, and the app simultaneously.
+
+### Carry from Week 1
+
+Logged in the 2026-06-19 Week 1 reconciliation (see `docs/workdiary.md` Week 1 retrospective and the Plan revision log below). Each line: what slipped, why, what unblocks it.
+
+- **Prod migration promotion (all 5 migrations) + Dashboard OTP config.** Only dev was promoted in Week 1 (Sulaiman's session 3 confirmed 26 tables + RLS on dev). Prod is still unpromoted. Slipped because the prod CLI link was deferred to Week 0 wrap and never executed. Unblocked by one prod-link session running the `docs/05` promotion ritual for `enable_extensions` / `initial_schema` / `rls_policies` / `add_notify_agent` / `add_pg_cron_jobs`, plus replicating the Dashboard-side OTP email config (magic-link template → `{{ .Token }}`, confirm-email off, OTP length 6 — see `docs/05` § Supabase Dashboard configuration).
+- **`agent_role` read-only Postgres role migration.** Gated on AI Agent Contract v0 review. The v0 contract exists (App-track session 12, `docs/ai-agent-contract.md`) but is on an unmerged branch and not yet shared with the agent project, so the role's exact read scope isn't final. Unblocked when the contract v0 merges and the agent project confirms which tables/columns it reads.
+- **`devices` column-scope follow-up migration.** Deferred in the RLS migration (session 7) until `mint_device_token` firmed up. `mint_device_token` now exists (Sulaiman's session 4), so this is unblocked: REVOKE UPDATE on device-managed columns from `authenticated`, GRANT the owner-writable subset (likely just `status`).
+- **AI Agent Contract: share with agent project + weekly-sync calendar invite.** Channel (GitHub issue on the agent repo) and cadence (Friday 16:00 IST, 30 min) are decided (session 12) but not executed — no agent repo is reachable from the App founder's `gh`, and there's no calendar integration. Founder action: confirm the agent repo + access (or have the agent owner file the issue) and create the recurring invite. This is the standing R1 mitigation.
+- **Auth-decision doc fix.** "Magic link" in Week 1's deliverables/DoD corrected to "email OTP (code-only)" in this reconciliation (see revision log).
+
+Already completed by Sulaiman in Weeks 2–5 (so NOT carried, recorded for honesty): **Edge Function scaffolding** (the Week-1 Platform item "Initialize Edge Function scaffolding" was deferred to Week 2 and is done — all Week 2–5 functions are on `main`) and **`supabase/seed.sql`** (present on `main`, Sulaiman's session 5).
+
+Slipped from Week 1's "Together"/working-agreement set and still open as founder actions (not code): designer 90-min working session, Figma component-system confirmation, recurring daily-sync + Friday-retro calendar events, and the GitHub Issues + project board. Per the 2026-06-19 retro these had not happened; founder intends to do them after that session.
 
 ### Platform founder
 - [ ] Edge Function: `pair_device` (per `07_Sync_Architecture.md`)
@@ -537,4 +551,8 @@ Do not fill this week with new features.
 
 When this plan changes, log it here with date and reason. Don't pretend the original plan was always what's happening.
 
-- _(empty — first revision will be logged here)_
+- 2026-06-19 — **Week 1 reconciliation.** DoD: 3/5 fully done (Muhammed runs the codebase locally; app logs in via email OTP against dev; CI green on a trivial PR — PR #18), 2/5 partial (Supabase: dev has all 5 migrations + seed + RLS, prod still unpromoted; AI Agent Contract v0 exists but is unmerged and not yet shared). Slipped into Week 2 (see "Carry from Week 1"): prod migration promotion + Dashboard OTP config, `agent_role` migration, `devices` column-scope migration, AI-contract sharing + weekly-sync invite. Slipped working-agreement items (founder actions, not code): designer working session, Figma component-system confirmation, daily-sync + Friday-retro calendar events, GitHub Issues + project board. Nothing was silently dropped. Note: Sulaiman's Platform track ran ahead to Week 5 (Edge Functions, admin dashboard, Vault, sync pipeline) — those weeks' work is logged in the workdiary's Platform-track entries.
+- 2026-06-19 — **Execution model clarified mid-Week-1.** Reading B (Muhammed sole code author; Sulaiman reviews-only and owns Platform-area decisions) made explicit via Prompt 0 in session 4. Reflected in `CLAUDE.md`, `docs/01`, `docs/02`, `docs/04`, `docs/08`, `workdiary`, `conventions.md`.
+- 2026-06-19 — **Auth decision corrected.** Email magic link v1 → Email OTP (code-only) v1. `CLAUDE.md` fixed session 10; `docs/03` fixed session 11; this revision logs the change in the Action Plan's Week 1 deliverables + DoD.
+- 2026-06-19 — **Stack version bump.** Scaffolders drifted past the doc floors; accepted Expo SDK 56 (not 53), Next.js 16 (not 15), TypeScript pinned 5.9.3 monorepo-wide. Documented in `docs/03` and `conventions.md`. (No "SDK 53"/"Next 15" literals appear in the week-by-week deliverables, so no per-week text changes were needed here.)
+- 2026-06-19 — **Prompt 8 (admin scaffold) cut from Week 1.** Admin work properly belongs to Week 3 per the original plan, and Sulaiman built the Week 3 admin dashboard (his session 7). Cut from Week 1 scope.

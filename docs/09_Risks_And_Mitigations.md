@@ -16,7 +16,7 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 - Contract changes require PR approval from both sides
 - Week 6 integration day is explicitly buffered for finding gaps
 
-**Status:** Active. Monitor weekly.
+**Status:** Active, partially mitigated as of the 2026-06-19 Week 1 retro. A written, versioned contract v0 exists (`docs/ai-agent-contract.md`, App-track session 12) with each open-question default labelled a *proposal* the agent project can reject — the core mitigation. But it is **not yet shared**: it sits on an unmerged branch, no agent repo is reachable from the App founder's `gh`, and the weekly cross-project sync isn't on a calendar. Until the contract is shared and the sync is recurring, the mitigation is on paper. Monitor weekly.
 
 ---
 
@@ -49,7 +49,7 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 - The split between Platform and App founders means single-person work isn't pure blocker; each can make some progress on the other's track
 - Week 12 is buffer that can absorb up to a week of slip
 
-**Status:** Active.
+**Status:** Active. Did not materialize as written (no founder went unavailable) through the 2026-06-19 Week 1 retro. Worth noting: the Reading B execution model — Muhammed as sole code author — is effectively the single-execution-point pattern this risk was written to anticipate, but in steady-state rather than as a one-off absence. The day-to-day version of that exposure is now tracked more precisely under R14 (bus factor); R3 remains the framing for a multi-day/family-emergency-style availability shock.
 
 ---
 
@@ -235,6 +235,8 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 
 **Status:** Active. Reframed 2026-06-02 from the prior R14 ("Two founders' coding styles diverge"), which is obsolete now that the execution model has collapsed to a single code author. The original divergence-of-style risk no longer applies.
 
+**2026-06-19 Week 1 retro check:** the **EAS Update + EAS Build emergency-release runbook** listed above as a mitigation **does not yet exist** as an artifact — a repo-wide search found no runbook doc, only this mitigation text referencing it. It has been a paper mitigation since session 4. Outstanding action: write the runbook in `docs/` (the conditions that triggered listing it — Muhammed unavailable, urgent JS-only fix needed — are unchanged). The other mitigations (rich `CLAUDE.md`/`docs/`, ADRs, strict TS + Zod, Sulaiman reviewing every PR) are in place and active.
+
 ---
 
 ## R15: AI tools generate plausible-but-wrong code that ships unnoticed
@@ -251,7 +253,7 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 - Pilot itself is the final test
 - For especially critical paths (auth, device pairing, payments-later), write unit tests even if other code is tested less
 
-**Status:** Active.
+**Status:** Active. No instance of plausible-but-wrong AI-generated code is known to have reached `main` or pilot through the 2026-06-19 Week 1 retro (Weeks 1–5). The `docs/conventions.md` § Spec deviations protocol has instead been actively exercised as a working mitigation — implementation surfaced real spec gaps that were fixed-and-documented in the same PR (e.g. `app_versions` composite PK, the RLS row-vs-column interpretation, the `pnpm -r run --if-present test` correction). Those are spec/tooling corrections caught during authoring, not bugs that shipped; the absence of shipped defects is encouraging but unproven until the pilot exercises the code.
 
 ---
 
@@ -267,7 +269,7 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 - Both founders have EAS access; Sulaiman can publish an emergency rollback via the documented runbook if Muhammed is unavailable
 - Don't introduce force-update logic until Week 8 when it's been tested
 
-**Status:** Active. Specifically watched.
+**Status:** Active. Specifically watched. Unchanged at the 2026-06-19 Week 1 retro — force-update logic has not been introduced yet (it's a Week 8 item), so the risk is still latent, not live. The `app_versions` table (with the composite `(version, platform)` PK) exists in the schema, but no client-side version-check code consumes it yet.
 
 ---
 
@@ -304,6 +306,25 @@ than "Caeorta." Less professional for commercial launch.
 - Track the transfer as an explicit Week 13+ task
 
 **Status:** Active. Tracked for post-pilot.
+
+---
+
+## R19: Two-track main divergence / stacked-merge drift
+
+**Risk:** Two parallel work tracks (Muhammed's App track and Sulaiman's Platform track) integrate into one `main`, and work proceeds on feature branches and stacked PRs. Local `main` (and feature branches cut from it) go stale silently; stacked PRs can merge into their base branch instead of `main`; and a long-lived branch can miss the *other* track's commits entirely. The failure mode is acting on a stale picture — a confident-but-wrong analysis, or worse, an edit/merge that clobbers the other founder's work (e.g. overwriting the Platform-track workdiary entries).
+
+**Likelihood:** Medium-High — it has already recurred. Session 9 hit it (5 stacked PRs merged into base branches, leaving `main` three stacks behind, requiring catch-up PRs #11/#12). Session 13 hit it (28-commit-stale local `main` produced a wrong "main has no monorepo" analysis). The 2026-06-19 Week 1 retro hit it again (the retro branch was stale by Sulaiman's entire Platform track + App session 13; editing the local workdiary would have dropped ~220 lines of his entries).
+
+**Impact:** Low-to-medium each time so far (caught before damage), but the clobber-the-other-track case is high-impact and hard to reverse on a public repo.
+
+**Mitigations:**
+- **`git fetch` and reason about `origin/main`, never local `main`.** Local refs are silent when stale.
+- **Branch off `origin/main`; for cross-track doc edits (workdiary, plan, risks), edit the `origin/main` copy** so the other track's entries are preserved.
+- **Keep stacks shallow** and ensure every PR in a stack targets `main`, not an intermediate branch (see `docs/conventions.md` § PR stacking + Reconciliation).
+- **Sanity-check after stacked merges** with `git ls-tree origin/main <path>` / `git log origin/main..<branch>`.
+- Longer-term: enabling required status checks / branch protection (blocked on the Free plan today) would reduce the surface; revisit on a paid plan.
+
+**Status:** Active. New at the 2026-06-19 Week 1 retro, formalizing a pattern that bit three times. The process guidance already lives in `docs/conventions.md`; this register entry records it as a standing risk because recurrence shows the guidance alone hasn't prevented it.
 
 ---
 
