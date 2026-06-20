@@ -419,6 +419,26 @@ A migration applied to dev but not yet promoted to prod is "dev-only." Week N+1 
 
 All three should be promoted to prod in one session per the procedure above, before any prod-touching Week 2 work begins.
 
+## Supabase Dashboard configuration (operational, not in migrations)
+
+Some Supabase configuration lives outside migrations — in the Dashboard UI under Project Settings, Auth Providers, Email Templates, and similar. This config must be replicated manually when promoting to prod, since it doesn't ship via migrations. Keep this checklist current as new Dashboard-side config is added.
+
+> TODO: extract to `docs/supabase-dashboard-config.md` if this section grows past one screen, or when prod Auth setup adds more items than dev currently has.
+
+### Auth — Email OTP code-only configuration
+
+Default Supabase Auth email behavior is "send a magic link with an embedded token." Code-only OTP delivery (the v1 decision per CLAUDE.md) requires three Dashboard-side changes per project (dev configured 2026-06-09; prod still pending):
+
+1. **Authentication → Email Templates → Magic Link template**: replace the link with `{{ .Token }}` so the email contains only the 6-digit code, not a clickable URL.
+2. **Authentication → Providers → Email → Confirm email**: set to OFF. Otherwise new users get a confirm-email link before they can sign in, defeating the OTP flow.
+3. **Authentication → Providers → Email → Email OTP Length**: change from 8 (default) to 6 digits, matching the verify screen's input length.
+
+Note: even after these settings, Supabase may still emit both code and link in some templates. The mobile app only reads the code, so this is cosmetic-only. If a pilot user reports confusion, revisit template wording then.
+
+### Auth — Email rate limiting (free tier)
+
+The default Supabase email infrastructure throttles aggressively on free tier. During session 11's testing the rate limit was hit during retries. For pilot launch (Week 11), switch to Resend custom SMTP via Authentication → Providers → Email → SMTP Settings. Resend credits are cheap; the rate limit becomes a non-issue. Until then, expect occasional throttling during dev — it's expected, not a bug.
+
 ## Data retention
 
 - `telemetry` — raw data: 30 days. Older data downsampled to per-minute aggregates and retained 1 year.

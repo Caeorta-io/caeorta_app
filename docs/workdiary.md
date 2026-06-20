@@ -37,7 +37,7 @@ Tools intentionally **not** installed (per project decisions or scope):
 
 ## Repository facts
 
-- **GitHub**: [Caeorta-io/caeorta_app](https://github.com/Caeorta-io/caeorta_app) — **private** (org renamed from `Caeorta-AI` on 2026-05-15; see decisions log)
+- **GitHub**: [Caeorta-io/caeorta_app](https://github.com/Caeorta-io/caeorta_app) — **public** (made public 2026-06-16 as part of an intentional open-development posture; private from creation until then). Org renamed from `Caeorta-AI` on 2026-05-15; see decisions log.
 - **Local working path** (App founder): `c:\Users\muham\Documents\1_Caeorta_dev\caeorta_app` (NOT OneDrive; the `#` prefix was dropped on 2026-06-03 because Tailwind 4's oxide compiler corrupts paths containing `#` — see decisions log)
 - **Default branch**: `main`
 - **Workspace manager**: pnpm 11 workspaces (`apps/*`, `packages/*`)
@@ -87,6 +87,7 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-06-09 | **`docs/03_Tech_Stack.md` auth row corrected** `Email magic link v1` → `Email OTP (code-only) v1`. | Spec-deviation fix: CLAUDE.md was corrected in session 10 but this table row was missed; OTP is what's now implemented. | `docs/03_Tech_Stack.md` |
 | 2026-06-09 | **On-device testing requires an EAS development build, not Expo Go** — SDK 56 isn't on the Play Store Expo Go yet (ships SDK 54; SDK 56 awaiting store approval, no timeline). Added `expo-dev-client`; `expo-updates` + EAS Update config came in automatically with the dev profile's channel. `eas init` created Expo project `@caeorta/caeorta` (projectId `2128c1a3-de52-4a34-958f-5bb988150003`, app id `com.caeorta.caeorta`). | SDK 56 outpaces the public Expo Go; dev builds are Expo's recommended path anyway and also enable native Sentry. | `apps/mobile/app.json`, `apps/mobile/package.json`, `apps/mobile/eas.json` (existing profile), Expo dashboard |
 | 2026-06-09 | **Dev Supabase email/OTP config for code-only OTP** (done on dev project, not in repo): Magic Link template → `{{ .Token }}`; "Confirm email" turned OFF; Email OTP Length 8 → 6. | Default templates emitted a magic link not a code; confirm-on would route new users through a signup-confirm link needing `type:'signup'` (app uses `type:'email'`); length 8 mismatched the 6-digit app/spec. | dev Supabase Dashboard (Auth → Email templates + provider settings) |
+| 2026-06-16 | **`Caeorta-io/caeorta_app` set to public** (private from creation until then). Intentional open-development posture; the AI Agent Contract and `conventions.md` docs are now world-readable, which is by design. | Founder decision; open-development posture. Flagged in sessions 11/12/13; reconciled in the Week 1 retro. | Repository facts above (visibility line); decisions log; Week 1 retrospective entry (2026-06-19) |
 | 2026-06-17 | **CI enhanced, not created: added a Test step + pnpm-store caching to the existing `main` `ci.yml`** (Sulaiman's session-6 CI, which already ran lint + typecheck + `validate-migrations`). Test runner = **Vitest** via root `pnpm test` → `pnpm -r run --if-present test`; placeholder smoke test in `packages/types` (lightest workspace). Added a disabled `mobile-preview.yml` (`if: false`, Week-10 EAS). | The brief assumed no CI existed; one did — minimal additive change keeps Sulaiman's CI intact. CI is cross-cutting → needs Platform (Sulaiman) agreement. | `.github/workflows/ci.yml`, `.github/workflows/mobile-preview.yml`, root `package.json`, `packages/types/package.json` + `src/__tests__/smoke.test.ts`, `docs/04_Repository_Structure.md`; PR #18 |
 | 2026-06-17 | **Recursive test command = `pnpm -r run --if-present test`** (flag before the script name), not the brief's `pnpm -r test --if-present`. | The brief's form forwards `--if-present` to vitest as an unknown CLI option and fails the job; pnpm only treats it as a `run` flag when it precedes the script name. | `.github/workflows/ci.yml` Test step, root `package.json` `test` script |
 
@@ -716,6 +717,62 @@ The brief assumed Expo Go, but **SDK 56 isn't on the Play Store Expo Go** (it sh
 - **`git fetch` before reasoning about `main`.** A 28-commit-stale local `main` produced a confident-but-wrong "main has no monorepo" analysis and an unnecessary clarifying question to the founder. Stale local refs are silent; verify `origin/<branch>` before drawing conclusions about repo state — especially in this repo's stacked-branch workflow where `main` moves via reconciliation commits.
 - **Check for an existing workflow before "creating" one.** The brief said "create `ci.yml`"; one already existed (Sulaiman's session 6). Enhancing beats replacing — it preserves the `validate-migrations` job and the proven setup, and keeps the diff reviewable.
 - **`--if-present` is a pnpm `run` flag, not a script arg.** `pnpm -r test --if-present` forwards `--if-present` to vitest (unknown option → fail); `pnpm -r run --if-present test` is the correct form.
+
+---
+
+### 2026-06-19 — Week 1 retrospective: plan reconciliation, ADRs, repo visibility (session 14)
+
+> **Numbering note:** App-track session 12 (AI Agent Contract v0) is still on the unmerged `docs/ai-agent-contract-v0` branch, so on `main` this retro follows session 13 with a 12-shaped gap (per session 13's note). This is a Week-1-as-a-whole summary, not a per-session retro.
+
+**Goal of the week (Week 1 — "Foundation and contracts"):** decide things on paper so Weeks 2–12 don't get rewritten — monorepo + apps scaffolded, schema/RLS/types on dev, app logs in against dev Supabase, AI Agent Contract written, CI green. This entry reconciles that plan against what actually shipped across the Week-1 sessions, and is the Friday-retro deliverable.
+
+**Process note (this session):** done off a fresh `docs/week1-retro` branch cut from `origin/main`. The local branch was stale — missing Sulaiman's entire Platform track and App session 13. Editing the local workdiary would have dropped ~220 lines of his entries. This is the third recurrence of the two-track/stale-main trap; now logged as **R19**. (See Notes.)
+
+**What shipped (by session / PR):**
+- **CLAUDE.md + all docs into `docs/`** — session 1.
+- **Week-0 reconciliation, org rename to `Caeorta-io`, founder-split reframe (Reading B)** — sessions 3–4, PRs #1, #2.
+- **Supabase dev: extensions, initial v1 schema (26 tables), RLS, generated TS types** — sessions 5–7 (PRs #4, #6, #8), reconciled to `main` via catch-up PRs #11/#12 (session 9); Sulaiman's session 3 independently re-verified dev (26 tables, RLS, `client.ts`).
+- **Week-1 conventions captured** (`conventions.md`, spec-deviation protocol, PR discipline) — session 8.
+- **Monorepo scaffold** — `apps/mobile` (Expo SDK 56, expo-router, NativeWind), `apps/admin` (Next.js 16), `packages/config|types|supabase`; TS pinned 5.9.3 — session 9, PR #13.
+- **Gap-fix pass** (versions, self-merge exception, env gotchas) — session 10, PR #14.
+- **Mobile cross-cutting** — SecureStore Supabase client, **email OTP (code-only) login**, "Hello {email}" home, i18next, Sentry, Zustand + TanStack Query; verified end-to-end on a physical Android via an EAS dev build → dev Supabase — session 11, PR #15.
+- **AI Agent Contract v0** (`docs/ai-agent-contract.md`, six open-question defaults, async-review framing) — session 12 (on the unmerged contract branch).
+- **CI** — Sulaiman set up `ci.yml` (lint, typecheck, migration validation) in his session 6; App session 13 enhanced it with a Test step (Vitest) + pnpm-store caching, **green on PR #18** — session 13.
+- **Platform ran ahead to Week 5** (logged in the Platform-track entries below): Week 2 Edge Functions (`pair_device`, `mint_device_token`, `submit_wifi_credentials`, `ota_check`), seed data, admin dashboard + Vercel deploy, Supabase Vault, Week 4 sync pipeline (`device_sync_*` + `notify_agent`), Week 5 functions (`get_drive_telemetry`, `send_diagnostic_notification`, `pg_cron` retention, `update_current_state`). This closes the Week-1 carry items "Edge Function scaffolding" and "`supabase/seed.sql`" ahead of schedule.
+
+**Definition of Done — 3/5 fully done, 2/5 partial (honest):**
+1. ✓ **Muhammed can run the codebase locally** — verified on-device session 11.
+2. ◐ **Both Supabase projects with v1 schema** — dev has all 5 migrations + seed + RLS; **prod still unpromoted** (confirmed in this retro). Partial.
+3. ✓ **App logs in against dev** — email OTP (code-only), session 11. (Plan/DoD said "magic link"; corrected to OTP this session.)
+4. ◐ **AI Agent Contract exists + shared with agent project** — v0 exists (session 12) but is **unmerged and not yet shared** (no reachable agent repo). Partial.
+5. ✓ **CI green on a trivial PR** — PR #18, session 13.
+
+**Decisions taken across the week** (full text in the Decisions log; dates + one-liners here):
+- 2026-05-13 — Android-only v1; Node 22; pnpm 11; repo `caeorta_app`; defer Apple/Play; founder split named; Section 0 closed; R18; Week 1 start.
+- 2026-05-15 — org renamed to `Caeorta-io`; working path moved.
+- 2026-06-02 — **execution model = Reading B** (Muhammed sole author); `app_versions` composite PK; v2 placeholders minimum shape; community RLS deny-all; `devices` column-scope deferred.
+- 2026-06-03 — 13 conventions captured; **accept Expo 56 / Next 16**; **TS 5.9.3** monorepo-wide; drop `#` from path; `react-native-css-interop` workaround; catch-up PRs #11/#12.
+- 2026-06-09 — gap-fix sessions 8-9; Sentry = `@sentry/react-native`; **`Stack.Protected` guards**; `docs/03` auth row → OTP; **dev build not Expo Go**; dev OTP Dashboard config.
+- 2026-06-16 — Contract v0 + six defaults + trigger reconciliation + handoff channel + weekly sync; **repo made public**.
+- 2026-06-17 — CI enhanced not created; recursive test command corrected.
+- 2026-06-19 (this retro) — visibility reconciled in Repository facts; auth-decision change logged in the Action Plan; **ADR-0001 (monorepo) + ADR-0002 (`Stack.Protected`)** written; **R19** added; R1/R3/R14/R15/R16 statuses reviewed.
+
+**Tools / versions across the week:** machine inventory unchanged from the per-session entries (Node 22.22.2, pnpm 11.1.1, fnm, gh 2.92.0, Supabase CLI 2.98.2, scoop, OpenJDK 17, Android tools/Studio). npm deps added in `apps/mobile` (session 11): `expo-secure-store`, `expo-localization`, `@sentry/react-native`, `i18next`, `react-i18next`, `zustand`, `@tanstack/react-query`, `react-native-url-polyfill`, `zod`; `vitest` added to `packages/types` (session 13). Sulaiman's machine (his session 3): Supabase CLI 2.106.0, gh, Git via Homebrew on Ubuntu. Upgrade backlog still open: Supabase CLI 2.98.2 → 2.104.0, pnpm 11.1.1 → 11.5.0, Git 2.37.1.
+
+**Open items rolled to Week 2** (see the Action Plan's "## Carry from Week 1"):
+- Prod migration promotion (all 5) + Dashboard OTP config replication.
+- `agent_role` read-only migration (gated on contract v0 review).
+- `devices` column-scope follow-up migration (now unblocked — `mint_device_token` exists).
+- AI Agent Contract: share with agent project + create the weekly-sync calendar invite (R1 mitigation; founder actions).
+- **R14 EAS Update/Build emergency-release runbook** — still doesn't exist; write it in `docs/`.
+- Founder actions (not code): designer 90-min session, Figma component-system confirmation, daily-sync + Friday-retro calendar events, GitHub Issues + project board — none happened in Week 1; founder intends to do them after this session.
+- Long-running carry-overs unchanged: Google Play Console pre-Week-10, Resend custom SMTP, PostHog wiring, Sentry Week-10 work, repo squash-only setting, Git upgrade, source-folder cleanup.
+
+**Notes / lessons:**
+- **The two-track integration is the dominant operational pain, not the code.** Stale-main / stacked-merge drift bit in session 9, session 13, and again here. The code deliverables landed; the coordination machinery (keeping `main` the single truth, merging stacks to `main` not base branches) is where the friction is. Formalized as R19. Standing fix: `git fetch` + reason about `origin/main`, branch off it, edit the `origin/main` copy for cross-track docs.
+- **The "soft" Week-1 work slipped, the hard work didn't.** Schema, auth, scaffold, CI all shipped; the designer session, retro/sync calendar cadence, and issue board — the coordination rituals — are the items that fell through. Worth protecting calendar/process setup in Week 2 the way code tasks are protected.
+- **No plausible-but-wrong AI code shipped (R15),** but the spec-deviation protocol earned its keep — real spec gaps (`app_versions` PK, RLS row-vs-column, the `--if-present` flag) were caught and fixed-and-documented during authoring rather than shipping.
+- **Scaffolders drift past doc floors;** accept the latest stable major and bump the floor in the same session (Expo 56, Next 16). **Expo Go has an SDK ceiling** → dev builds are the on-device path on bleeding-edge SDKs. **Supabase "OTP vs magic link" is a template decision, not an API flag.**
 
 ---
 

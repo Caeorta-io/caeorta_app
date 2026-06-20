@@ -324,6 +324,8 @@ These surfaced during session 9's monorepo scaffold. Capture so they don't bite 
 
 **NativeWind under pnpm strict linker**. pnpm's strict module-resolution requires `react-native-css-interop@0.2.4` to be a direct dependency of `apps/mobile`, not a transitive one through NativeWind. Without it, you get module-not-found errors at Expo bundle time despite NativeWind appearing to install correctly.
 
+**Expo Go's bundled SDK lags the latest by one major**. The Expo Go app on the Play Store ships with a specific Expo SDK version (SDK 54 as of session 11, 2026-06-09) and updates lag behind newer SDK releases by weeks to months. When this repo's Expo SDK is newer than Expo Go's bundled SDK (currently SDK 56 vs Expo Go's 54), Expo Go cannot run the app — it will refuse to load. Use an EAS development build for on-device testing instead. The dev build path also enables features Expo Go doesn't support (native Sentry capture, expo-dev-client menu, custom native modules). Cost: a fresh APK install per pilot device, instead of zero-install Expo Go testing.
+
 ## CLAUDE.md — Claude Code's project brief
 
 `CLAUDE.md` at the repo root is read automatically by Claude Code (VS Code
