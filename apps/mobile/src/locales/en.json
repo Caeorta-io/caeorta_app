@@ -1,7 +1,10 @@
 {
   "common": {
     "appName": "Caeorta",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "cancel": "Cancel",
+    "back": "Back",
+    "retry": "Try again"
   },
   "auth": {
     "signInTitle": "Sign in",
@@ -24,9 +27,44 @@
   },
   "home": {
     "greeting": "Hello {{email}}",
+    "pairDevice": "Pair a device",
     "signOut": "Sign out",
     "throwTestError": "Throw test error",
     "testErrorSentTitle": "Test error sent",
     "testErrorSentBody": "A test error was reported to Sentry. Check the dashboard."
+  },
+  "pair": {
+    "introTitle": "Pair your Caeorta device",
+    "introSubtitle": "Plug the device into your car's OBD-II port, then scan the QR code on its label to connect it to your account.",
+    "scanCta": "Scan QR code",
+    "manualCta": "Enter code manually",
+    "pairCta": "Pair device",
+    "scanHint": "Point your camera at the QR code on the device label.",
+    "cameraDeniedTitle": "Camera access needed",
+    "cameraDeniedBody": "Caeorta uses the camera to scan your device's QR code. You can allow access, or enter the code by hand instead.",
+    "allowCamera": "Allow camera",
+    "openSettings": "Open settings",
+    "manualTitle": "Enter device code",
+    "manualSubtitle": "Type the code printed under the QR on your device label.",
+    "manualLabel": "Device code",
+    "manualPlaceholder": "CAEORTA-…",
+    "manualInvalid": "Enter the device code from the label.",
+    "pairing": "Pairing your device…",
+    "successTitle": "Device paired",
+    "successBody": "Your Caeorta device is now linked to your account. You're ready to set it up.",
+    "successCta": "Continue",
+    "scanAgainCta": "Scan again",
+    "doneCta": "Back to home",
+    "differentDeviceCta": "Pair a different device",
+    "errNotFoundTitle": "Code not recognized",
+    "errNotFoundBody": "We couldn't find a device for that code. Double-check the label and try scanning or entering it again.",
+    "errAlreadyClaimedTitle": "Already paired",
+    "errAlreadyClaimedBody": "This device is already paired to an account. If it should be yours, contact support to transfer it.",
+    "errNetworkTitle": "Couldn't reach Caeorta",
+    "errNetworkBody": "Check your internet connection and try again.",
+    "errUnauthorizedTitle": "Session expired",
+    "errUnauthorizedBody": "Your session has expired. Go back and sign in again to pair your device.",
+    "errGenericTitle": "Something went wrong",
+    "errGenericBody": "We couldn't pair your device just now. Please try again."
   }
 }

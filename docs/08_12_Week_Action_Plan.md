@@ -205,9 +205,10 @@ Slipped from Week 1's "Together"/working-agreement set and still open as founder
   - "Sending credentials to your device"
   - "Test live mode" — confirms device-to-app round-trip
   - Done / Home
-- [ ] Wire QR + manual code paths to `pair_device`
+- [x] Wire QR + manual code paths to `pair_device` <!-- session 16, 2026-06-21 (feat/device-pairing) -->
 - [ ] Wire Wi-Fi entry to `submit_wifi_credentials`
-- [ ] Handle all error cases: invalid code, already-claimed, network failure, camera denied
+- [x] Handle all error cases: invalid code, already-claimed, network failure, camera denied <!-- session 16: 404/409/network mapped in pairing.ts; camera-denied → manual path in scan.tsx -->
+- [ ] On-device E2E (DoD): scan/enter a seed secret on a physical Android dev build → device row claimed + audit_log written. Deferred — needs a new EAS dev build (expo-camera is native).
 - [ ] Persist auth state with expo-secure-store
 
 ### Together

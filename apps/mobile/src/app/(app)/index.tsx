@@ -1,4 +1,5 @@
 import { Alert, Pressable, Text, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -8,6 +9,7 @@ import { useAuthStore } from '@/lib/store';
 
 export default function Home() {
   const { t } = useTranslation();
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
 
   function handleSignOut() {
@@ -30,7 +32,14 @@ export default function Home() {
         </Text>
 
         <Pressable
-          className="mt-10 w-full items-center rounded-xl bg-neutral-900 py-4 active:opacity-80"
+          className="mt-10 w-full items-center rounded-xl bg-blue-600 py-4 active:opacity-80"
+          onPress={() => router.push('/pair')}
+        >
+          <Text className="text-base font-semibold text-white">{t('home.pairDevice')}</Text>
+        </Pressable>
+
+        <Pressable
+          className="mt-3 w-full items-center rounded-xl bg-neutral-900 py-4 active:opacity-80"
           onPress={handleSignOut}
         >
           <Text className="text-base font-semibold text-white">{t('home.signOut')}</Text>
