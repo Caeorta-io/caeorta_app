@@ -412,12 +412,20 @@ Enable in v1:
 
 A migration applied to dev but not yet promoted to prod is "dev-only." Week N+1 work that depends on a migration must verify dev-only vs prod-promoted state. The Action Plan's week-end Definition of Done implicitly assumes prod-promoted; in practice, prod promotion has often slipped by 1-3 days. Workdiary entries should note both states for any migration touched in that session.
 
-**Currently outstanding promotions** (dev-only at time of writing):
-- Extensions migration — merged to main (PR #4), applied on dev, NOT on prod
-- Initial schema migration — merged to main (PR #6, reconciled via PR #11), applied on dev, NOT on prod
-- RLS policies migration — merged to main (PR #8, reconciled via PR #11), applied on dev, NOT on prod
+**Migration promotion status** (updated 2026-06-21):
 
-All three should be promoted to prod in one session per the procedure above, before any prod-touching Week 2 work begins.
+The three Week 1 v1 migrations are applied to **both dev and prod** as of 2026-06-21:
+- Extensions migration (`20260602125801`) — dev ✓, prod ✓ (was PR #4)
+- Initial schema migration (`20260602130000`) — dev ✓, prod ✓ (was PR #6, reconciled via PR #11)
+- RLS policies migration (`20260602150000`) — dev ✓, prod ✓ (was PR #8, reconciled via PR #11)
+
+Prod promotion was verified the same day: 4 extensions (pgcrypto, pg_cron, pg_trgm, vector), 26 tables, 36 indexes, RLS enabled on all 26 tables, and the two fixture-free RLS isolation tests (anon→`vehicles` and authenticated→`audit_log`) both return 0 rows, matching dev.
+
+**Still outstanding (dev-only):**
+- `20260614000001_add_notify_agent` (Week 5) — applied on dev, NOT on prod
+- `20260614000002_add_pg_cron_jobs` (Week 5) — applied on dev, NOT on prod
+
+These two Week 5 migrations were deliberately excluded from the 2026-06-21 promotion (that session was scoped to the three Week 1 migrations). Promote them in a follow-up prod-link session per the procedure above, once the corresponding Week 4/5 Edge Functions are confirmed ready for prod. Note: `add_pg_cron_jobs` schedules nightly jobs that begin running the moment the migration is applied — confirm that's intended before promoting.
 
 ## Supabase Dashboard configuration (operational, not in migrations)
 
