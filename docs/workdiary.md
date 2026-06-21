@@ -90,6 +90,7 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-06-16 | **`Caeorta-io/caeorta_app` set to public** (private from creation until then). Intentional open-development posture; the AI Agent Contract and `conventions.md` docs are now world-readable, which is by design. | Founder decision; open-development posture. Flagged in sessions 11/12/13; reconciled in the Week 1 retro. | Repository facts above (visibility line); decisions log; Week 1 retrospective entry (2026-06-19) |
 | 2026-06-17 | **CI enhanced, not created: added a Test step + pnpm-store caching to the existing `main` `ci.yml`** (Sulaiman's session-6 CI, which already ran lint + typecheck + `validate-migrations`). Test runner = **Vitest** via root `pnpm test` → `pnpm -r run --if-present test`; placeholder smoke test in `packages/types` (lightest workspace). Added a disabled `mobile-preview.yml` (`if: false`, Week-10 EAS). | The brief assumed no CI existed; one did — minimal additive change keeps Sulaiman's CI intact. CI is cross-cutting → needs Platform (Sulaiman) agreement. | `.github/workflows/ci.yml`, `.github/workflows/mobile-preview.yml`, root `package.json`, `packages/types/package.json` + `src/__tests__/smoke.test.ts`, `docs/04_Repository_Structure.md`; PR #18 |
 | 2026-06-17 | **Recursive test command = `pnpm -r run --if-present test`** (flag before the script name), not the brief's `pnpm -r test --if-present`. | The brief's form forwards `--if-present` to vitest as an unknown CLI option and fails the job; pnpm only treats it as a `run` flag when it precedes the script name. | `.github/workflows/ci.yml` Test step, root `package.json` `test` script |
+| 2026-06-21 | **Prod migration promotion scoped to the three Week 1 migrations only (strict-3), not all 5 dev migrations.** `supabase migration list --linked` showed dev carries 5 applied migrations — the 3 Week 1 (`enable_extensions`, `initial_schema`, `rls_policies`) plus the 2 Week 5 (`add_notify_agent`, `add_pg_cron_jobs`), all dev-only. The session brief assumed only 3 were outstanding. Surfaced **before** linking to prod; founder chose to promote only the Week 1 three and leave the two Week 5 migrations dev-only. | Brief's "three outstanding" predated the Week 5 migrations; the two Week-5 migrations (esp. `add_pg_cron_jobs`, which starts nightly jobs the moment it lands) shouldn't hit prod until their Week 4/5 Edge Functions are confirmed prod-ready. Founder picked "Strict 3 only" when the 3-vs-5 mismatch was surfaced. | prod Supabase (`blfovbkrkrgyrzkuycxr`): 3 migrations applied + verified; `docs/05_Database_Schema.md` § Migration discipline (promotion status); `docs/08_12_Week_Action_Plan.md` Week 1 DoD + Week 2 carry; diary entry 2026-06-21 |
 
 ---
 
@@ -773,6 +774,37 @@ The brief assumed Expo Go, but **SDK 56 isn't on the Play Store Expo Go** (it sh
 - **The "soft" Week-1 work slipped, the hard work didn't.** Schema, auth, scaffold, CI all shipped; the designer session, retro/sync calendar cadence, and issue board — the coordination rituals — are the items that fell through. Worth protecting calendar/process setup in Week 2 the way code tasks are protected.
 - **No plausible-but-wrong AI code shipped (R15),** but the spec-deviation protocol earned its keep — real spec gaps (`app_versions` PK, RLS row-vs-column, the `--if-present` flag) were caught and fixed-and-documented during authoring rather than shipping.
 - **Scaffolders drift past doc floors;** accept the latest stable major and bump the floor in the same session (Expo 56, Next 16). **Expo Go has an SDK ceiling** → dev builds are the on-device path on bleeding-edge SDKs. **Supabase "OTP vs magic link" is a template decision, not an API flag.**
+
+---
+
+### 2026-06-21 — Prod promotion of the three Week 1 migrations (session 15)
+
+**Goal of session:** Promote the three Week 1 v1 migrations (extensions `20260602125801`, initial schema `20260602130000`, RLS policies `20260602150000`) from dev to prod Supabase, following the `docs/05` § Promoting a migration to prod ritual. Past the 24h smoke window since session 5–7.
+
+**Done:**
+- **Scope discrepancy caught pre-push.** `supabase migration list --linked` (dev) showed **5** applied migrations, not 3: the Week 1 three plus the two Week 5 migrations `20260614000001_add_notify_agent` and `20260614000002_add_pg_cron_jobs`, all dev-only. A plain `db push` to prod would have carried all five. Surfaced to the founder **before** touching prod → chose **strict-3** (see decisions log). Promoted only the Week 1 three; the two Week 5 migrations stay dev-only.
+- **Strict-3 mechanics.** `supabase db push` has no subset flag, so temporarily moved the two Week 5 files out of `supabase/migrations/` (to a scratch dir), pushed the three, then restored them. Dev migration dir back to all 5 afterward; confirmed dev still shows 5 Local==Remote.
+- **Applied to prod** (`blfovbkrkrgyrzkuycxr`, caeorta-prod, Mumbai). Linked → dry-run showed exactly the three (no unexpected DROP/ALTER) → `supabase db push --linked` applied cleanly (exit 0). `pgcrypto` reported `already exists, skipping` (Supabase preinstalls it; `IF NOT EXISTS` handled it), same as dev's session-5 result.
+- **Prod verified** (all match dev): 4 extensions (pgcrypto 1.3, pg_cron 1.6.4, pg_trgm 1.6, vector 0.8.0); **26 tables**; **36 indexes**; RLS enabled on **26/26** tables; RLS isolation tests — anon→`vehicles` = **0 rows**, authenticated→`audit_log` = **0 rows**.
+- **Re-linked CLI to dev** (`pseksdzkrimtzamcuzzh`); confirmed via `supabase projects list` (dev shows ●) and `migration list` (5 migrations, Local==Remote).
+- **Doc updates** (this PR, docs-only): `docs/05` migration-promotion status (3 promoted, 2 still dev-only) and `docs/08` Week 1 DoD (kept **partial** — see below) + Week 2 "Carry from Week 1" (updated to "2 of 5 remain", not removed).
+
+**Tools / versions touched:** none new. Supabase CLI 2.98.2 (2.107.0 available; not upgraded this session — still on the standing upgrade backlog).
+
+**Files / commits:** `docs/05_Database_Schema.md`, `docs/08_12_Week_Action_Plan.md`, `docs/workdiary.md`. **No code changes** — the prod migration apply happened directly via CLI, not through the PR; the PR only documents it. Branch `docs/promote-week1-migrations-prod` off fresh `origin/main`.
+
+**Decisions taken:** (row added to decisions log)
+- 2026-06-21 — Strict-3 prod promotion scope (promote the 3 Week 1 migrations; leave the 2 Week 5 migrations dev-only).
+
+**Open items rolled forward:**
+- **Two Week 5 migrations still dev-only** — `add_notify_agent` + `add_pg_cron_jobs`. Promote in a follow-up prod-link session once their Week 4/5 Edge Functions are confirmed prod-ready. ⚠️ `add_pg_cron_jobs` starts its nightly downsampling/cleanup jobs the moment it lands on prod — confirm that's intended first.
+- **Committed `packages/supabase/src/database.types.ts` is stale vs dev** — regenerating from dev (ritual step 7) was **not** a no-op: the committed file is missing the `notify_agent` function and a `graphql_public` schema block. This is **committed-vs-dev staleness from the Week 5 `add_notify_agent` migration, NOT a dev/prod divergence** (`gen types --linked` reads the dev DB only; prod isn't consulted). Left uncommitted here to keep this PR docs-only; regenerate + commit in a code PR, ideally bundled with the Week 5 prod promotion above.
+- **Prod Dashboard Auth OTP config still pending** — prod needs the same Auth email config dev got 2026-06-09 (Magic Link template → `{{ .Token }}`, Confirm email OFF, Email OTP Length → 6). This is Dashboard-side, not a migration, and **Sulaiman's action** (Platform owns Supabase admin access) — carried from session 11 / the Week 1 retro. Not done this session.
+
+**Notes / lessons:**
+- **`supabase migration list --linked` before acting is the cheap insurance.** The brief's "three outstanding" came from the `docs/05` callout written before Week 5 existed; reality had 5 dev-only migrations. Listing first (vs trusting the doc) caught the mismatch before any prod write.
+- **`supabase db push` is all-or-nothing on pending migrations** — no `--up-to`/subset flag in 2.98. A strict-subset promotion means physically removing the out-of-scope migration files from the scan path, pushing, then restoring.
+- **A post-promotion `gen types` "no-op" expectation is wrong when committed types predate a dev-only migration.** `gen types --linked` reflects the linked DB (dev), not the PR's committed snapshot; staleness there is about the committed file lagging dev, unrelated to whether dev and prod match.
 
 ---
 
