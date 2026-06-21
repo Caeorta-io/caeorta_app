@@ -36,7 +36,14 @@
           }
         }
       ],
-      "@sentry/react-native/expo"
+      "@sentry/react-native/expo",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow Caeorta to use the camera to scan your device's pairing QR code.",
+          "recordAudioAndroid": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
