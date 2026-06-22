@@ -85,7 +85,16 @@ Owned here. These Edge Functions implement the device-facing API.
 > `apps/mobile/src/lib/provisioningConfig.ts`). `submit_wifi_credentials` and the
 > `device_wifi_credentials` table are retained for a possible future cloud-assisted
 > path (e.g. re-provisioning a device the user is not physically next to), but are
-> out of the v1 onboarding flow. Built 2026-06-22 (`feat/wifi-provisioning`).
+> out of the v1 onboarding flow.
+>
+> **Device-side provisioning is not implemented yet and is owned by the hardware
+> track.** The V1 prototype has Wi-Fi credentials hardcoded + flashed and exposes
+> no phone-provisioning endpoint. The app is built to the published ESP-IDF
+> standard so both sides meet when firmware adopts it; until then there is no
+> on-device provisioning to test against, and the PoP value + security scheme
+> remain unratified (see R20 in `docs/09_Risks_And_Mitigations.md`).
+>
+> Built 2026-06-22 (`feat/wifi-provisioning`), reconciled to `main` via #23.
 
 ### `pair_device`
 **Input:** `{ device_secret }`
