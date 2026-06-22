@@ -76,6 +76,17 @@ Owned here. These Edge Functions implement the device-facing API.
 **Logic:** Encrypt password, insert/update row in `device_wifi_credentials`, return success.
 **Output:** `{ success: true }`
 
+> **v1 onboarding does NOT use this function.** After pairing, the app hands the
+> user's hotspot SSID + password directly to the device over the device's local
+> SoftAP, using the standard ESP-IDF `wifi_provisioning` protocol (via
+> `@orbital-systems/react-native-esp-idf-provisioning`). Credentials never leave
+> the phone — there is no cloud storage of Wi-Fi creds in onboarding. The
+> security/proof-of-possession seam is firmware-gated and not yet ratified (see
+> `apps/mobile/src/lib/provisioningConfig.ts`). `submit_wifi_credentials` and the
+> `device_wifi_credentials` table are retained for a possible future cloud-assisted
+> path (e.g. re-provisioning a device the user is not physically next to), but are
+> out of the v1 onboarding flow. Built 2026-06-22 (`feat/wifi-provisioning`).
+
 ### `pair_device`
 **Input:** `{ device_secret }`
 **Auth:** User JWT
