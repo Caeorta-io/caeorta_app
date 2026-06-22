@@ -18,6 +18,8 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 
 **Status:** Active, partially mitigated as of the 2026-06-19 Week 1 retro. A written, versioned contract v0 exists (`docs/ai-agent-contract.md`, App-track session 12) with each open-question default labelled a *proposal* the agent project can reject — the core mitigation. But it is **not yet shared**: it sits on an unmerged branch, no agent repo is reachable from the App founder's `gh`, and the weekly cross-project sync isn't on a calendar. Until the contract is shared and the sync is recurring, the mitigation is on paper. Monitor weekly.
 
+**2026-06-22 (Week 2 close):** unchanged in practice. The contract's six open-question defaults remain **unacknowledged by the AI agent project** — no response received, the contract still sits on an unmerged branch (`docs/ai-agent-contract.md` is not on `main`), no agent repo is reachable from the App founder's `gh`, and the weekly cross-project sync is still not calendared. Carried into Week 3 as-is; the mitigation stays on paper.
+
 ---
 
 ## R2: iOS Wi-Fi provisioning is painful
@@ -325,6 +327,24 @@ than "Caeorta." Less professional for commercial launch.
 - Longer-term: enabling required status checks / branch protection (blocked on the Free plan today) would reduce the surface; revisit on a paid plan.
 
 **Status:** Active. New at the 2026-06-19 Week 1 retro, formalizing a pattern that bit three times. The process guidance already lives in `docs/conventions.md`; this register entry records it as a standing risk because recurrence shows the guidance alone hasn't prevented it.
+
+---
+
+## R20: Wi-Fi provisioning contract (PoP + security scheme) unratified
+
+**Risk:** The app's Wi-Fi onboarding is built to the standard ESP-IDF `wifi_provisioning` protocol over SoftAP (App-track session 17), but the firmware/hardware track has **not ratified the two parameters that gate a working session**: the proof-of-possession (PoP) value/source, and the security scheme — Security 1 vs Security 2 / SRP6a, which also dictates whether a username is required. The app holds these in a single typed seam (`apps/mobile/src/lib/provisioningConfig.ts`) with PoP unset and a provisional security default — *neither is a committed choice*. If firmware later picks a scheme or PoP source the app didn't anticipate, the SoftAP handshake fails and onboarding breaks at the worst moment (a new user setting up their device).
+
+**Note:** Device-side provisioning is owned by the hardware project and is **not implemented yet** (the V1 prototype has Wi-Fi hardcoded + flashed, no phone-provisioning endpoint — see `docs/07_Sync_Architecture.md` § `submit_wifi_credentials`). This is now an **app-side dependency on a firmware decision**, not just a hardware concern.
+
+**Likelihood:** Medium — the seam is designed to absorb the choice in one place, but the choice is genuinely unmade and the two sides have not met on the wire yet.
+
+**Mitigations (in this project):**
+- Security level + PoP isolated in one typed config seam; ratifying them is a one-file change, not a screen/flow rewrite.
+- The result-mapping boundary is unit-tested independently of the (untestable-today) live wire path.
+- Carried explicitly as a Week-2 gate (`docs/08_12_Week_Action_Plan.md` Week 2 DoD) and as a firmware-sync item: confirm PoP source + security scheme **before** the first real-device provisioning test.
+- Related: R2 (iOS Wi-Fi provisioning pain), R13 (firmware↔app interface stability).
+
+**Status:** Active. New at Week-2 close (2026-06-22). Latent until firmware exposes a provisioning endpoint; becomes live the moment on-device integration starts.
 
 ---
 

@@ -206,7 +206,8 @@ Slipped from Week 1's "Together"/working-agreement set and still open as founder
   - "Test live mode" — confirms device-to-app round-trip
   - Done / Home
 - [x] Wire QR + manual code paths to `pair_device` <!-- session 16, 2026-06-21 (feat/device-pairing) -->
-- [ ] Wire Wi-Fi entry to `submit_wifi_credentials`
+- [x] Wi-Fi setup screens (SSID + password) wired to **direct SoftAP provisioning** over the standard ESP-IDF `wifi_provisioning` protocol — **not** `submit_wifi_credentials`. v1 onboarding sends creds phone→device only; no cloud storage. <!-- session 17, 2026-06-22 (feat/wifi-provisioning, reconciled to main via #23). See docs/07 § submit_wifi_credentials note + R20. -->
+- [ ] Real-device Wi-Fi provisioning E2E — **CARRIED, firmware-gated**: no device speaks ESP-IDF `wifi_provisioning` yet, and the PoP value + security scheme (Security 1 vs Security 2 / SRP6a) are unratified (R20). App side is built + unit-tested at the result-mapping boundary; the live wire path can only be verified once firmware provisioning exists.
 - [x] Handle all error cases: invalid code, already-claimed, network failure, camera denied <!-- session 16: 404/409/network mapped in pairing.ts; camera-denied → manual path in scan.tsx -->
 - [ ] On-device E2E (DoD): scan/enter a seed secret on a physical Android dev build → device row claimed + audit_log written. Deferred — needs a new EAS dev build (expo-camera is native).
 - [ ] Persist auth state with expo-secure-store
@@ -216,9 +217,16 @@ Slipped from Week 1's "Together"/working-agreement set and still open as founder
 - [ ] Sync with hardware/firmware project: confirm the device-side implementation will use the Edge Functions we built
 
 ### Definition of done — Week 2
-- A new user can open the app, sign in, scan a QR, enter Wi-Fi creds
-- The device gets claimed in DB
-- The auth and credential paths are real and tested
+
+**Built (on `main` at Week-2 close, 2026-06-22):**
+- A user can sign in, scan a QR or enter a code, and the claim path calls the **live** `pair_device` — 404 / 409 / network error cases mapped and unit-tested (session 16).
+- Wi-Fi setup screens hand SSID + password to the device via **direct SoftAP ESP-IDF provisioning** (no cloud creds); the boundary + result-mapping is unit-tested (session 17).
+
+**Remaining gates — NOT closed, carried to integration:**
+- **Pairing on-device E2E has not been run.** Needs a physical Android EAS dev build: scan/enter a seed secret → confirm the `devices` row is claimed (`claimed_by_user_id`, `status='active'`) and an `audit_log` row is written. Pairing is *built*, not yet *verified end-to-end* (the open App-founder item above).
+- **Real-device Wi-Fi provisioning is firmware-gated.** No device speaks ESP-IDF `wifi_provisioning` yet; PoP + security scheme are unratified (R20). Cannot be verified until firmware provisioning exists.
+
+The auth and pairing **paths are real**; full "real and tested" closure waits on the on-device run (pairing) and on firmware (Wi-Fi).
 
 ---
 

@@ -56,6 +56,7 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 
 | Date | Decision | Driver | Where it shows up |
 |---|---|---|---|
+| 2026-06-22 | **Self-merge exception used (2nd time ever) to reconcile the wifi PR onto `main` via PR #23.** PR #22 (wifi) had squash-merged into its base `feat/device-pairing` instead of `main` (13s after #21 merged to main), so `main` had the pairing half but none of the wifi work — the R19 stacked-merge trap. Cherry-picked the reviewed wifi commit (`7724a8a`) onto a branch off `origin/main`; verified the tree was byte-identical to the reviewed `feat/wifi-provisioning` and re-ran typecheck/lint/test green; opened PR #23 and merged it. | Already-reviewed content (PR #22); pure topology fix to undo a base-branch-merge. Founder gave **explicit one-time authorization this session** ("I gave you permission for this once to merge everything properly in order to main"). Documented here per the CLAUDE.md self-merge exception clause (prior occurrence: PRs #11/#12, session 9). | `main` (commit `b582baf`, PR #23); CLAUDE.md self-merge exception clause; this row + session 18 diary entry |
 | 2026-05-13 | **Android-only for v1 pilot; iOS deferred post-pilot.** | Budget (no Apple Developer enrollment until funded) + hardware (no Mac on team) | `CLAUDE.md`, `docs/01_Project_Identity.md`, `docs/08_12_Week_Action_Plan.md`, `docs/10_Out_Of_Scope.md` |
 | 2026-05-13 | **Node 22 LTS** (not Node 20 as in original docs). | Node 20 went EOL 2026-04 | `docs/04_Repository_Structure.md`, `docs/08_12_Week_Action_Plan.md`, `.nvmrc` |
 | 2026-05-13 | **pnpm 11** (not pnpm 9 as in original docs). | corepack installed latest; same workspace semantics | `docs/04_Repository_Structure.md`, `package.json` |
@@ -883,6 +884,41 @@ The brief assumed Expo Go, but **SDK 56 isn't on the Play Store Expo Go** (it sh
 - **Two same-named packages.** `react-native-esp-idf-provisioning` (unscoped, stale 0.2.0) vs `@orbital-systems/react-native-esp-idf-provisioning` (0.5.5, maintained, Expo plugin + new-arch). The scoped one is the live standard; verify the scope before adding.
 - **Keep the testable boundary native-free.** Putting the schemas + result mappers in `@caeorta/types` (no native import) means they unit-test in vitest with no device/native build, while the mobile orchestrator stays a thin typed wrapper — same split as `device.ts` (types) + `pairing.ts` (mobile).
 - **`.expo/types/router.d.ts`** stale-route gotcha recurred (gitignored, Metro-generated): new `/wifi/*` routes fail `tsc` locally until a brief `CI=1 expo start` rewrites it; CI passes regardless via expo-router's `string` fallback on a fresh checkout.
+
+---
+
+### 2026-06-22 (later same day) — main reconciliation (#23) + Week-2-close docs reconcile — session 18
+
+**Goal of session:** Reconcile the project docs to honest Week-2-close state before Week 3 planning (docs-only). Verifying current state first surfaced a bigger problem to fix before the docs work.
+
+**The bug found first (R19 again).** `git fetch` showed PR #21 (pairing) and #22 (wifi) both reported "MERGED" by GitHub, but they merged into **different bases**: #21 squash-merged to `main` (`88f3182`), and #22 squash-merged into its base `feat/device-pairing` 13 seconds later — **not `main`**. Net effect: `main` had the pairing half and **none of the wifi PR** (no `lib/provisioning.ts`, no `wifi/*` screens, no docs/07 note, no session-17 entry). Classic stacked-merge trap. Surfaced to the founder with evidence before editing any docs.
+
+**Reconciliation (PR #23, authorized self-merge — 2nd ever).** With explicit one-time founder authorization, cherry-picked the reviewed wifi commit `7724a8a` onto a branch off `origin/main`; the resulting tree was **byte-identical** to the reviewed `feat/wifi-provisioning` (empty `git diff`); re-ran typecheck + lint + test green; opened PR #23 and merged it. `main` is now `b582baf` and contains the full wifi work. (Decisions-log row added per the CLAUDE.md self-merge exception clause.)
+
+**Docs reconciliation (this entry's actual task), off the corrected `main`:**
+- **`docs/08` Week 2** — replaced the stale "Wire Wi-Fi entry to `submit_wifi_credentials`" App item with the SoftAP reality (built, ticked) + a new **carried, firmware-gated** "real-device Wi-Fi provisioning E2E" item. Rewrote the **Week 2 Definition of Done** to be honest: pairing + Wi-Fi are *built* (paths real, unit-tested), but two gates are **not closed** — pairing on-device E2E (not yet run; needs a physical EAS dev build) and real-device Wi-Fi provisioning (firmware-gated, R20). Pairing **not** marked fully closed.
+- **`docs/07`** — extended the existing PR-#22 SoftAP note (did not duplicate it) with an explicit "device-side provisioning is not implemented yet and is owned by the hardware track" paragraph + R20 cross-reference.
+- **`docs/09`** — added a dated **2026-06-22 Week-2-close** line to **R1** (the six AI-agent-contract open questions remain unacknowledged by the agent project; contract still unshared/not on `main`); added **R20 — Wi-Fi provisioning contract (PoP + security scheme) unratified**, now an app-side dependency on a firmware decision.
+- **`docs/workdiary`** — did **not** add a duplicate wifi entry (session 17 already covers it, now on `main`); added this session-18 entry + the #23 decisions-log row.
+
+**Confirmed with founder this session:** pairing on-device E2E **has not been run** — left open, "pending on-device run."
+
+**Tools / versions touched:** none (docs + a topology-only code reconciliation; no new deps). 
+
+**Files / commits:** Reconciliation — `main` commit `b582baf` (PR #23, cherry-pick of `7724a8a`). Docs — `docs/08_12_Week_Action_Plan.md`, `docs/07_Sync_Architecture.md`, `docs/09_Risks_And_Mitigations.md`, `docs/workdiary.md`. Branch `docs/week2-close-reconcile` off corrected `origin/main`.
+
+**Decisions taken:** (row added to decisions log) — 2026-06-22, authorized self-merge of PR #23 to reconcile the stacked wifi PR onto `main`.
+
+**Open items rolled forward:**
+- **Pairing on-device E2E** — not run; needs a physical Android EAS dev build (`devices` row claimed + `audit_log` written). Week 2 gate.
+- **Real-device Wi-Fi provisioning + PoP/security-scheme ratification** — firmware-gated (R20); confirm PoP source + Security 1 vs 2/SRP6a with the hardware track before the first on-device provisioning test.
+- **R1 / AI Agent Contract** — six open questions unacknowledged; contract unshared (not on `main`); cross-project weekly sync not calendared.
+- **Stacked-merge hygiene** — #22's mis-merge is the 4th R19 recurrence; the durable fix (branch protection / required checks) stays blocked on the GitHub Free plan.
+- Carried from earlier: EAS emergency-release runbook (R14, still paper); Figma reconciliation for pair + wifi screens; founder working-agreement actions (designer session, calendars, project board).
+
+**Notes / lessons:**
+- **"MERGED" on GitHub doesn't mean "on `main`."** A squash-merge takes the PR's **base branch** as target; a stacked PR whose base is another feature branch merges *there*. Always verify the actual files/commits on `origin/main` after a batch of stacked merges (`git show origin/main:<path>`, `git log origin/main..<branch>`), not the PR status badges.
+- **Cherry-pick is the clean R19 catch-up** when the parent PR was squashed: the wifi commit's parent (the pre-squash pairing commit) had the same tree as the squashed `main` commit, so `git cherry-pick 7724a8a` applied with no conflict and reproduced the reviewed tree exactly.
 
 ---
 
