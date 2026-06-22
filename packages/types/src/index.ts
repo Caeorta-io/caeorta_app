@@ -6,5 +6,6 @@ export * from './diagnostic';
 export * from './telemetry';
 export * from './vehicle';
 export * from './device';
+export * from './provisioning';
 export * from './drive';
 export * from './sync';
