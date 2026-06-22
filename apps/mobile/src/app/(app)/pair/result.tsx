@@ -45,6 +45,11 @@ export default function PairResult() {
     else router.replace('/');
   }, [router]);
 
+  // Continue onboarding into Wi-Fi setup (the next step after a successful pair).
+  const continueToWifi = useCallback(() => {
+    router.replace('/wifi');
+  }, [router]);
+
   if (state.phase === 'pending') {
     return (
       <Screen>
@@ -66,7 +71,7 @@ export default function PairResult() {
           <Text className="mt-3 text-base leading-6 text-neutral-500">{t('pair.successBody')}</Text>
         </View>
         <View className="pb-4">
-          <Button label={t('pair.successCta')} onPress={goHome} />
+          <Button label={t('pair.successCta')} onPress={continueToWifi} />
         </View>
       </Screen>
     );
