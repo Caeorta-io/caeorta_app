@@ -43,7 +43,7 @@ importers:
         version: 1.17.0(react@19.2.4)
       next:
         specifier: 16.2.7
-        version: 16.2.7(@babel/core@7.29.7)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+        version: 16.2.7(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react:
         specifier: 19.2.4
         version: 19.2.4
@@ -211,6 +211,9 @@ importers:
       '@caeorta/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.16))(@types/react@19.2.16)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@types/react':
         specifier: ~19.2.2
         version: 19.2.16
@@ -220,12 +223,18 @@ importers:
       eslint-config-expo:
         specifier: ~56.0.0
         version: 56.0.4(eslint@9.39.4(jiti@1.21.7))(typescript@5.9.3)
+      happy-dom:
+        specifier: ^20.10.6
+        version: 20.10.6
       tailwindcss:
         specifier: ^3.4.17
         version: 3.4.19(yaml@2.9.0)
       typescript:
         specifier: ^5.9.0
         version: 5.9.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@20.19.41)(happy-dom@20.10.6)(vite@8.0.16(@types/node@20.19.41)(jiti@1.21.7)(terser@5.48.0)(yaml@2.9.0))
 
   packages/config:
     dependencies:
@@ -266,7 +275,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^4.1.9
-        version: 4.1.9(@types/node@20.19.41)(vite@8.0.16(@types/node@20.19.41)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
+        version: 4.1.9(@types/node@20.19.41)(happy-dom@20.10.6)(vite@8.0.16(@types/node@20.19.41)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
 
 packages:
 
@@ -1894,6 +1903,21 @@ packages:
     resolution: {integrity: sha512-zIcONa+hVtVSSep9UT3jZ5rizo2BsxgyDYU7WFD5eICBE7no3881HGeb/QkGfsJs6JTkY1aQhT7rIPC7e+0nnA==}
     engines: {node: '>=14', npm: '>=6', yarn: '>=1'}
 
+  '@testing-library/react@16.3.2':
+    resolution: {integrity: sha512-XU5/SytQM+ykqMnAnvB2umaJNIOsLF3PVv//1Ew4CTcpz0/BRyy/af40qqrt7SjKpDdT1saBMc42CUok5gaw+g==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@testing-library/dom': ^10.0.0
+      '@types/react': ^18.0.0 || ^19.0.0
+      '@types/react-dom': ^18.0.0 || ^19.0.0
+      react: ^18.0.0 || ^19.0.0
+      react-dom: ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      '@types/react-dom':
+        optional: true
+
   '@testing-library/user-event@14.6.1':
     resolution: {integrity: sha512-vq7fv0rnt+QTXgPxr5Hjc210p6YKq2kmdziLgnsZGgLJ9e6VAShx1pACLuRjd/AS/sr7phAR58OIIpf0LlmQNw==}
     engines: {node: '>=12', npm: '>=6'}
@@ -1949,6 +1973,12 @@ packages:
 
   '@types/react@19.2.16':
     resolution: {integrity: sha512-esJiCAnl0kfpNdE69f3So4WJUXy95dLZydX0KwK46riIHDzHM7O9Vtf9xCHW0PXIqvgqNrswl522kA/5yx+F4w==}
+
+  '@types/whatwg-mimetype@3.0.2':
+    resolution: {integrity: sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA==}
+
+  '@types/ws@8.18.1':
+    resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
   '@types/yargs-parser@21.0.3':
     resolution: {integrity: sha512-I4q9QU9MQv4oEOz4tAHJtNz1cwuLxn2F3xcc2iV5WdqLPpUnj30aUuxt1mAxYTG+oe8CZMV/+6rU4S4gRDzqtQ==}
@@ -2424,6 +2454,10 @@ packages:
   buffer-from@1.1.2:
     resolution: {integrity: sha512-E+XQCRwSbaaiChtv6k6Dwgc+bx+Bs6vuKJHHl5kox/BaKbhiXzqQOwK4cO22yElGp2OCmjwVhT3HmxgyPGnJfQ==}
 
+  buffer-image-size@0.6.4:
+    resolution: {integrity: sha512-nEh+kZOPY1w+gcCMobZ6ETUp9WfibndnosbpwB1iJk/8Gt5ZF2bhS6+B6bPYz424KtwsR6Rflc3tCz1/ghX2dQ==}
+    engines: {node: '>=4.0'}
+
   buffer@5.7.1:
     resolution: {integrity: sha512-EHcyIPBQ4BSGlvjB16k5KgAJ27CIsHY/2JBmCRReo48y9rQ3MaUzWX3KVlBa4U7MyX02HdVj0K7C3WaB3ju7FQ==}
 
@@ -2735,6 +2769,10 @@ packages:
   enhanced-resolve@5.22.1:
     resolution: {integrity: sha512-6QEuw3zoX1SJQc7b87aBXke/no+mG2bTBgw29gWMQonLmpEkWoCAVkl+M49e48AZlWzxiDzDZzYdp6kobcyLww==}
     engines: {node: '>=10.13.0'}
+
+  entities@7.0.1:
+    resolution: {integrity: sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==}
+    engines: {node: '>=0.12'}
 
   error-stack-parser@2.1.4:
     resolution: {integrity: sha512-Sk5V6wVazPhq5MhpO+AUxJn5x7XSXGl1R93Vn7i+zS15KDVxQijejNCrz8340/2bgLBjR9GtEG8ZVKONDjcqGQ==}
@@ -3370,6 +3408,10 @@ packages:
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
+
+  happy-dom@20.10.6:
+    resolution: {integrity: sha512-6QD0ilzDDt93tX44y8tbmZdAcdTRYDhUP+Asgi6pC8Pp5IA3cvaZGyoVN/EGtlq9ziT65iPuBBn3ASLr6hCgVw==}
+    engines: {node: '>=20.0.0'}
 
   has-bigints@1.1.0:
     resolution: {integrity: sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg==}
@@ -5297,6 +5339,10 @@ packages:
   whatwg-fetch@3.6.20:
     resolution: {integrity: sha512-EqhiFU6daOA8kpjOWTL0olhVOF3i7OrFzSYiGsEMB8GcXS+RrzauAERX65xMeNWVqxA6HXH2m69Z9LaKKdisfg==}
 
+  whatwg-mimetype@3.0.0:
+    resolution: {integrity: sha512-nt+N2dzIutVRxARx1nghPKGv1xHikU7HKdfafKkLNLindmPU/ch3U31NOCGGA/dmPcmb1VlofO0vnKAcsm0o/Q==}
+    engines: {node: '>=12'}
+
   whatwg-url-minimum@0.1.2:
     resolution: {integrity: sha512-XPEm0XFQWNVG292lII1PrRRJl3sItrs7CettZ4ncYxuDVpLyy+NwlGyut2hXI0JswcJUxeCH+CyOJK0ZzAXD6A==}
 
@@ -6939,9 +6985,7 @@ snapshots:
       metro-runtime: 0.84.4
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.74.89': {}
 
@@ -7250,6 +7294,16 @@ snapshots:
       picocolors: 1.1.1
       redent: 3.0.0
 
+  '@testing-library/react@16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@19.2.3(@types/react@19.2.16))(@types/react@19.2.16)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)':
+    dependencies:
+      '@babel/runtime': 7.29.7
+      '@testing-library/dom': 10.4.1
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
+    optionalDependencies:
+      '@types/react': 19.2.16
+      '@types/react-dom': 19.2.3(@types/react@19.2.16)
+
   '@testing-library/user-event@14.6.1(@testing-library/dom@10.4.1)':
     dependencies:
       '@testing-library/dom': 10.4.1
@@ -7303,6 +7357,12 @@ snapshots:
   '@types/react@19.2.16':
     dependencies:
       csstype: 3.2.3
+
+  '@types/whatwg-mimetype@3.0.2': {}
+
+  '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 20.19.41
 
   '@types/yargs-parser@21.0.3': {}
 
@@ -7532,6 +7592,14 @@ snapshots:
       '@vitest/utils': 4.1.9
       chai: 6.2.2
       tinyrainbow: 3.1.0
+
+  '@vitest/mocker@4.1.9(vite@8.0.16(@types/node@20.19.41)(jiti@1.21.7)(terser@5.48.0)(yaml@2.9.0))':
+    dependencies:
+      '@vitest/spy': 4.1.9
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 8.0.16(@types/node@20.19.41)(jiti@1.21.7)(terser@5.48.0)(yaml@2.9.0)
 
   '@vitest/mocker@4.1.9(vite@8.0.16(@types/node@20.19.41)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))':
     dependencies:
@@ -7881,6 +7949,10 @@ snapshots:
 
   buffer-from@1.1.2: {}
 
+  buffer-image-size@0.6.4:
+    dependencies:
+      '@types/node': 20.19.41
+
   buffer@5.7.1:
     dependencies:
       base64-js: 1.5.1
@@ -8182,6 +8254,8 @@ snapshots:
     dependencies:
       graceful-fs: 4.2.11
       tapable: 2.3.3
+
+  entities@7.0.1: {}
 
   error-stack-parser@2.1.4:
     dependencies:
@@ -9167,6 +9241,19 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
+  happy-dom@20.10.6:
+    dependencies:
+      '@types/node': 20.19.41
+      '@types/whatwg-mimetype': 3.0.2
+      '@types/ws': 8.18.1
+      buffer-image-size: 0.6.4
+      entities: 7.0.1
+      whatwg-mimetype: 3.0.0
+      ws: 8.21.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
   has-bigints@1.1.0: {}
 
   has-flag@3.0.0: {}
@@ -9932,7 +10019,7 @@ snapshots:
 
   negotiator@1.0.0: {}
 
-  next@16.2.7(@babel/core@7.29.7)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  next@16.2.7(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       '@next/env': 16.2.7
       '@swc/helpers': 0.5.15
@@ -9941,7 +10028,7 @@ snapshots:
       postcss: 8.4.31
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
-      styled-jsx: 5.1.6(@babel/core@7.29.7)(react@19.2.4)
+      styled-jsx: 5.1.6(react@19.2.4)
     optionalDependencies:
       '@next/swc-darwin-arm64': 16.2.7
       '@next/swc-darwin-x64': 16.2.7
@@ -10862,12 +10949,10 @@ snapshots:
 
   structured-headers@0.4.1: {}
 
-  styled-jsx@5.1.6(@babel/core@7.29.7)(react@19.2.4):
+  styled-jsx@5.1.6(react@19.2.4):
     dependencies:
       client-only: 0.0.1
       react: 19.2.4
-    optionalDependencies:
-      '@babel/core': 7.29.7
 
   styleq@0.1.3: {}
 
@@ -11161,6 +11246,20 @@ snapshots:
       - '@types/react'
       - '@types/react-dom'
 
+  vite@8.0.16(@types/node@20.19.41)(jiti@1.21.7)(terser@5.48.0)(yaml@2.9.0):
+    dependencies:
+      lightningcss: 1.32.0
+      picomatch: 4.0.4
+      postcss: 8.5.15
+      rolldown: 1.0.3
+      tinyglobby: 0.2.17
+    optionalDependencies:
+      '@types/node': 20.19.41
+      fsevents: 2.3.3
+      jiti: 1.21.7
+      terser: 5.48.0
+      yaml: 2.9.0
+
   vite@8.0.16(@types/node@20.19.41)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0):
     dependencies:
       lightningcss: 1.32.0
@@ -11175,7 +11274,35 @@ snapshots:
       terser: 5.48.0
       yaml: 2.9.0
 
-  vitest@4.1.9(@types/node@20.19.41)(vite@8.0.16(@types/node@20.19.41)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0)):
+  vitest@4.1.9(@types/node@20.19.41)(happy-dom@20.10.6)(vite@8.0.16(@types/node@20.19.41)(jiti@1.21.7)(terser@5.48.0)(yaml@2.9.0)):
+    dependencies:
+      '@vitest/expect': 4.1.9
+      '@vitest/mocker': 4.1.9(vite@8.0.16(@types/node@20.19.41)(jiti@1.21.7)(terser@5.48.0)(yaml@2.9.0))
+      '@vitest/pretty-format': 4.1.9
+      '@vitest/runner': 4.1.9
+      '@vitest/snapshot': 4.1.9
+      '@vitest/spy': 4.1.9
+      '@vitest/utils': 4.1.9
+      es-module-lexer: 2.1.0
+      expect-type: 1.3.0
+      magic-string: 0.30.21
+      obug: 2.1.3
+      pathe: 2.0.3
+      picomatch: 4.0.4
+      std-env: 4.1.0
+      tinybench: 2.9.0
+      tinyexec: 1.2.4
+      tinyglobby: 0.2.17
+      tinyrainbow: 3.1.0
+      vite: 8.0.16(@types/node@20.19.41)(jiti@1.21.7)(terser@5.48.0)(yaml@2.9.0)
+      why-is-node-running: 2.3.0
+    optionalDependencies:
+      '@types/node': 20.19.41
+      happy-dom: 20.10.6
+    transitivePeerDependencies:
+      - msw
+
+  vitest@4.1.9(@types/node@20.19.41)(happy-dom@20.10.6)(vite@8.0.16(@types/node@20.19.41)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0)):
     dependencies:
       '@vitest/expect': 4.1.9
       '@vitest/mocker': 4.1.9(vite@8.0.16(@types/node@20.19.41)(jiti@2.7.0)(terser@5.48.0)(yaml@2.9.0))
@@ -11199,6 +11326,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 20.19.41
+      happy-dom: 20.10.6
     transitivePeerDependencies:
       - msw
 
@@ -11221,6 +11349,8 @@ snapshots:
   webidl-conversions@5.0.0: {}
 
   whatwg-fetch@3.6.20: {}
+
+  whatwg-mimetype@3.0.0: {}
 
   whatwg-url-minimum@0.1.2: {}
 
