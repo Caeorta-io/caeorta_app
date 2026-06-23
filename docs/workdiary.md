@@ -56,6 +56,7 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 
 | Date | Decision | Driver | Where it shows up |
 |---|---|---|---|
+| 2026-06-22 | **Vehicles are created via a `create_vehicle` Edge Function (Platform track); in-app add-vehicle flow in v1. Service-role retains direct edit rights; `vehicles_no_direct_insert` RLS remains.** Decided in session 19 (this week's Week-3 planning). Status: **decided**. The App-track add-vehicle screen (Week 3, Day 3) is built against this function's contract, carried like the Wi-Fi flow until the Platform side lands. | Keeps the user-facing write-path off direct table inserts (consistent with the existing `pair_device` service-role pattern) while giving the app a real add-vehicle UX; the Edge Function itself is Sulaiman's to build. | `docs/05_Database_Schema.md` (vehicles Platform-track note); `docs/08_12_Week_Action_Plan.md` (Week 3 App-track scope); App-track add-vehicle screen (Week 3) |
 | 2026-06-22 | **Self-merge exception used (3rd time ever) to land PR #24 (Week-2-close docs reconcile) on `main` — broader than the documented exception: PR #24 was UNREVIEWED.** Prior two occurrences (PRs #11/#12; PR #23) were *already-reviewed* content where only the merge topology was wrong. Here the App-track workdiary entries (sessions 16–18) + decisions rows lived only in the unmerged PR #24, so the Week-3 data-seam diary entry had no contiguous home and basing the code branch on #24 would re-create the stacked-PR (R19) trap. Merged #24 to `main` (`c356494`), then rebased the data-seam branch onto it and added session 19 in order. | Founder gave **explicit one-time authorization this session**, with the unreviewed status surfaced first ("Merge #24 now, then my work" / "permission for this once to merge and commit in the proper order"). Logged per the CLAUDE.md self-merge exception clause, **with the explicit caveat that this extends the clause beyond already-reviewed content** — not a precedent for routine unreviewed merges. | `main` (commit `c356494`, PR #24); CLAUDE.md self-merge exception clause; this row + session 19 diary entry |
 | 2026-06-22 | **Week-3 data seam: one per-capability `'mock' \| 'live'` flip-point (`DATA_SOURCE` in `apps/mobile/src/lib/data/source.ts`), default `'mock'`; jsonb metric-key vocabulary is PROVISIONAL.** Hooks/screens never branch on mock-vs-live; flipping a capability is a one-line edit. The metric keys inside `peak_metrics`/`summary_metrics`/`latest_metrics` are placeholders (`TODO(metric-keys)`) — the canonical set is owned by the hardware/AI-agent contract and MUST be reconciled before any capability flips to `'live'` (the jsonb columns are opaque `Json`, so a key mismatch is NOT caught by the compiler). | Lets each capability migrate to live Supabase independently as Platform lands the query/RPC; keeps screens decoupled from the data source. Metric vocab undocumented in `docs/06`/`docs/07` (only "max rpm, max boost, max coolant temp" prose) → provisional set chosen and flagged rather than blocking. | `apps/mobile/src/lib/data/source.ts` + `mocks.ts`; `apps/mobile/src/hooks/*`; PR #25 |
 | 2026-06-22 | **Self-merge exception used (2nd time ever) to reconcile the wifi PR onto `main` via PR #23.** PR #22 (wifi) had squash-merged into its base `feat/device-pairing` instead of `main` (13s after #21 merged to main), so `main` had the pairing half but none of the wifi work — the R19 stacked-merge trap. Cherry-picked the reviewed wifi commit (`7724a8a`) onto a branch off `origin/main`; verified the tree was byte-identical to the reviewed `feat/wifi-provisioning` and re-ran typecheck/lint/test green; opened PR #23 and merged it. | Already-reviewed content (PR #22); pure topology fix to undo a base-branch-merge. Founder gave **explicit one-time authorization this session** ("I gave you permission for this once to merge everything properly in order to main"). Documented here per the CLAUDE.md self-merge exception clause (prior occurrence: PRs #11/#12, session 9). | `main` (commit `b582baf`, PR #23); CLAUDE.md self-merge exception clause; this row + session 18 diary entry |
@@ -955,6 +956,42 @@ The brief assumed Expo Go, but **SDK 56 isn't on the Play Store Expo Go** (it sh
 **Notes / lessons:**
 - **Keep the live branch import-free of RN/Supabase.** Routing the `'live'` path through a thrown error (not a real client import) keeps the whole mock graph pure JS, so the hooks render under happy-dom/vitest with zero React-Native shimming — the seam is testable from day one, before any live wiring exists.
 - **`satisfies Tables<'…'>` on each fixture is the cheapest conformance gate.** It fails `tsc --noEmit` the moment Platform regenerates `database.types.ts` with a changed column — no separate codegen-diff check needed. The opaque-`Json` columns are the blind spot the `TODO(metric-keys)` note exists to cover.
+
+---
+
+### 2026-06-23 — Week 3 vehicle list + connection state indicator (App track, session 20)
+
+**Goal of session:** Build the first Week-3 screens on top of the session-19 data seam — the vehicle list, a reusable connection-state indicator, and the "no vehicles" empty state. All reads through the mock hooks (`DATA_SOURCE='mock'`); no live Supabase calls.
+
+**Verified main first.** `git fetch`; confirmed **PR #25 squash-merged to `main`** (`4bfbd3e`, merged 2026-06-23 04:37 UTC) — so branched `feat/mobile-week3-vehicle-list` **off `main`**, not stacked on the data-seam branch. No R19 retarget obligation this time. Read the generated `Tables<'vehicles'|'current_state'|'drives'>` Rows + the five hooks/`queryKeys` barrel before touching anything; confirmed no vehicle-list screen existed yet.
+
+**Done (`apps/mobile/src/`):**
+- **`lib/connectionState.ts`** — canonical pure `deriveConnectionState({ channelStatus, currentStateUpdatedAt, now? })` + `SYNCED_THRESHOLD_MS` (4 h). Priority `connecting` → `live` → `synced` (within 4 h, **strict** — exactly-4 h is offline) → `offline`. RN-free so it unit-tests in plain Node. Lives in `lib/` (not `components/`) to dodge a Windows case-insensitive filename clash with `components/ConnectionState.tsx`.
+- **`components/ConnectionState.tsx`** — presentational colour-dot chip; `role="status"` + `aria-label` (RN web-compat props — `accessibilityRole` has no `status` member). Re-exports the pure rule so the canonical derivation is imported, never re-derived inline.
+- **`app/(app)/vehicles/index.tsx`** — list screen: 3-card skeleton → cards / `EmptyVehicleList` / inline-retry error. Per-card `useCurrentState` + `useLastDrive` live in a `VehicleCard` component (rules of hooks under the React Compiler — can't call hooks in a `.map`). `TODO(perf)` on the per-card fan-out (expected/fine in mock mode).
+- **`components/EmptyVehicleList.tsx`** — reusable zero-vehicles state (distinct from the Day-4 "no drives" state), CTA → `/vehicles/add`.
+- **`lib/format.ts`** — relative-time (`Just now` / `N min ago` / `N h ago` / `–`) + drive-summary (`24.6 km · 36 min`) formatters.
+- **Stub routes** `/vehicles/[id]` and `/vehicles/add` (Days 4 & 3) so typed-routes navigation compiles and tap targets aren't dead.
+- **Tests** — `deriveConnectionState` (4 branches + boundaries: exactly-4 h, null `updatedAt`, null `channelStatus`, future ts) and the formatters. Mobile suite now 33/33.
+
+**Typed-routes note.** `app.json` has `experiments.typedRoutes`; the generated `.expo/types/router.d.ts` is gitignored, so adding the `vehicles` routes needed a regen — ran `expo start --no-dev` briefly to rewrite the declaration, then stopped it. Same local workflow the pair/wifi PRs used.
+
+**Spec deviation (logged in PR):** task asked for `role="status"`; RN's `accessibilityRole` has no `status`, so used RN's web-compat `role`/`aria-label` (which accept `status`). Same intent, typechecks — no doc change.
+
+**Green:** repo-wide `pnpm -r typecheck` (exit 0), `pnpm -r lint` (exit 0; only the pre-existing `apps/admin/app/page.tsx` warning, not touched), `pnpm -r test` (exit 0 — `apps/mobile` 33/33, `packages/types` 28/28). No screen files from prior PRs modified; no live Supabase calls.
+
+**Files / commits:** `feat(mobile)` commit `c985a9a` (`lib/{connectionState,format}.ts` + `__tests__`, `components/{ConnectionState,EmptyVehicleList}.tsx` + `__tests__`, `app/(app)/vehicles/{index,[id],add}.tsx`, `locales/en.json`); `docs:` commit `0399e05` (08, 05, workdiary decisions row). Branch `feat/mobile-week3-vehicle-list` off `main` (`4bfbd3e`); **PR #26**, base `main`, **@22SHY review, not self-merged.**
+
+**Decisions taken:** (decisions-log row added) vehicles created via a `create_vehicle` Edge Function (Platform track); in-app add-vehicle flow in v1; `vehicles_no_direct_insert` RLS remains.
+
+**Open items rolled forward:**
+- **Add-vehicle form (Day 3)** and **vehicle detail screen (Day 4)** replace the two stub routes; add-vehicle E2E gated on the Platform-side `create_vehicle` Edge Function (carried like Wi-Fi).
+- Live mode screen + Realtime wiring (`subscribeToCurrentState`) — the list passes `channelStatus=null`; the detail/live surfaces will open the channel and feed real `channelStatus` into the same `deriveConnectionState`.
+- Carried from session 19: `TODO(metric-keys)` reconcile before any `'live'` flip; live `fetch*` branches still throw `not implemented`. Pairing/Wi-Fi on-device E2E still ungated by hardware.
+
+**Notes / lessons:**
+- **Hooks-per-card belong in a child component, not the list callback.** Under the React Compiler, calling `useCurrentState`/`useLastDrive` inside `renderItem` violates rules of hooks; a `VehicleCard` component makes the fan-out legal and lets TanStack Query dedupe by key.
+- **Windows case-insensitive FS will collide `Foo.ts` and `foo.tsx` in the same folder.** `tsc` flags it as "differs only in casing"; putting the pure logic in `lib/` (a different folder from the PascalCase component) is the clean fix and also where pure helpers belong.
 
 ---
 

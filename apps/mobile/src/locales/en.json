@@ -96,5 +96,30 @@
     "errTimeoutBody": "Your device took too long to respond. Make sure it's nearby and in setup mode, then try again.",
     "errNetworkTitle": "Couldn't reach the device",
     "errNetworkBody": "Something interrupted the connection to your device. Try again."
+  },
+  "vehicles": {
+    "title": "Your vehicles",
+    "unnamed": "Unnamed vehicle",
+    "lastSync": "Last sync: {{value}}",
+    "connection": {
+      "live": "Live",
+      "synced": "Synced",
+      "connecting": "Connecting…",
+      "offline": "Offline"
+    },
+    "connectionA11y": {
+      "live": "Live — receiving real-time data from this vehicle.",
+      "synced": "Synced — data is up to date as of the last sync.",
+      "connecting": "Connecting — establishing a live connection.",
+      "offline": "Offline — no recent data from this vehicle."
+    },
+    "error": {
+      "title": "Couldn't load your vehicles",
+      "body": "Something went wrong loading your vehicles. Check your connection and try again."
+    },
+    "empty": {
+      "body": "No vehicles yet — pair a device and add your first car.",
+      "addCta": "Add vehicle"
+    }
   }
 }
