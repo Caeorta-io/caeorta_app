@@ -155,6 +155,40 @@
       "errValidationFields": "Fields to fix: {{fields}}",
       "backToForm": "Back to form",
       "backToPairing": "Back to pairing"
+    },
+    "detail": {
+      "lastDrive": "Last drive",
+      "distance": "Distance",
+      "duration": "Duration",
+      "avgSpeed": "Avg speed",
+      "anomaly": "Anomaly detected",
+      "peakTitle": "Peaks",
+      "peak": {
+        "rpm": "Peak RPM",
+        "speed": "Top speed",
+        "coolant": "Peak coolant"
+      },
+      "noDrives": "No drives recorded yet — sync your device after your first drive.",
+      "diagnostics": "Recent diagnostics",
+      "noDiagnostics": "No diagnostics yet.",
+      "viewAll": "View all",
+      "severity": {
+        "critical": "Critical",
+        "warning": "Warning",
+        "info": "Info"
+      },
+      "urgency": {
+        "now": "Now",
+        "soon": "Soon",
+        "monitor": "Monitor"
+      },
+      "goLive": "Go live",
+      "notFoundTitle": "Vehicle not found",
+      "notFoundBody": "We couldn't find that vehicle. It may have been removed.",
+      "error": {
+        "title": "Couldn't load this vehicle",
+        "body": "Something went wrong loading this vehicle. Check your connection and try again."
+      }
     }
   }
 }

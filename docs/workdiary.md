@@ -1026,6 +1026,41 @@ The brief assumed Expo Go, but **SDK 56 isn't on the Play Store Expo Go** (it sh
 
 ---
 
+### 2026-06-23 (later same day) — Week 3 vehicle detail screen + components (App track, session 22)
+
+**Goal of session:** Build the vehicle detail screen (Day 4) — the persistent view after tapping a vehicle card: header + last-drive card + recent-diagnostics preview + a "Go live" entry point, plus the distinct "vehicle exists but no drives yet" empty state. All data from the mock-backed hooks; no live Supabase calls.
+
+**Verified main first.** `git fetch`; confirmed **PR #27 squash-merged to `main`** (`b86c515`) — branched `feat/mobile-week3-vehicle-detail` **off `main`**, not stacked. No R19 obligation. Confirmed the session-21 entry is present; confirmed `/vehicles/[id]` existed as a flat-file stub before touching it. Note: `gh` couldn't reach `api.github.com` this session (transient) — verified the merge from `git log origin/main` instead.
+
+**Done (`apps/mobile/src/`):**
+- **Screen `/vehicles/[id]`** (was the flat-file stub) — handles, in priority order: **loading** (skeleton layout: tall header + card + 3 diagnostic rows, not a spinner), **error + retry** (gated on `useVehicle` only; the secondary hooks fail soft), **no-vehicle-found** (`useVehicle` → `null`, "Vehicle not found" + back button), **populated**, and the **distinct no-drives-yet** state (vehicle loaded, `useLastDrive` → null → `NoLastDriveState` in place of the card). Header reads `useCurrentState(id)` for the `ConnectionState` chip with `channelStatus={null}` (no Realtime channel on this view) + a `TODO(perf)` note.
+- **`components/LastDriveCard.tsx`** (+ `NoLastDriveState`, exported separately) — distance / duration / avg-speed via new `lib/format` helpers; amber "Anomaly detected" indicator only when `has_anomaly` (silent otherwise); up to **3** peak metrics from the provisional `peak_metrics` jsonb keys, wrapped in the `TODO(metric-keys)` note, absent keys skipped silently.
+- **`components/DiagnosticsPreview.tsx`** — client-side sort by severity (critical → warning → info) then `generated_at` desc, top 3 rows (severity dot + title + urgency chip), "View all" → `/vehicles/[id]/diagnostics` only when non-empty; empty → muted "No diagnostics yet." `status` field deliberately not shown (full screen's concern).
+- **Pure helpers** (RN-free, unit-tested in plain vitest — same pattern as `connectionState.ts`): `lib/diagnostics.ts` `sortDiagnosticsByPriority` (the brief's "sort after the hook returns", NOT a new data-source capability); `lib/format.ts` `formatDistanceKm` / `formatDuration` / `formatSpeedKph` / `selectPeakMetrics` (added to the existing single formatter module, not a second one).
+- **Routing** — converted the flat `[id].tsx` → `[id]/index.tsx` (the `(app)` `_layout.tsx` is a bare `Stack` that auto-registers nested routes, so no `[id]/_layout.tsx` was needed) and added stub routes `[id]/live.tsx` (Day 5) + `[id]/diagnostics.tsx` (post-Week-3), same one-line-of-text stub pattern as the old `[id]` stub.
+- **i18n** — new `vehicles.detail.*` keys in `locales/en.json`.
+
+**Tests:** `diagnostics.test.ts` (sort: severity order regardless of input order, recency within a tier, combined, unknown-severity-last, empty→empty, no-mutation, seeded fixtures); extended `format.test.ts` (distance/duration/speed + `selectPeakMetrics` absent/non-numeric/non-object cases). **No RN render tests** — vitest here is happy-dom-only with no React-Native in the graph (the config says so, and even the `ConnectionState` component is tested via its pure rule, not a render); so the components' logic is tested through the extracted pure helpers, matching repo precedent.
+
+**Typed-routes note.** `[id]` went from a single file to a folder (`index`/`live`/`diagnostics`); the gitignored `.expo/types/router.d.ts` needed a regen — ran `CI=1 expo start --no-dev` briefly until it picked up `/vehicles/[id]/live` + `/vehicles/[id]/diagnostics`, then stopped it. Same local workflow as the pair/wifi/session-20/21 PRs.
+
+**Green:** `pnpm -r typecheck` (exit 0, all 5 workspaces), `pnpm -r lint` (exit 0; only the pre-existing `apps/admin/app/page.tsx` warning, untouched), `pnpm -r test` (exit 0 — `apps/mobile` 56/56, `packages/types` 34/34). No prior screen files modified beyond the `[id]` stub replacement; no live Supabase calls.
+
+**Files / commits:** `feat(mobile): vehicle detail screen + components` (`app/(app)/vehicles/[id]/{index,live,diagnostics}.tsx`, `components/{LastDriveCard,DiagnosticsPreview}.tsx`, `lib/diagnostics.ts` + test, `lib/format.ts` + test, `locales/en.json`); `docs: session-22 workdiary` (this entry). Branch `feat/mobile-week3-vehicle-detail` off `main` (`b86c515`); **PR for @22SHY review, not self-merged.**
+
+**Decisions taken:** none requiring a decisions-log row — the screen states, fail-soft secondary-hook policy, and client-side severity sort all follow the session-brief and existing seam conventions.
+
+**Open items rolled forward:**
+- **Live screen (Day 5):** `/vehicles/[id]/live` is a stub — real screen opens a Realtime channel (`channelStatus !== null`) and streams `current_state`. The detail header's `useCurrentState` call is present but `channelStatus=null` (no live channel on the detail view).
+- **Full diagnostics screen (post-Week-3):** `/vehicles/[id]/diagnostics` is a stub — will show every diagnostic incl. `status` ('new'/'seen'/'dismissed'/'actioned'), which the preview omits.
+- **`TODO(metric-keys)` still open** — the provisional `peak_metrics` jsonb keys (now also referenced in `LastDriveCard`) must be reconciled against the hardware/AI-agent contract before any capability flips to `'live'`.
+- Carried: add-vehicle E2E gated on the Platform `create_vehicle` Edge Function (session 21); `ecu_type` canonical set open question.
+
+**Notes / lessons:**
+- The `(app)` `_layout.tsx` being a bare `Stack` (no explicit `<Stack.Screen>` declarations) means folder-nesting a route needs no new `_layout.tsx` — the parent Stack covers the children. Worth remembering for future `[id]/*` sub-routes.
+
+---
+
 ## Template for future entries
 
 When starting a new entry, copy this scaffold to the bottom of the file. Keep prose tight; cross-reference the decisions log and tool inventory rather than re-describing.
