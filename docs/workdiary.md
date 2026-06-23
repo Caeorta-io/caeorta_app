@@ -959,6 +959,42 @@ The brief assumed Expo Go, but **SDK 56 isn't on the Play Store Expo Go** (it sh
 
 ---
 
+### 2026-06-23 — Week 3 vehicle list + connection state indicator (App track, session 20)
+
+**Goal of session:** Build the first Week-3 screens on top of the session-19 data seam — the vehicle list, a reusable connection-state indicator, and the "no vehicles" empty state. All reads through the mock hooks (`DATA_SOURCE='mock'`); no live Supabase calls.
+
+**Verified main first.** `git fetch`; confirmed **PR #25 squash-merged to `main`** (`4bfbd3e`, merged 2026-06-23 04:37 UTC) — so branched `feat/mobile-week3-vehicle-list` **off `main`**, not stacked on the data-seam branch. No R19 retarget obligation this time. Read the generated `Tables<'vehicles'|'current_state'|'drives'>` Rows + the five hooks/`queryKeys` barrel before touching anything; confirmed no vehicle-list screen existed yet.
+
+**Done (`apps/mobile/src/`):**
+- **`lib/connectionState.ts`** — canonical pure `deriveConnectionState({ channelStatus, currentStateUpdatedAt, now? })` + `SYNCED_THRESHOLD_MS` (4 h). Priority `connecting` → `live` → `synced` (within 4 h, **strict** — exactly-4 h is offline) → `offline`. RN-free so it unit-tests in plain Node. Lives in `lib/` (not `components/`) to dodge a Windows case-insensitive filename clash with `components/ConnectionState.tsx`.
+- **`components/ConnectionState.tsx`** — presentational colour-dot chip; `role="status"` + `aria-label` (RN web-compat props — `accessibilityRole` has no `status` member). Re-exports the pure rule so the canonical derivation is imported, never re-derived inline.
+- **`app/(app)/vehicles/index.tsx`** — list screen: 3-card skeleton → cards / `EmptyVehicleList` / inline-retry error. Per-card `useCurrentState` + `useLastDrive` live in a `VehicleCard` component (rules of hooks under the React Compiler — can't call hooks in a `.map`). `TODO(perf)` on the per-card fan-out (expected/fine in mock mode).
+- **`components/EmptyVehicleList.tsx`** — reusable zero-vehicles state (distinct from the Day-4 "no drives" state), CTA → `/vehicles/add`.
+- **`lib/format.ts`** — relative-time (`Just now` / `N min ago` / `N h ago` / `–`) + drive-summary (`24.6 km · 36 min`) formatters.
+- **Stub routes** `/vehicles/[id]` and `/vehicles/add` (Days 4 & 3) so typed-routes navigation compiles and tap targets aren't dead.
+- **Tests** — `deriveConnectionState` (4 branches + boundaries: exactly-4 h, null `updatedAt`, null `channelStatus`, future ts) and the formatters. Mobile suite now 33/33.
+
+**Typed-routes note.** `app.json` has `experiments.typedRoutes`; the generated `.expo/types/router.d.ts` is gitignored, so adding the `vehicles` routes needed a regen — ran `expo start --no-dev` briefly to rewrite the declaration, then stopped it. Same local workflow the pair/wifi PRs used.
+
+**Spec deviation (logged in PR):** task asked for `role="status"`; RN's `accessibilityRole` has no `status`, so used RN's web-compat `role`/`aria-label` (which accept `status`). Same intent, typechecks — no doc change.
+
+**Green:** repo-wide `pnpm -r typecheck` (exit 0), `pnpm -r lint` (exit 0; only the pre-existing `apps/admin/app/page.tsx` warning, not touched), `pnpm -r test` (exit 0 — `apps/mobile` 33/33, `packages/types` 28/28). No screen files from prior PRs modified; no live Supabase calls.
+
+**Files / commits:** `feat(mobile)` commit `c985a9a` (`lib/{connectionState,format}.ts` + `__tests__`, `components/{ConnectionState,EmptyVehicleList}.tsx` + `__tests__`, `app/(app)/vehicles/{index,[id],add}.tsx`, `locales/en.json`); `docs:` commit `0399e05` (08, 05, workdiary decisions row). Branch `feat/mobile-week3-vehicle-list` off `main` (`4bfbd3e`); **PR #26**, base `main`, **@22SHY review, not self-merged.**
+
+**Decisions taken:** (decisions-log row added) vehicles created via a `create_vehicle` Edge Function (Platform track); in-app add-vehicle flow in v1; `vehicles_no_direct_insert` RLS remains.
+
+**Open items rolled forward:**
+- **Add-vehicle form (Day 3)** and **vehicle detail screen (Day 4)** replace the two stub routes; add-vehicle E2E gated on the Platform-side `create_vehicle` Edge Function (carried like Wi-Fi).
+- Live mode screen + Realtime wiring (`subscribeToCurrentState`) — the list passes `channelStatus=null`; the detail/live surfaces will open the channel and feed real `channelStatus` into the same `deriveConnectionState`.
+- Carried from session 19: `TODO(metric-keys)` reconcile before any `'live'` flip; live `fetch*` branches still throw `not implemented`. Pairing/Wi-Fi on-device E2E still ungated by hardware.
+
+**Notes / lessons:**
+- **Hooks-per-card belong in a child component, not the list callback.** Under the React Compiler, calling `useCurrentState`/`useLastDrive` inside `renderItem` violates rules of hooks; a `VehicleCard` component makes the fan-out legal and lets TanStack Query dedupe by key.
+- **Windows case-insensitive FS will collide `Foo.ts` and `foo.tsx` in the same folder.** `tsc` flags it as "differs only in casing"; putting the pure logic in `lib/` (a different folder from the PascalCase component) is the clean fix and also where pure helpers belong.
+
+---
+
 ## Template for future entries
 
 When starting a new entry, copy this scaffold to the bottom of the file. Keep prose tight; cross-reference the decisions log and tool inventory rather than re-describing.
