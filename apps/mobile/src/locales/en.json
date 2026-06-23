@@ -120,6 +120,41 @@
     "empty": {
       "body": "No vehicles yet — pair a device and add your first car.",
       "addCta": "Add vehicle"
+    },
+    "add": {
+      "title": "Add your vehicle",
+      "subtitle": "Tell us about the car linked to this device.",
+      "makeLabel": "Make",
+      "makePlaceholder": "Toyota",
+      "modelLabel": "Model",
+      "modelPlaceholder": "GR Corolla",
+      "yearLabel": "Year",
+      "yearPlaceholder": "2023",
+      "nicknameLabel": "Nickname",
+      "nicknamePlaceholder": "Project Hachi",
+      "ecuLabel": "ECU type",
+      "ecuPlaceholder": "oem",
+      "ecuHint": "If you're not sure, enter “oem”.",
+      "submitCta": "Add vehicle",
+      "fieldRequired": "This field is required.",
+      "fieldTooLong": "Keep this under {{max}} characters.",
+      "yearInvalid": "Enter a year between {{min}} and {{max}}.",
+      "noDeviceTitle": "No device linked",
+      "noDeviceBody": "No device linked — complete device pairing first.",
+      "noDeviceCta": "Go to pairing",
+      "successTitle": "Vehicle added",
+      "successBody": "{{nickname}} — {{make}} {{model}} ({{year}}) is now in your garage.",
+      "successCta": "Go to my garage",
+      "errTitle": "Couldn't add your vehicle",
+      "errNotDeviceOwner": "This device isn't registered to your account.",
+      "errDeviceNotClaimed": "Device hasn't been claimed yet — go back to pairing.",
+      "errDeviceNotActive": "Device is inactive. Contact support.",
+      "errDuplicateVehicle": "A vehicle is already linked to this device.",
+      "errValidation": "Please fix the highlighted fields.",
+      "errNetwork": "Connection problem — check your internet and try again.",
+      "errValidationFields": "Fields to fix: {{fields}}",
+      "backToForm": "Back to form",
+      "backToPairing": "Back to pairing"
     }
   }
 }

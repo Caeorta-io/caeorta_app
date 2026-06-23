@@ -20,6 +20,7 @@
  *   opaque `Json`, so a key mismatch would NOT be caught by the compiler.
  * ─────────────────────────────────────────────────────────────────────────────
  */
+import type { CreateVehicleInput } from '@caeorta/types';
 import type { Tables } from '@caeorta/supabase';
 
 /**
@@ -224,4 +225,41 @@ export function currentStateForVehicle(vehicleId: string): Tables<'current_state
   if (vehicleId !== MOCK_VEHICLE_ID) return null;
   // Re-stamp to now so "recent" stays honest regardless of when the app reads it.
   return { ...mockCurrentState, updated_at: new Date().toISOString() };
+}
+
+/**
+ * RFC-4122 v4 id, Math.random-backed. Good enough for a mock seam (no crypto
+ * dependency, works in both Hermes and the Node/vitest test runner where
+ * `crypto.randomUUID` isn't guaranteed). The live `create_vehicle` path gets a
+ * real db-generated `id` from the `RETURNING *`, so this never reaches prod.
+ */
+function mockUuid(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/**
+ * The mock counterpart of the `create_vehicle` Edge Function's insert: builds a
+ * brand-new `vehicles` Row from the mock owner/fixture defaults plus the validated
+ * user input. Mirrors what the function's `RETURNING *` will hand back — a fresh
+ * `id`/`created_at`, the caller's owner, and the user-entered columns — so the
+ * add-vehicle screens render against the same shape live and mock.
+ */
+export function createMockVehicle(input: CreateVehicleInput): Tables<'vehicles'> {
+  return {
+    id: mockUuid(),
+    owner_user_id: MOCK_OWNER_USER_ID,
+    device_id: input.device_id,
+    nickname: input.nickname,
+    make: input.make,
+    model: input.model,
+    year: input.year,
+    vin: null,
+    ecu_type: input.ecu_type,
+    modifications: [],
+    created_at: new Date().toISOString(),
+  } satisfies Tables<'vehicles'>;
 }
