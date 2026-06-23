@@ -15,6 +15,7 @@
  * plain Node/vitest environment. Wire the real queries here when each capability
  * is promoted (see the per-table notes on each `fetch*`).
  */
+import { createVehicleInputSchema, type CreateVehicleInput } from '@caeorta/types';
 import type { Tables } from '@caeorta/supabase';
 
 import * as mocks from './mocks';
@@ -31,7 +32,8 @@ export type DataCapability =
   | 'vehicle'
   | 'lastDrive'
   | 'recentDiagnostics'
-  | 'currentState';
+  | 'currentState'
+  | 'createVehicle';
 
 /**
  * Optional global default via env: `EXPO_PUBLIC_DATA_SOURCE=live` flips every
@@ -52,6 +54,7 @@ export const DATA_SOURCE: Record<DataCapability, DataSourceMode> = {
   lastDrive: ENV_DEFAULT,
   recentDiagnostics: ENV_DEFAULT,
   currentState: ENV_DEFAULT,
+  createVehicle: ENV_DEFAULT,
 };
 
 function notImplemented(capability: DataCapability): never {
@@ -105,4 +108,26 @@ export async function fetchCurrentState(
 ): Promise<Tables<'current_state'> | null> {
   if (DATA_SOURCE.currentState === 'live') return notImplemented('currentState');
   return mocks.currentStateForVehicle(vehicleId);
+}
+
+/** Simulated mock-mode latency for the write path, so the form's busy state is visible. */
+const MOCK_CREATE_LATENCY_MS = 300;
+
+/**
+ * Creates a vehicle. Unlike the read fetchers, this is the one WRITE on the seam.
+ *
+ * Mock: re-validates the input at the boundary (defensive — the orchestrator already
+ * parsed it), waits ~300 ms to exercise the form's busy state, and returns a freshly
+ * constructed `vehicles` Row. Resolves the row; it does not throw on the happy path.
+ *
+ * Live: throws via {@link notImplemented} — the real call POSTs to the `create_vehicle`
+ * Edge Function (see docs/create_vehicle_contract.md). Wire the `fetch` here when the
+ * Platform side lands and flip `DATA_SOURCE.createVehicle` to 'live'. The orchestrator
+ * in `lib/vehicles.ts` maps a thrown error from this path onto its `network` variant.
+ */
+export async function createVehicle(input: CreateVehicleInput): Promise<Tables<'vehicles'>> {
+  if (DATA_SOURCE.createVehicle === 'live') return notImplemented('createVehicle');
+  const parsed = createVehicleInputSchema.parse(input);
+  await new Promise((resolve) => setTimeout(resolve, MOCK_CREATE_LATENCY_MS));
+  return mocks.createMockVehicle(parsed);
 }
