@@ -129,6 +129,8 @@ A car owned by a user, paired with a device.
 | modifications | jsonb | Free-form for now; itemize in v2 |
 | created_at | timestamptz | |
 
+> ⚠️ **Platform-track note:** a `create_vehicle` Edge Function is planned for v1. Once it lands, update this section to document the new write-path alongside `vehicles_no_direct_insert`. The App-track add-vehicle screen (Week 3) is built against this function's contract; the function itself is Sulaiman's to build.
+
 #### `vehicle_modifications`
 Empty in v1; reserved for v2 community features (itemized mod tracking).
 

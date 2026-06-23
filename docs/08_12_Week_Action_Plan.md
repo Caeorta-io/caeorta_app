@@ -244,6 +244,9 @@ The actual product starts to take shape. Default view is "your last drive," not 
   - Empty state when no drives yet: clear "waiting for first drive" UX
 - [ ] Live mode screen (separate route): real-time current_state via Realtime, large legible numbers, exit cleanly
 - [ ] Connection state indicator: "Synced 2h ago" / "Live" / "Connecting…" / "Offline since yesterday"
+- [ ] In-app add-vehicle flow (make/model/year/nickname/ecu_type form, Zod validation, `lib/vehicles.ts` orchestrator, result states; E2E gated on Platform-side `create_vehicle` Edge Function — carried like Wi-Fi)
+
+> **Week 3 App is mock-data-first, JS-only (`DATA_SOURCE='mock'`); no EAS dev build required this week.**
 
 ### Platform founder
 - [ ] Implement `current_state` upsert pattern
