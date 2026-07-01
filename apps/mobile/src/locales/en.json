@@ -189,6 +189,21 @@
         "title": "Couldn't load this vehicle",
         "body": "Something went wrong loading this vehicle. Check your connection and try again."
       }
+    },
+    "live": {
+      "title": "Live metrics",
+      "connecting": "Connecting…",
+      "disconnected": "Disconnected — showing last known values.",
+      "updatedAgo": "Updated {{value}} ago",
+      "metric": {
+        "rpm": "RPM",
+        "speed": "Speed",
+        "coolant": "Coolant"
+      },
+      "error": {
+        "title": "Couldn't load this vehicle",
+        "body": "Something went wrong loading this vehicle. Check your connection and try again."
+      }
     }
   }
 }

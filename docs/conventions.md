@@ -71,3 +71,32 @@ For any code change that needs verification:
 Example from Week 1: RLS policies (PR #8) tested user-isolation and service-role-bypass via Dashboard `SET request.jwt.claims`. Device-JWT path verification was deferred to Week 2 because `mint_device_token` doesn't exist yet.
 
 This pattern prevents two failure modes: (a) shipping untested code while pretending it's tested, and (b) blocking a PR forever on tests that need infrastructure that hasn't been built. Honesty about coverage is the discipline.
+
+## Week 3 patterns
+
+Extracted from the Week 3 vehicle-dashboard sessions (list, add-vehicle, detail, live mode). These are the load-bearing conventions future dashboard/data work inherits.
+
+### Data-seam pattern
+
+- `DATA_SOURCE: Record<DataCapability, 'mock' | 'live'>` in `apps/mobile/src/lib/data/source.ts` is the single per-capability flip-point. Every dashboard read (and the one write, and the live subscription) goes through a `fetch*` / `subscribe*` function that consults its capability's entry. Hooks and screens never branch on mock-vs-live.
+- Default every capability to `'mock'`. The env var `EXPO_PUBLIC_DATA_SOURCE=live` flips the default for **all** capabilities at once; an individual capability can be promoted ahead of the others by hard-coding its entry to `'live'` in `source.ts` (incremental rollout).
+- Live branches throw `notImplemented(capability)` and import **no** Supabase / React-Native code, so the whole seam module unit-tests in plain Node/vitest (no native graph). Wire the real query/adapter in the live branch only when promoting that capability.
+- Before flipping any capability to `'live'`, resolve `TODO(metric-keys)` for that capability's jsonb fields (`peak_metrics` / `summary_metrics` / `latest_metrics`). Those columns are typed as opaque `Json`, so a key mismatch is **not** caught by the compiler — it must be reconciled against the hardware/AI-agent contract by hand.
+
+### Connection-state derivation rule
+
+- `deriveConnectionState` in `apps/mobile/src/lib/connectionState.ts` is the canonical rule. Never re-derive "what counts as live/synced/offline" inline. Priority (first match wins): `connecting` → `live` → `synced` → `offline`. `SYNCED_THRESHOLD_MS = 4 hours` (strict: exactly-threshold-old reads as `offline`; future timestamps read as `offline`).
+- `channelStatus = null` means Realtime is not initialised (the surface is not in live mode). **Only the live screen passes a real `channelStatus`**; every other surface (list, detail) passes `null` and derives from the last-sync timestamp alone. This is correct, not a stub — do not "fix" the detail screen to open a channel.
+
+### Never-throws orchestrator pattern
+
+- `apps/mobile/src/lib/pairing.ts` and `apps/mobile/src/lib/vehicles.ts` are the canonical examples for a user-triggered action that can fail.
+- The orchestrator **always returns a typed result union** (`{ ok: true, … }` | `{ ok: false, error: … }` with a typed error code) — it never throws to the caller.
+- All unrecognised thrown errors map to `{ code: 'network' }` (the safe catch-all the UI can always render).
+- Validate input at the boundary with Zod; no `any` without an inline comment justifying it.
+
+### Realtime subscription pattern
+
+- The **screen** manages subscribe/unsubscribe with `useEffect`, not TanStack Query. TanStack Query is for fetching; a one-shot query (`useCurrentState`) supplies the initial seed, and Realtime pushes overwrite it from there. Screen-local subscription state lives in `useState`/`useRef`, not Zustand.
+- Always store the returned unsubscribe fn in a ref and call it on unmount **unconditionally** — the channel must never outlive the screen. Dependency array is `[id]` only, so a vehicle change tears down and re-subscribes.
+- The mock emitter (`subscribeToCurrentStateMock`) and the real `subscribeToCurrentState` share the **same external interface** — `(vehicleId, onUpdate, onChannelStatus) => () => void` — so the swap is a per-capability flag flip in `source.ts`, not a screen change. Note the real `@caeorta/supabase` helper does **not** natively match that shape (it needs a client, returns a `RealtimeChannel`, has a separate async `unsubscribe`, and emits no channel status); the live branch owns a thin adapter that maps it onto the seam contract, keeping the adapter — and the shape mismatch — out of the screen.

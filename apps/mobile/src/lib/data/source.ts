@@ -33,6 +33,7 @@ export type DataCapability =
   | 'lastDrive'
   | 'recentDiagnostics'
   | 'currentState'
+  | 'currentStateSubscription'
   | 'createVehicle';
 
 /**
@@ -54,6 +55,7 @@ export const DATA_SOURCE: Record<DataCapability, DataSourceMode> = {
   lastDrive: ENV_DEFAULT,
   recentDiagnostics: ENV_DEFAULT,
   currentState: ENV_DEFAULT,
+  currentStateSubscription: ENV_DEFAULT,
   createVehicle: ENV_DEFAULT,
 };
 
@@ -130,4 +132,78 @@ export async function createVehicle(input: CreateVehicleInput): Promise<Tables<'
   const parsed = createVehicleInputSchema.parse(input);
   await new Promise((resolve) => setTimeout(resolve, MOCK_CREATE_LATENCY_MS));
   return mocks.createMockVehicle(parsed);
+}
+
+// ── Live-mode current_state subscription (Realtime seam) ──────────────────────
+// Unlike the read fetchers above, this capability is a *push* stream, not a
+// one-shot fetch: the live screen opens it on mount and tears it down on unmount.
+// The interface below is the seam's own contract — deliberately NOT the shape of
+// the real `subscribeToCurrentState` in @caeorta/supabase, which (a) needs a
+// CaeortaSupabaseClient, (b) returns a RealtimeChannel (teardown is the separate
+// async `unsubscribe(client, channel)`), and (c) emits no channel status. When
+// this capability is promoted to 'live', wire an adapter in the live branch below
+// that maps that helper onto this `(vehicleId, onUpdate, onChannelStatus) => () => void`
+// contract (channel → unsubscribe closure; Supabase SUBSCRIBED/CHANNEL_ERROR/CLOSED
+// → 'open'/'connecting'/'closed'). Keeping the adapter here preserves the seam's
+// zero-Supabase-import, plain-Node-testable property (see the module header).
+
+/** Emitter callbacks/return shared by the mock and (future) live subscription branches. */
+export type CurrentStateUpdate = (payload: Tables<'current_state'>) => void;
+export type ChannelStatusUpdate = (status: 'open' | 'connecting' | 'closed') => void;
+export type Unsubscribe = () => void;
+
+/** Mock emitter timings — visible-but-brisk connect, then a steady 2 s push cadence. */
+const MOCK_SUB_CONNECT_MS = 500;
+const MOCK_SUB_TICK_MS = 2000;
+
+/**
+ * Mock live-mode emitter. Immediately reports 'connecting', flips to 'open' after
+ * ~500 ms, then pushes a fresh {@link Tables}<'current_state'> every 2 s (one
+ * provisional metric nudged per tick so the UI visibly updates — see
+ * `mocks.currentStateTick`). The returned unsubscribe clears every timer and
+ * reports 'closed'; it is safe to call at any point (before or after 'open').
+ *
+ * This matches the seam's subscription contract exactly (see the block comment
+ * above), so the live screen's lifecycle code is identical whether the source is
+ * mock or live.
+ */
+export function subscribeToCurrentStateMock(
+  vehicleId: string,
+  onUpdate: CurrentStateUpdate,
+  onChannelStatus: ChannelStatusUpdate,
+): Unsubscribe {
+  onChannelStatus('connecting');
+
+  let tick = 0;
+  let intervalId: ReturnType<typeof setInterval> | null = null;
+
+  const connectTimer = setTimeout(() => {
+    onChannelStatus('open');
+    intervalId = setInterval(() => {
+      onUpdate(mocks.currentStateTick(vehicleId, tick));
+      tick += 1;
+    }, MOCK_SUB_TICK_MS);
+  }, MOCK_SUB_CONNECT_MS);
+
+  return () => {
+    clearTimeout(connectTimer);
+    if (intervalId !== null) clearInterval(intervalId);
+    onChannelStatus('closed');
+  };
+}
+
+/**
+ * THE subscription swap point (mirrors the `fetch*` factories). The live screen
+ * calls this, never the branch functions directly. Mock: {@link subscribeToCurrentStateMock}.
+ * Live: throws {@link notImplemented} — resolve TODO(metric-keys) and wire the
+ * @caeorta/supabase adapter (see the block comment above) before flipping
+ * `DATA_SOURCE.currentStateSubscription` to 'live'.
+ */
+export function subscribeToCurrentStateSource(
+  vehicleId: string,
+  onUpdate: CurrentStateUpdate,
+  onChannelStatus: ChannelStatusUpdate,
+): Unsubscribe {
+  if (DATA_SOURCE.currentStateSubscription === 'live') return notImplemented('currentStateSubscription');
+  return subscribeToCurrentStateMock(vehicleId, onUpdate, onChannelStatus);
 }

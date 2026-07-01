@@ -228,6 +228,24 @@ export function currentStateForVehicle(vehicleId: string): Tables<'current_state
 }
 
 /**
+ * One Realtime "tick" of `current_state` for the mock live-mode emitter
+ * (`subscribeToCurrentStateMock` in ./source.ts). Based on {@link mockCurrentState}
+ * but stamped to call-time and with a single provisional metric (`rpm`) nudged by
+ * `tick` so each push is visibly different on the live screen — an idle engine
+ * wandering ±160 rpm around the baseline. Keys stay within
+ * {@link PROVISIONAL_METRIC_KEYS} (see the TODO(metric-keys) note above); the live
+ * stream will replace this once the real subscription is wired.
+ */
+export function currentStateTick(vehicleId: string, tick: number): Tables<'current_state'> {
+  const base = mockCurrentState.latest_metrics;
+  return {
+    vehicle_id: vehicleId,
+    latest_metrics: { ...base, rpm: base.rpm + ((tick % 8) - 4) * 40 },
+    updated_at: new Date().toISOString(),
+  } satisfies Tables<'current_state'>;
+}
+
+/**
  * RFC-4122 v4 id, Math.random-backed. Good enough for a mock seam (no crypto
  * dependency, works in both Hermes and the Node/vitest test runner where
  * `crypto.randomUUID` isn't guaranteed). The live `create_vehicle` path gets a
