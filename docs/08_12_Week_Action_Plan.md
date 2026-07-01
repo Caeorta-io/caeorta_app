@@ -270,16 +270,14 @@ The actual product starts to take shape. Default view is "your last drive," not 
 - **Screens shipped:** vehicle list, add-vehicle flow, vehicle detail, live mode. Live mode
   runs against the data seam's mock Realtime emitter (`subscribeToCurrentStateMock`), which
   matches the real subscription's external contract so the swap is a per-capability flag flip.
-- **Carried forward:**
-  - `create_vehicle` E2E — gated on the Platform-side `create_vehicle` Edge Function.
-  - `TODO(metric-keys)` — provisional jsonb metric vocabulary; gated on the hardware/AI-agent
-    contract. Resolve per capability before flipping it to `'live'`.
-  - Live Realtime swap — flip `DATA_SOURCE.currentStateSubscription` (and the read capabilities)
-    to `'live'` once Platform reads are wired; a `@caeorta/supabase` adapter maps the real
-    `subscribeToCurrentState` (returns a channel, needs a client, emits no channel status) onto
-    the seam's `(vehicleId, onUpdate, onChannelStatus) => () => void` contract.
-  - Pairing on-device E2E — still unrun; not a Week 3 blocker. Requires the next EAS dev build
-    with the `expo-camera` + `esp-idf-provisioning` native modules.
+**Carried forward (detailed).** These four items are the reference point for Week 4 planning; the Realtime-adapter and metric-keys items are also tracked as standing risks (R21, R22 in `docs/09_Risks_And_Mitigations.md`). Recorded in full in App-track session 24.
+
+| Item | Status | What is needed to resolve | Owner |
+|------|--------|--------------------------|-------|
+| **`create_vehicle` E2E** | Built, not E2E-verified. | Platform-side `create_vehicle` Edge Function deployed and accessible. Once live: flip `DATA_SOURCE.createVehicle` to `'live'` in `source.ts` and wire the real `fetch` call in the live branch. Then run the add-vehicle flow on device with a claimed `device_id` and confirm a `vehicles` row is created with the correct `owner_user_id`, `device_id`, and fields. See `docs/create_vehicle_contract.md` (incl. the `ecu_type` Open question, which must be agreed before this flip). | Platform track (Edge Function); App track (live-branch wiring + E2E run). |
+| **`TODO(metric-keys)` — provisional jsonb vocabulary** | Open. All three jsonb fields (`peak_metrics`, `summary_metrics`, `latest_metrics`) use a provisional key set marked with `TODO(metric-keys)` in `mocks.ts`, `LastDriveCard`, `DiagnosticsPreview`, and the live screen. | The hardware/AI-agent contract must confirm the canonical key set. Once confirmed: update the `mocks.ts` provisional keys to match, update any hardcoded key references in `LastDriveCard` and the live metrics panel, and remove the `TODO` flags. A key mismatch is **NOT** caught by the compiler (opaque jsonb) — this must be a deliberate reconciliation step before any live flip of the `lastDrive`, `currentState`, or `recentDiagnostics` capabilities. | Hardware/AI-agent project (canonical set); App track (reconciliation + `TODO` removal). |
+| **Live Realtime swap — adapter gap** | Open. The live branch of the `currentStateSubscription` capability in `source.ts` throws `notImplemented`. The real `subscribeToCurrentState` in `packages/supabase/src/realtime.ts` takes a Supabase client and returns a `RealtimeChannel` — it does **not** match the mock emitter's interface `(onUpdate, onChannelStatus) => () => void`. The swap is not a one-liner. | A thin adapter (in `packages/supabase` or `apps/mobile`) that wraps `RealtimeChannel` into the mock's interface shape — bridging the channel's event callbacks to `onUpdate` and synthesising `onChannelStatus` from the channel's `subscribe` callback status codes. This adapter must be agreed with the Platform track before it is authored (it touches `packages/supabase`). Once the adapter exists, the `source.ts` live branch imports and calls it; the mock emitter is retired for that capability. | App track (adapter design); Platform track (`packages/supabase` boundary sign-off); both tracks must agree the interface before authoring. |
+| **Pairing on-device E2E** | Unrun. The pairing flow (`lib/pairing.ts`, `(app)/pair/*` screens) is built and all unit tests pass, but the live handshake against a real seed device has never been executed. | A fresh EAS development build carrying both `expo-camera` (~56.0.8) and `@orbital-systems/react-native-esp-idf-provisioning` (~0.5.5). Run the full pairing flow on a physical Android device: claim a real seed device, confirm the `devices` row flips (`claimed_by_user_id` set, `status='active'`), confirm the `audit_log` row, and exercise all four documented error states. This is the only gap between "Week 2 built" and "Week 2 verified." | App track (Muhammed, on hardware). |
 
 ---
 
