@@ -102,6 +102,137 @@ export const mockLastDrive = {
   } satisfies Record<string, number>,
 } satisfies Tables<'drives'>;
 
+/** One decimal place, matching the `distance_km` / `average_speed_kph` precision. */
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
+/**
+ * Build one completed `drives` Row from compact fields. `ended_at` is derived from
+ * `startedAt + durationSeconds` and `average_speed_kph` from distance/duration, so
+ * every fixture stays arithmetically self-consistent (same invariant the conformance
+ * test pins on {@link mockLastDrive}). The jsonb blobs reuse the exact provisional
+ * key set from {@link PROVISIONAL_METRIC_KEYS} — no new key names (see TODO above).
+ */
+function makeDrive(fields: {
+  id: string;
+  startedAt: string;
+  durationSeconds: number;
+  distanceKm: number;
+  hasAnomaly?: boolean;
+  peakRpm?: number;
+  peakSpeedKph?: number;
+  peakCoolantC?: number;
+}): Tables<'drives'> {
+  const avg = round1(fields.distanceKm / (fields.durationSeconds / 3600));
+  const endedAt = new Date(Date.parse(fields.startedAt) + fields.durationSeconds * 1000).toISOString();
+  return {
+    id: fields.id,
+    vehicle_id: MOCK_VEHICLE_ID,
+    sync_session_id: MOCK_SYNC_SESSION_ID,
+    started_at: fields.startedAt,
+    ended_at: endedAt,
+    duration_seconds: fields.durationSeconds,
+    distance_km: fields.distanceKm,
+    average_speed_kph: avg,
+    has_anomaly: fields.hasAnomaly ?? false,
+    peak_metrics: {
+      rpm: fields.peakRpm ?? 5200,
+      speed_kph: fields.peakSpeedKph ?? 96,
+      coolant_temp_c: fields.peakCoolantC ?? 95.0,
+      engine_load_pct: 82,
+      throttle_pct: 88,
+      intake_air_temp_c: 42,
+      boost_pressure_kpa: 74,
+      battery_voltage: 14.5,
+    } satisfies Record<string, number>,
+    summary_metrics: {
+      rpm: 2050,
+      speed_kph: avg,
+      coolant_temp_c: 90.0,
+      engine_load_pct: 34,
+      throttle_pct: 20,
+      intake_air_temp_c: 37,
+      boost_pressure_kpa: 10,
+      battery_voltage: 14.2,
+      fuel_level_pct: 58,
+    } satisfies Record<string, number>,
+  } satisfies Tables<'drives'>;
+}
+
+/**
+ * The vehicle's completed drives for the paginated, date-grouped drives list.
+ * Newest-first, spanning four calendar dates (Jun 22 / 21 / 19 / 18) with several
+ * drives per day so date-grouping and cursor pagination are both exercised.
+ *
+ * {@link mockLastDrive} is the newest element, so the drives list and the detail
+ * screen's "last drive" card stay consistent (the last drive IS the top of the list).
+ * A couple of drives carry `has_anomaly` so the list's amber marker has something to
+ * render.
+ */
+export const mockDrives: Tables<'drives'>[] = [
+  // ── Jun 22 (2 drives) — newest is the shared mockLastDrive ──
+  mockLastDrive,
+  makeDrive({
+    id: '77777777-7777-4777-8777-777777777701',
+    startedAt: '2026-06-22T05:40:00.000Z',
+    durationSeconds: 1140, // 19 min
+    distanceKm: 11.2,
+  }),
+  // ── Jun 21 (3 drives) ──
+  makeDrive({
+    id: '77777777-7777-4777-8777-777777777702',
+    startedAt: '2026-06-21T19:20:00.000Z',
+    durationSeconds: 2760, // 46 min
+    distanceKm: 38.9,
+    hasAnomaly: true,
+    peakRpm: 6720,
+    peakSpeedKph: 141,
+    peakCoolantC: 103.2,
+  }),
+  makeDrive({
+    id: '77777777-7777-4777-8777-777777777703',
+    startedAt: '2026-06-21T13:05:00.000Z',
+    durationSeconds: 900, // 15 min
+    distanceKm: 7.4,
+  }),
+  makeDrive({
+    id: '77777777-7777-4777-8777-777777777704',
+    startedAt: '2026-06-21T08:15:00.000Z',
+    durationSeconds: 1980, // 33 min
+    distanceKm: 21.5,
+  }),
+  // ── Jun 19 (2 drives) ──
+  makeDrive({
+    id: '77777777-7777-4777-8777-777777777705',
+    startedAt: '2026-06-19T17:45:00.000Z',
+    durationSeconds: 3300, // 55 min
+    distanceKm: 47.1,
+  }),
+  makeDrive({
+    id: '77777777-7777-4777-8777-777777777706',
+    startedAt: '2026-06-19T07:30:00.000Z',
+    durationSeconds: 1500, // 25 min
+    distanceKm: 16.8,
+  }),
+  // ── Jun 18 (2 drives) ──
+  makeDrive({
+    id: '77777777-7777-4777-8777-777777777707',
+    startedAt: '2026-06-18T16:10:00.000Z',
+    durationSeconds: 2100, // 35 min
+    distanceKm: 28.3,
+    hasAnomaly: true,
+    peakRpm: 6180,
+    peakCoolantC: 99.8,
+  }),
+  makeDrive({
+    id: '77777777-7777-4777-8777-777777777708',
+    startedAt: '2026-06-18T06:50:00.000Z',
+    durationSeconds: 1260, // 21 min
+    distanceKm: 13.6,
+  }),
+];
+
 /**
  * Latest known instantaneous metrics for the vehicle (engine idling, just keyed
  * on). `updated_at` here is a static "recent" anchor; `currentStateForVehicle`
@@ -210,6 +341,33 @@ export function vehicleById(id: string): Tables<'vehicles'> | null {
 
 export function lastDriveForVehicle(vehicleId: string): Tables<'drives'> | null {
   return vehicleId === MOCK_VEHICLE_ID ? mockLastDrive : null;
+}
+
+/** All of a vehicle's completed drives, newest-first (the order the live query returns). */
+export function drivesForVehicle(vehicleId: string): Tables<'drives'>[] {
+  if (vehicleId !== MOCK_VEHICLE_ID) return [];
+  return [...mockDrives].sort((a, b) => b.started_at.localeCompare(a.started_at));
+}
+
+/**
+ * One keyset page of a vehicle's drives, newest-first. `cursor` is the `started_at`
+ * of the last row already seen (null for the first page); rows strictly older than
+ * the cursor are returned. `nextCursor` is the last returned row's `started_at` when
+ * more rows remain, else null. Mirrors the live `.lt('started_at', cursor).limit()`
+ * scan (see `fetchDrives` in ./source.ts).
+ */
+export function drivesPage(
+  vehicleId: string,
+  limit: number,
+  cursor: string | null,
+): { drives: Tables<'drives'>[]; nextCursor: string | null } {
+  const all = drivesForVehicle(vehicleId);
+  const remaining = cursor === null ? all : all.filter((d) => d.started_at < cursor);
+  const safeLimit = Math.max(0, limit);
+  const drives = remaining.slice(0, safeLimit);
+  const hasMore = remaining.length > drives.length;
+  const nextCursor = hasMore ? (drives.at(-1)?.started_at ?? null) : null;
+  return { drives, nextCursor };
 }
 
 export function recentDiagnosticsForVehicle(

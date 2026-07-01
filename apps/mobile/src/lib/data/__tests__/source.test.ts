@@ -4,13 +4,14 @@ import type { Tables } from '@caeorta/supabase';
 import {
   DATA_SOURCE,
   fetchCurrentState,
+  fetchDrives,
   fetchLastDrive,
   fetchRecentDiagnostics,
   fetchVehicle,
   fetchVehicles,
   subscribeToCurrentStateMock,
 } from '../source';
-import { MOCK_VEHICLE_ID } from '../mocks';
+import { MOCK_VEHICLE_ID, mockDrives } from '../mocks';
 
 const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
 
@@ -54,6 +55,56 @@ describe('data source factory (mock mode)', () => {
 
   it('DATA_SOURCE.currentStateSubscription defaults to mock', () => {
     expect(DATA_SOURCE.currentStateSubscription).toBe('mock');
+  });
+});
+
+describe('fetchDrives (keyset pagination)', () => {
+  const LIMIT = 4;
+
+  it('returns the newest page and a cursor when more drives remain', async () => {
+    const page = await fetchDrives(MOCK_VEHICLE_ID, { limit: LIMIT });
+    expect(page.drives).toHaveLength(LIMIT);
+    // Newest-first within the page.
+    const times = page.drives.map((d) => d.started_at);
+    expect(times).toEqual([...times].sort((a, b) => b.localeCompare(a)));
+    // Cursor is the last row's started_at, and there are more drives than one page.
+    expect(page.nextCursor).toBe(page.drives.at(-1)?.started_at);
+    expect(mockDrives.length).toBeGreaterThan(LIMIT);
+  });
+
+  it('the cursor page excludes the cursor row and continues newest-first', async () => {
+    const first = await fetchDrives(MOCK_VEHICLE_ID, { limit: LIMIT });
+    const second = await fetchDrives(MOCK_VEHICLE_ID, { limit: LIMIT, cursor: first.nextCursor });
+    // No overlap: every second-page row is strictly older than the cursor.
+    const cursor = first.nextCursor;
+    expect(cursor).not.toBeNull();
+    expect(second.drives.every((d) => d.started_at < cursor!)).toBe(true);
+  });
+
+  it('walks every drive exactly once, in strict newest-first order, ending with a null cursor', async () => {
+    const collected: string[] = [];
+    let cursor: string | null = null;
+    for (let guard = 0; guard < 50; guard += 1) {
+      const page = await fetchDrives(MOCK_VEHICLE_ID, { limit: LIMIT, cursor });
+      collected.push(...page.drives.map((d) => d.started_at));
+      if (page.nextCursor === null) break;
+      cursor = page.nextCursor;
+    }
+    // Covers all drives, no duplicates.
+    expect(collected).toHaveLength(mockDrives.length);
+    expect(new Set(collected).size).toBe(mockDrives.length);
+    // Strictly descending by started_at across page boundaries.
+    expect(collected).toEqual([...collected].sort((a, b) => b.localeCompare(a)));
+  });
+
+  it('returns everything with a null cursor when the limit exceeds the total', async () => {
+    const page = await fetchDrives(MOCK_VEHICLE_ID, { limit: mockDrives.length + 10 });
+    expect(page.drives).toHaveLength(mockDrives.length);
+    expect(page.nextCursor).toBeNull();
+  });
+
+  it('returns an empty page with a null cursor for an unknown vehicle', async () => {
+    expect(await fetchDrives(UNKNOWN_ID, { limit: LIMIT })).toEqual({ drives: [], nextCursor: null });
   });
 });
 

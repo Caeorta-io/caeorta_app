@@ -1,4 +1,4 @@
-import { ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
@@ -113,6 +113,18 @@ export default function VehicleDetailScreen() {
         ) : (
           <NoLastDriveState />
         )}
+
+        {/* Entry point to the full, paginated drives history — additional to the
+            last-drive summary above, which stays as the at-a-glance view. */}
+        <Pressable
+          accessibilityRole="link"
+          onPress={() =>
+            router.push({ pathname: '/vehicles/[id]/drives', params: { id: vehicle.id } })
+          }
+          className="mt-2 self-start py-2 active:opacity-70"
+        >
+          <Text className="text-sm font-medium text-blue-600">{t('vehicles.drives.viewAll')}</Text>
+        </Pressable>
 
         {diagnosticsQuery.isPending ? (
           <DiagnosticsSkeleton />

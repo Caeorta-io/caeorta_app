@@ -190,6 +190,15 @@
         "body": "Something went wrong loading this vehicle. Check your connection and try again."
       }
     },
+    "drives": {
+      "title": "Drives",
+      "viewAll": "View all drives",
+      "empty": "No drives recorded yet — sync your device after your first drive.",
+      "error": {
+        "title": "Couldn't load drives",
+        "body": "Something went wrong loading your drives. Check your connection and try again."
+      }
+    },
     "live": {
       "title": "Live metrics",
       "connecting": "Connecting…",
