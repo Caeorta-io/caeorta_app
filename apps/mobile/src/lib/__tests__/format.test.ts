@@ -6,6 +6,7 @@ import {
   formatDriveSummary,
   formatDuration,
   formatRelativeTime,
+  formatSecondsAgo,
   formatSpeedKph,
   selectPeakMetrics,
 } from '../format';
@@ -38,6 +39,27 @@ describe('formatRelativeTime', () => {
   it('returns the dash for future / unparseable timestamps', () => {
     expect(formatRelativeTime(isoAgo(-60_000), NOW)).toBe(EMPTY_DASH);
     expect(formatRelativeTime('not-a-date', NOW)).toBe(EMPTY_DASH);
+  });
+});
+
+describe('formatSecondsAgo', () => {
+  it('returns the dash for null and unparseable / future timestamps', () => {
+    expect(formatSecondsAgo(null, NOW)).toBe(EMPTY_DASH);
+    expect(formatSecondsAgo('not-a-date', NOW)).toBe(EMPTY_DASH);
+    expect(formatSecondsAgo(isoAgo(-5_000), NOW)).toBe(EMPTY_DASH);
+  });
+
+  it('resolves seconds under a minute (counts up)', () => {
+    expect(formatSecondsAgo(isoAgo(0), NOW)).toBe('0 s');
+    expect(formatSecondsAgo(isoAgo(1_000), NOW)).toBe('1 s');
+    expect(formatSecondsAgo(isoAgo(45_000), NOW)).toBe('45 s');
+    expect(formatSecondsAgo(isoAgo(59_000), NOW)).toBe('59 s');
+  });
+
+  it('rolls up to min / h / d past a minute', () => {
+    expect(formatSecondsAgo(isoAgo(2 * 60_000), NOW)).toBe('2 min');
+    expect(formatSecondsAgo(isoAgo(3 * 60 * 60_000), NOW)).toBe('3 h');
+    expect(formatSecondsAgo(isoAgo(2 * 24 * 60 * 60_000), NOW)).toBe('2 d');
   });
 });
 

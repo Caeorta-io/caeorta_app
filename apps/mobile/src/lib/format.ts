@@ -34,6 +34,28 @@ export function formatRelativeTime(iso: string | null, now: number = Date.now())
 }
 
 /**
+ * Second-granular relative token for the live screen's "Updated X ago" line:
+ * "0 s", "5 s", then "2 min" / "3 h" / "4 d" once past a minute. Unlike
+ * {@link formatRelativeTime} (which floors everything under a minute to
+ * "Just now"), this resolves seconds so a once-per-second re-render visibly
+ * counts up. Returns {@link EMPTY_DASH} for `null` and for future/unparseable
+ * timestamps. Locale-neutral: the screen wraps it as "Updated {{value}} ago".
+ */
+export function formatSecondsAgo(iso: string | null, now: number = Date.now()): string {
+  if (iso === null) return EMPTY_DASH;
+
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return EMPTY_DASH;
+
+  const ageMs = now - then;
+  if (ageMs < 0) return EMPTY_DASH;
+  if (ageMs < MINUTE_MS) return `${Math.floor(ageMs / 1000)} s`;
+  if (ageMs < HOUR_MS) return `${Math.floor(ageMs / MINUTE_MS)} min`;
+  if (ageMs < DAY_MS) return `${Math.floor(ageMs / HOUR_MS)} h`;
+  return `${Math.floor(ageMs / DAY_MS)} d`;
+}
+
+/**
  * One-line summary of a drive: "24.6 km · 36 min". Returns {@link EMPTY_DASH}
  * when distance or duration is missing (a drive row with null metrics, or no
  * drive at all). Distance is shown to one decimal; duration in whole minutes.
