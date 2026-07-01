@@ -348,6 +348,38 @@ than "Caeorta." Less professional for commercial launch.
 
 ---
 
+## R21: Live Realtime swap requires a cross-track adapter
+
+**Risk:** `subscribeToCurrentState` (in `packages/supabase/src/realtime.ts`) returns a `RealtimeChannel` and takes a Supabase client; the App-side mock emitter expects `(onUpdate, onChannelStatus) => () => void`. Bridging this requires a thin adapter touching `packages/supabase` — a shared package boundary. If the adapter is authored without Platform-track sign-off, the interface may diverge from how Sulaiman's track uses the same Realtime helpers elsewhere.
+
+**Likelihood:** Medium (inevitable work; the risk is misalignment, not omission).
+
+**Impact:** Medium (blocks the live Realtime flip; does not block screens or other live-flip capabilities).
+
+**Mitigations:**
+- Author the adapter interface as a contract document (same pattern as `docs/create_vehicle_contract.md`) before writing any code.
+- Both tracks agree on the interface; adapter implementation follows the agreed contract.
+
+**Status:** Open. New at Week-3 close (App-track session 24). See the Week-3 carried-forward table in `docs/08_12_Week_Action_Plan.md` and the `currentStateSubscription` live-branch comment in `source.ts`.
+
+---
+
+## R22: Provisional jsonb metric key vocabulary unreconciled
+
+**Risk:** The `peak_metrics`, `summary_metrics`, and `latest_metrics` jsonb fields use a provisional key set in `mocks.ts`. The canonical set is owned by the hardware/AI-agent contract. A mismatch is not compiler-caught (the columns are opaque `Json`). Every live-flip of the `lastDrive`, `currentState`, or `recentDiagnostics` capabilities is blocked until the canonical set is confirmed and the `TODO(metric-keys)` flags are resolved.
+
+**Likelihood:** Medium (the contract exists; reconciliation just hasn't happened).
+
+**Impact:** High (silently wrong data in production if skipped).
+
+**Mitigations:**
+- Treat `TODO(metric-keys)` as a hard gate on each capability's live flip.
+- Add a checklist item to the live-flip runbook (to be written in Week 4) that explicitly confirms metric-key reconciliation before the flip is approved.
+
+**Status:** Open. New at Week-3 close (App-track session 24). Related: R1 (AI agent contract drift). See the Week-3 carried-forward table in `docs/08_12_Week_Action_Plan.md`.
+
+---
+
 ## How to use this document
 
 - **Weekly retro:** Walk this list. Any risks worsening? Any new ones to add? Any to resolve?

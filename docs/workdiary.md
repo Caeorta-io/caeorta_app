@@ -1097,6 +1097,26 @@ The brief assumed Expo Go, but **SDK 56 isn't on the Play Store Expo Go** (it sh
 
 ---
 
+### 2026-07-01 (later same day) — Week 3 carry-forward detail captured in shared docs (App track, session 24)
+
+**Goal of session:** Record the Week 3 carry-forward items in full detail in the shared project docs, so they are the reference point for Week 4 planning. **Docs-only — no code touched.**
+
+**Verified main first.** `git fetch`; confirmed **PR #29 (session-23 live mode) squash-merged to `main`** (`9471210`) — so the Week-3 close note, conventions Week-3 patterns, and the session-23 entry are all on `main`. Branched `docs/week3-carryforward` **off `main`**, not stacked. Confirmed session-23 was the latest App-track entry.
+
+**Done (docs only):**
+- **`docs/08_12_Week_Action_Plan.md`** — replaced the Week-3 close "Carried forward" bullet list with a detailed four-row **table** (`Item | Status | What is needed to resolve | Owner`): `create_vehicle` E2E, `TODO(metric-keys)` provisional vocabulary, live Realtime swap (adapter gap), pairing on-device E2E. This table is the canonical Week-4-planning reference; session-23's carry-forward stays as the summary.
+- **`docs/09_Risks_And_Mitigations.md`** — added two new entries (highest was R20). **R21: live Realtime swap requires a cross-track adapter** (the `RealtimeChannel`-vs-`(onUpdate, onChannelStatus) => () => void` bridge touches `packages/supabase`; risk is cross-track misalignment — mitigation is an adapter contract doc before code). **R22: provisional jsonb metric key vocabulary unreconciled** (`TODO(metric-keys)` is a hard gate on any `lastDrive`/`currentState`/`recentDiagnostics` live flip; mismatch is not compiler-caught → High impact). Confirmed neither existed under other wording before adding.
+
+**No code changed.** No files under `apps/` or `packages/` touched. Ran the gate anyway to confirm docs edits didn't disturb anything: `corepack pnpm -r typecheck` / `-r lint` / `-r run --if-present test` all green (see PR).
+
+**Files / commits:** single `docs: expand week3 carry-forward detail (08, 09, workdiary session-24)` (`docs/08_12_Week_Action_Plan.md`, `docs/09_Risks_And_Mitigations.md`, this entry). Branch `docs/week3-carryforward` off `main` (`9471210`); **PR for @22SHY review, not self-merged.**
+
+**Decisions taken:** none — this session records already-made decisions in more durable form; no new decision.
+
+**Open items rolled forward:** unchanged from session 23 — the four carried items are now recorded in full in `docs/08` (table) + `docs/09` (R21, R22). Next: Week 4 App track (drives list, drive detail, charts) + a live-flip runbook that bakes in the R22 metric-key gate.
+
+---
+
 ## Template for future entries
 
 When starting a new entry, copy this scaffold to the bottom of the file. Keep prose tight; cross-reference the decisions log and tool inventory rather than re-describing.
