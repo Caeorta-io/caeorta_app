@@ -265,6 +265,22 @@ The actual product starts to take shape. Default view is "your last drive," not 
 - Live mode works as explicit, opt-in feature
 - Admin dashboard shows device status
 
+### Week close — App track (session 23)
+- **Week 3 App track complete**, mock-data-first and JS-only — no EAS dev build was needed.
+- **Screens shipped:** vehicle list, add-vehicle flow, vehicle detail, live mode. Live mode
+  runs against the data seam's mock Realtime emitter (`subscribeToCurrentStateMock`), which
+  matches the real subscription's external contract so the swap is a per-capability flag flip.
+- **Carried forward:**
+  - `create_vehicle` E2E — gated on the Platform-side `create_vehicle` Edge Function.
+  - `TODO(metric-keys)` — provisional jsonb metric vocabulary; gated on the hardware/AI-agent
+    contract. Resolve per capability before flipping it to `'live'`.
+  - Live Realtime swap — flip `DATA_SOURCE.currentStateSubscription` (and the read capabilities)
+    to `'live'` once Platform reads are wired; a `@caeorta/supabase` adapter maps the real
+    `subscribeToCurrentState` (returns a channel, needs a client, emits no channel status) onto
+    the seam's `(vehicleId, onUpdate, onChannelStatus) => () => void` contract.
+  - Pairing on-device E2E — still unrun; not a Week 3 blocker. Requires the next EAS dev build
+    with the `expo-camera` + `esp-idf-provisioning` native modules.
+
 ---
 
 ## Week 4 — Drives, charts, and historical data
