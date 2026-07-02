@@ -31,6 +31,7 @@ export type DataCapability =
   | 'vehicles'
   | 'vehicle'
   | 'lastDrive'
+  | 'drives'
   | 'recentDiagnostics'
   | 'currentState'
   | 'currentStateSubscription'
@@ -53,6 +54,7 @@ export const DATA_SOURCE: Record<DataCapability, DataSourceMode> = {
   vehicles: ENV_DEFAULT,
   vehicle: ENV_DEFAULT,
   lastDrive: ENV_DEFAULT,
+  drives: ENV_DEFAULT,
   recentDiagnostics: ENV_DEFAULT,
   currentState: ENV_DEFAULT,
   currentStateSubscription: ENV_DEFAULT,
@@ -85,6 +87,36 @@ export async function fetchVehicle(id: string): Promise<Tables<'vehicles'> | nul
 export async function fetchLastDrive(vehicleId: string): Promise<Tables<'drives'> | null> {
   if (DATA_SOURCE.lastDrive === 'live') return notImplemented('lastDrive');
   return mocks.lastDriveForVehicle(vehicleId);
+}
+
+/** One page of drives plus the cursor to fetch the next page (null when at the end). */
+export interface DrivesPage {
+  drives: Tables<'drives'>[];
+  /**
+   * Keyset cursor for the NEXT page: the `started_at` of the last row on this page,
+   * or null when no more rows follow. `started_at` (not an opaque offset) so the
+   * eventual live query is a stable keyset scan the mock already mirrors — see
+   * {@link fetchDrives}.
+   */
+  nextCursor: string | null;
+}
+
+/**
+ * One page of a vehicle's completed drives, newest-first, for the paginated drives
+ * list. `cursor` is the `started_at` of the last row seen (null/absent for the first
+ * page); `limit` is the page size.
+ *
+ * Live: keyset pagination on `started_at` —
+ * `…eq('vehicle_id', …).order('started_at',desc).lt('started_at', cursor).limit(limit)`
+ * (first page omits the `.lt`). `started_at` is effectively unique per vehicle in the
+ * fixtures; a live query wanting exact tie-breaking would key on `(started_at, id)`.
+ */
+export async function fetchDrives(
+  vehicleId: string,
+  { limit, cursor }: { limit: number; cursor?: string | null },
+): Promise<DrivesPage> {
+  if (DATA_SOURCE.drives === 'live') return notImplemented('drives');
+  return mocks.drivesPage(vehicleId, limit, cursor ?? null);
 }
 
 /**

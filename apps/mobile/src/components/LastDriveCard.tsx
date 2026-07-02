@@ -2,6 +2,7 @@ import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { Tables } from '@caeorta/supabase';
 
+import { AnomalyBadge } from '@/components/AnomalyBadge';
 import { formatDistanceKm, formatDuration, formatSpeedKph, selectPeakMetrics } from '@/lib/format';
 
 interface LastDriveCardProps {
@@ -56,13 +57,8 @@ export function LastDriveCard({ drive }: LastDriveCardProps) {
       </View>
 
       {drive.has_anomaly ? (
-        <View
-          role="status"
-          aria-label={t('vehicles.detail.anomaly')}
-          className="mt-4 flex-row items-center self-start rounded-full bg-amber-100 px-2.5 py-1"
-        >
-          <View className="mr-1.5 h-2 w-2 rounded-full bg-amber-500" />
-          <Text className="text-xs font-medium text-amber-800">{t('vehicles.detail.anomaly')}</Text>
+        <View className="mt-4">
+          <AnomalyBadge />
         </View>
       ) : null}
 
