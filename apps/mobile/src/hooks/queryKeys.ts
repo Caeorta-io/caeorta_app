@@ -11,6 +11,10 @@ export const queryKeys = {
   vehicle: (id: string) => ['vehicles', id] as const,
   lastDrive: (vehicleId: string) => ['vehicles', vehicleId, 'last-drive'] as const,
   drives: (vehicleId: string) => ['vehicles', vehicleId, 'drives'] as const,
+  drive: (vehicleId: string, driveId: string) =>
+    ['vehicles', vehicleId, 'drive', driveId] as const,
+  driveDiagnostics: (vehicleId: string, driveId: string) =>
+    ['vehicles', vehicleId, 'drive', driveId, 'diagnostics'] as const,
   recentDiagnostics: (vehicleId: string, limit: number) =>
     ['vehicles', vehicleId, 'diagnostics', { limit }] as const,
   currentState: (vehicleId: string) => ['vehicles', vehicleId, 'current-state'] as const,

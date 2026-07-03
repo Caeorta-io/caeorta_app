@@ -7,7 +7,14 @@ import { DiagnosticsPreview } from '@/components/DiagnosticsPreview';
 import { LastDriveCard, NoLastDriveState } from '@/components/LastDriveCard';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
-import { useCurrentState, useLastDrive, useRecentDiagnostics, useVehicle } from '@/hooks';
+import {
+  useCurrentState,
+  useDriveDiagnostics,
+  useLastDrive,
+  useRecentDiagnostics,
+  useVehicle,
+} from '@/hooks';
+import { deriveDriveHealth } from '@/lib/driveHealth';
 
 /**
  * Vehicle detail — the persistent view a user lands on after tapping a vehicle
@@ -27,6 +34,10 @@ export default function VehicleDetailScreen() {
 
   const vehicleQuery = useVehicle(id);
   const lastDriveQuery = useLastDrive(id);
+  // Health for the last-drive card: a SINGLE dependent query on that one drive's
+  // linked diagnostics (no N+1 — this is one drive, not the paginated list). Keyed
+  // by the resolved drive id; disabled until the last drive resolves.
+  const lastDriveDiagnosticsQuery = useDriveDiagnostics(id, lastDriveQuery.data?.id ?? '');
   const diagnosticsQuery = useRecentDiagnostics(id, 3);
   // TODO(perf): one extra query for the header's connection chip. Fine in mock mode
   // (fixtures resolve synchronously, TanStack dedupes by key). channelStatus stays
@@ -83,6 +94,10 @@ export default function VehicleDetailScreen() {
 
   // Secondary hooks fail soft: an error reads as "no data", not a crashed screen.
   const lastDrive = lastDriveQuery.isError ? null : (lastDriveQuery.data ?? null);
+  const lastDriveDiagnostics = lastDriveDiagnosticsQuery.isError
+    ? []
+    : (lastDriveDiagnosticsQuery.data ?? []);
+  const lastDriveHealth = deriveDriveHealth(lastDriveDiagnostics);
   const diagnostics = diagnosticsQuery.isError ? [] : (diagnosticsQuery.data ?? []);
   const currentStateUpdatedAt = currentStateQuery.data?.updated_at ?? null;
 
@@ -109,7 +124,7 @@ export default function VehicleDetailScreen() {
         {lastDriveQuery.isPending ? (
           <LastDriveCardSkeleton />
         ) : lastDrive !== null ? (
-          <LastDriveCard drive={lastDrive} />
+          <LastDriveCard drive={lastDrive} health={lastDriveHealth} />
         ) : (
           <NoLastDriveState />
         )}

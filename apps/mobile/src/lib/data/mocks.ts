@@ -326,6 +326,78 @@ export const mockDiagnostics = [
   },
 ] satisfies Tables<'diagnostic_outputs'>[];
 
+/**
+ * Additional diagnostics linked to drives OTHER than the last drive, so the drives
+ * list / drive-detail health pill exercises all three tiers plus the off-the-ladder
+ * case across the fixture set (see `deriveDriveHealth`):
+ *   • drive …702 (Jun 21) — a lone `warning` → derives `needs_look`.
+ *   • drive …707 (Jun 18) — a lone `insufficient_data` → stays `clean` (§4.3: off the
+ *     ladder, must NOT elevate health), the key proof case.
+ * The last drive (MOCK_DRIVE_ID) already carries critical+warning+info via
+ * {@link mockDiagnostics} → `check_now`; every other drive has none → `clean`.
+ *
+ * These are deliberately NOT added to {@link mockDiagnostics} (which stays the three
+ * newest, last-drive-scoped rows the recent-diagnostics preview shows). Their
+ * `generated_at` is older than that trio, so the vehicle's newest-3 preview is
+ * unchanged. Combined with {@link mockDiagnostics} in {@link allMockDiagnostics} for
+ * the drive-scoped reads.
+ */
+export const mockOtherDriveDiagnostics = [
+  {
+    id: '66666666-6666-4666-8666-666666666671',
+    vehicle_id: MOCK_VEHICLE_ID,
+    agent_version: 'v0.3.1',
+    category: 'cooling',
+    severity: 'warning',
+    urgency: 'soon',
+    status: 'new',
+    confidence: 0.68,
+    title: 'Coolant crept up on the evening run',
+    summary: 'Coolant temperature edged above its usual band late in the drive.',
+    explanation:
+      'Coolant temperature drifted a few degrees over your baseline during the last ' +
+      'ten minutes of this drive. Nothing alarming on its own, but worth a look if it ' +
+      'keeps happening — check coolant level and that the radiator has clear airflow.',
+    recommended_action: 'Check coolant level and radiator airflow when convenient.',
+    referenced_drive_id: '77777777-7777-4777-8777-777777777702',
+    referenced_dtc_ids: [],
+    referenced_telemetry_ids: [],
+    generated_at: '2026-06-21T20:07:00.000Z',
+  },
+  {
+    id: '66666666-6666-4666-8666-666666666672',
+    vehicle_id: MOCK_VEHICLE_ID,
+    agent_version: 'v0.3.1',
+    category: 'engine',
+    severity: 'insufficient_data',
+    urgency: 'monitor',
+    status: 'new',
+    confidence: 0.22,
+    title: 'Not enough data to assess this drive',
+    summary: 'The drive was too short to draw a confident conclusion.',
+    explanation:
+      'This drive ended before the agent gathered enough samples under load to say ' +
+      'anything meaningful. This is not a fault — just a note that more data is needed. ' +
+      'A longer drive will give a clearer picture.',
+    recommended_action: null,
+    referenced_drive_id: '77777777-7777-4777-8777-777777777707',
+    referenced_dtc_ids: [],
+    referenced_telemetry_ids: [],
+    generated_at: '2026-06-18T16:46:00.000Z',
+  },
+] satisfies Tables<'diagnostic_outputs'>[];
+
+/**
+ * Every mock diagnostic for the vehicle: the three newest (last-drive) rows plus the
+ * older, other-drive rows above. The drive-scoped reader {@link diagnosticsForDrive}
+ * and the drives-list health flags derive from this full set;
+ * {@link recentDiagnosticsForVehicle} intentionally stays on the newest trio.
+ */
+export const allMockDiagnostics: Tables<'diagnostic_outputs'>[] = [
+  ...mockDiagnostics,
+  ...mockOtherDriveDiagnostics,
+];
+
 // ── Selectors ────────────────────────────────────────────────────────────────
 // Narrow, mock-only readers used by `source.ts`. Return the WIDE generated row
 // types (not the narrow literal fixtures) so the seam's surface matches what the
@@ -349,6 +421,40 @@ export function drivesForVehicle(vehicleId: string): Tables<'drives'>[] {
   return [...mockDrives].sort((a, b) => b.started_at.localeCompare(a.started_at));
 }
 
+/** A single drive by id, or null if unknown. Mirrors `.eq('id', driveId).maybeSingle()`. */
+export function driveById(driveId: string): Tables<'drives'> | null {
+  return mockDrives.find((d) => d.id === driveId) ?? null;
+}
+
+/**
+ * Diagnostics the agent linked to a specific drive (via `referenced_drive_id`),
+ * newest-first. Reads the full pool ({@link allMockDiagnostics}) so drives other than
+ * the last one surface their own diagnostics. Mirrors the live
+ * `.eq('referenced_drive_id', driveId).order('generated_at',desc)`.
+ */
+export function diagnosticsForDrive(driveId: string): Tables<'diagnostic_outputs'>[] {
+  return allMockDiagnostics
+    .filter((d) => d.referenced_drive_id === driveId)
+    .sort((a, b) => b.generated_at.localeCompare(a.generated_at));
+}
+
+/**
+ * The health-severity flags a drive's linked diagnostics imply, for the drives-list
+ * pill. `has_critical` / `has_warning` mirror the live per-drive aggregate
+ * (`bool_or(severity = 'critical' | 'warning')`); `info` / `insufficient_data` /
+ * unknown severities set neither flag, so they never elevate health (§4.3).
+ */
+function driveHealthFlags(driveId: string): { hasCritical: boolean; hasWarning: boolean } {
+  let hasCritical = false;
+  let hasWarning = false;
+  for (const d of allMockDiagnostics) {
+    if (d.referenced_drive_id !== driveId) continue;
+    if (d.severity === 'critical') hasCritical = true;
+    else if (d.severity === 'warning') hasWarning = true;
+  }
+  return { hasCritical, hasWarning };
+}
+
 /**
  * One keyset page of a vehicle's drives, newest-first. `cursor` is the `started_at`
  * of the last row already seen (null for the first page); rows strictly older than
@@ -360,14 +466,25 @@ export function drivesPage(
   vehicleId: string,
   limit: number,
   cursor: string | null,
-): { drives: Tables<'drives'>[]; nextCursor: string | null } {
+): {
+  drives: Tables<'drives'>[];
+  healthByDriveId: Record<string, { hasCritical: boolean; hasWarning: boolean }>;
+  nextCursor: string | null;
+} {
   const all = drivesForVehicle(vehicleId);
   const remaining = cursor === null ? all : all.filter((d) => d.started_at < cursor);
   const safeLimit = Math.max(0, limit);
   const drives = remaining.slice(0, safeLimit);
   const hasMore = remaining.length > drives.length;
   const nextCursor = hasMore ? (drives.at(-1)?.started_at ?? null) : null;
-  return { drives, nextCursor };
+
+  // Sidecar health flags for exactly the drives on this page (no N+1 — see DrivesPage).
+  const healthByDriveId: Record<string, { hasCritical: boolean; hasWarning: boolean }> = {};
+  for (const drive of drives) {
+    healthByDriveId[drive.id] = driveHealthFlags(drive.id);
+  }
+
+  return { drives, healthByDriveId, nextCursor };
 }
 
 export function recentDiagnosticsForVehicle(

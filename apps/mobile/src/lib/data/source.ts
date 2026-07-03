@@ -18,6 +18,7 @@
 import { createVehicleInputSchema, type CreateVehicleInput } from '@caeorta/types';
 import type { Tables } from '@caeorta/supabase';
 
+import type { DriveHealthFlags } from '../driveHealth';
 import * as mocks from './mocks';
 
 export type DataSourceMode = 'mock' | 'live';
@@ -32,6 +33,8 @@ export type DataCapability =
   | 'vehicle'
   | 'lastDrive'
   | 'drives'
+  | 'drive'
+  | 'driveDiagnostics'
   | 'recentDiagnostics'
   | 'currentState'
   | 'currentStateSubscription'
@@ -55,6 +58,8 @@ export const DATA_SOURCE: Record<DataCapability, DataSourceMode> = {
   vehicle: ENV_DEFAULT,
   lastDrive: ENV_DEFAULT,
   drives: ENV_DEFAULT,
+  drive: ENV_DEFAULT,
+  driveDiagnostics: ENV_DEFAULT,
   recentDiagnostics: ENV_DEFAULT,
   currentState: ENV_DEFAULT,
   currentStateSubscription: ENV_DEFAULT,
@@ -93,6 +98,16 @@ export async function fetchLastDrive(vehicleId: string): Promise<Tables<'drives'
 export interface DrivesPage {
   drives: Tables<'drives'>[];
   /**
+   * Per-drive health-severity flags for the three-state health pill, keyed by drive
+   * id, for the drives on THIS page only. Carried alongside `drives` (a sidecar map,
+   * not per row) so the list renders each row's health WITHOUT an N+1 fetch of every
+   * drive's diagnostics — the list derives the pill via `driveHealthFromFlags`. Live:
+   * one keyset page query that also aggregates linked-diagnostic severities per drive
+   * (`bool_or(severity='critical'|'warning')`), not a query per row. Absence of a
+   * drive's id means no elevating diagnostics (reads clean).
+   */
+  healthByDriveId: Record<string, DriveHealthFlags>;
+  /**
    * Keyset cursor for the NEXT page: the `started_at` of the last row on this page,
    * or null when no more rows follow. `started_at` (not an opaque offset) so the
    * eventual live query is a stable keyset scan the mock already mirrors — see
@@ -117,6 +132,28 @@ export async function fetchDrives(
 ): Promise<DrivesPage> {
   if (DATA_SOURCE.drives === 'live') return notImplemented('drives');
   return mocks.drivesPage(vehicleId, limit, cursor ?? null);
+}
+
+/**
+ * A single completed drive by id, or null if not found — the drive-detail screen's
+ * primary read. Live: `…eq('id', driveId).maybeSingle()`.
+ */
+export async function fetchDrive(driveId: string): Promise<Tables<'drives'> | null> {
+  if (DATA_SOURCE.drive === 'live') return notImplemented('drive');
+  return mocks.driveById(driveId);
+}
+
+/**
+ * All diagnostics the AI agent linked to a specific drive (the drive-detail screen's
+ * "diagnostics from this drive" section), newest-first. Filters on the
+ * `referenced_drive_id` FK; an empty array means the drive flagged nothing.
+ * Live: `…eq('referenced_drive_id', driveId).order('generated_at',desc)`.
+ */
+export async function fetchDriveDiagnostics(
+  driveId: string,
+): Promise<Tables<'diagnostic_outputs'>[]> {
+  if (DATA_SOURCE.driveDiagnostics === 'live') return notImplemented('driveDiagnostics');
+  return mocks.diagnosticsForDrive(driveId);
 }
 
 /**
