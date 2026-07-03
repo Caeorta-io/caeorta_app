@@ -83,8 +83,11 @@ describe('typography (§4.4)', () => {
 });
 
 describe('scale & interaction constants (§4.5, §3)', () => {
-  it('radius scale matches the report', () => {
-    expect(radius).toEqual({ sm: '8px', md: '12px', lg: '16px', xl: '20px', full: '999px' });
+  it('radius scale matches the report (design-namespaced, additive)', () => {
+    // Namespaced `ds-*` keys → rounded-ds-sm/md/lg/xl; they collide with nothing
+    // in stock Tailwind, so stock rounded-* stays default (strict forward-only).
+    // No `ds-full`: the design pill (999) renders as stock rounded-full (9999).
+    expect(radius).toEqual({ 'ds-sm': '8px', 'ds-md': '12px', 'ds-lg': '16px', 'ds-xl': '20px' });
   });
 
   it('pressed opacity and min touch target', () => {

@@ -19,7 +19,7 @@ export const colorsDark: ColorTokens;
 export const colorsLight: ColorTokens;
 
 export const spacing: Record<string, string>;
-export const radius: Record<'sm' | 'md' | 'lg' | 'xl' | 'full', string>;
+export const radius: Record<'ds-sm' | 'ds-md' | 'ds-lg' | 'ds-xl', string>;
 export const fontFamily: Record<string, string[]>;
 
 export const FONT_FAMILY: {

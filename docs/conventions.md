@@ -139,23 +139,28 @@ every other group keeps its Figma name.
 | `interactive/*` | `bg-interactive-*` | `bg-interactive-disabled` |
 
 Spacing is the 4dp scale (`p-1`=4 … `p-6`=24, half-step `p-0.5`=2). Radius is
-**re-defined** to the design scale: `rounded-sm`=8, `rounded-md`=12, `rounded-lg`=16
-(cards), `rounded-xl`=20 (modals/takeover), `rounded-full`=999 — this differs from
-stock Tailwind (see forward-only note). Elevation is surface-step + border, exposed as
-the `ELEVATION` recipe strings (`ELEVATION[1]`, `ELEVATION[2]`) so surfaces don't
-re-type the combo.
+**additive and design-namespaced**: `rounded-ds-sm`=8 (chips/controls),
+`rounded-ds-md`=12 (buttons/inputs), `rounded-ds-lg`=16 (cards), `rounded-ds-xl`=20
+(modals/takeover). These collide with nothing in stock Tailwind, so stock
+`rounded-sm/md/lg/xl/full` keep their Tailwind defaults and are used only by the
+un-migrated Week 1–3 screens until Week 8. There is no design `rounded-ds-full`: the
+design pill radius (999) renders identically to stock `rounded-full` (9999), so new
+screens use plain `rounded-full`. Elevation is surface-step + border, exposed as the
+`ELEVATION` recipe strings (`ELEVATION[1]`, `ELEVATION[2]`) so surfaces don't re-type
+the combo.
 
 ### Forward-only migration policy
 
-This foundation is **forward-only**. New screens (Day 2 of Week 4 onward) build against
-these tokens. The Week 1–3 screens keep their current stock-palette classes and are
-**not** migrated here — that is the Week 8 polish pass. Do not restyle old screens in
-token PRs.
+This foundation is **strictly forward-only** with **zero render change to existing
+screens**. Both colours and radius are additive under new class names (`bg-surface-*`,
+`text-fg-*`, … and `rounded-ds-*`); no stock Tailwind class is redefined. New screens
+(Day 2 of Week 4 onward) build against these tokens. The Week 1–3 screens keep their
+current stock-palette classes — including stock `rounded-*` — and are **not** migrated
+here; that is the Week 8 polish pass. Do not restyle old screens in token PRs.
 
-One caveat: because the radius scale re-defines `rounded-sm/md/lg/xl/full`, the
-un-migrated screens' existing `rounded-*` usages render at the new values (e.g. cards
-`rounded-xl` 12→20dp) until Week 8. This is config-only (no screen JSX changes) and is
-reconciled in the Week 8 pass.
+The Week 8 pass reconciles the radius namespace: once no old screen depends on stock
+`rounded-*` radii, strip the `ds-` prefix from the design keys and flip `borderRadius`
+to override stock, so migrated screens read plain `rounded-lg` etc. at design values.
 
 ### Typography — reference a style by name
 

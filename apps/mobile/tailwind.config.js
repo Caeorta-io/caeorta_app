@@ -23,8 +23,11 @@ module.exports = {
       colors: colorsDark,
       // Documentary (values equal stock 4dp scale); pins the design's closed set.
       spacing,
-      // Re-defines rounded-sm/md/lg/xl/full to the design scale (differs from
-      // stock). Forward-only note in conventions.md.
+      // Design radii under NON-COLLIDING `ds-*` keys → `rounded-ds-sm/md/lg/xl`.
+      // Additive: stock rounded-sm/md/lg/xl/full keep their Tailwind defaults, so
+      // the un-migrated Week 1–3 screens render unchanged (strict forward-only).
+      // Week-8 pass reconciles by stripping `ds-` and flipping to override. See
+      // docs/conventions.md → "Design system".
       borderRadius: radius,
       // Named families only — the app default font is left as system so old
       // screens keep their current typography until the Week 8 pass. New type

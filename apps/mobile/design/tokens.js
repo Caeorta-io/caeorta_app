@@ -120,17 +120,21 @@ const spacing = {
 };
 
 /**
- * Radius scale (§4.5). NOTE: these deliberately DIFFER from Tailwind's stock
- * radii, so wiring them into `borderRadius` re-defines `rounded-sm/md/lg/xl/full`.
- * See docs/conventions.md → "Design system" for the forward-only implication for
- * the un-migrated Week 1–3 screens.
+ * Radius scale (§4.5). These DIFFER from Tailwind's stock radii, so they are
+ * exposed under DESIGN-NAMESPACED keys (`ds-*`) that wire into `borderRadius` as
+ * `rounded-ds-sm/md/lg/xl` — additive, colliding with nothing in stock Tailwind.
+ * New screens use these; un-migrated Week 1–3 screens keep stock `rounded-*` and
+ * so render unchanged (strict forward-only). The design `full` radius (999) is
+ * dropped from this set: it renders identically to stock `rounded-full` (9999) as
+ * a pill, so new screens use plain `rounded-full`. See docs/conventions.md →
+ * "Design system" for the Week-8 reconciliation (strip the `ds-` prefix, flip to
+ * override) once no old screen depends on stock radii.
  */
 const radius = {
-  sm: '8px', // chips, small controls
-  md: '12px', // buttons, inputs
-  lg: '16px', // cards
-  xl: '20px', // modals / critical takeover
-  full: '999px',
+  'ds-sm': '8px', // chips, small controls
+  'ds-md': '12px', // buttons, inputs
+  'ds-lg': '16px', // cards
+  'ds-xl': '20px', // modals / critical takeover
 };
 
 /**

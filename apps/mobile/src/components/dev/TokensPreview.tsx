@@ -19,7 +19,19 @@ import { colorsDark, ELEVATION, type TextVariant } from '@/design';
 function Swatch({ className, label }: { className: string; label: string }) {
   return (
     <View className="mb-2 mr-2 w-24">
-      <View className={`h-12 rounded-md border border-border-default ${className}`} />
+      <View className={`h-12 rounded-ds-md border border-border-default ${className}`} />
+      <Text variant="caption" className="mt-1 text-fg-tertiary">
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+/** One radius chip; `rounded-` className must be a literal so NativeWind emits it. */
+function RadiusSwatch({ className, label }: { className: string; label: string }) {
+  return (
+    <View className="mb-2 mr-2 w-24">
+      <View className={`h-12 border border-border-strong bg-surface-elevated ${className}`} />
       <Text variant="caption" className="mt-1 text-fg-tertiary">
         {label}
       </Text>
@@ -124,13 +136,22 @@ export function TokensPreview() {
         ))}
       </Section>
 
+      <Section title="Radius (design scale · rounded-ds-*)">
+        <View className="flex-row flex-wrap">
+          <RadiusSwatch className="rounded-ds-sm" label="ds-sm · 8 chips" />
+          <RadiusSwatch className="rounded-ds-md" label="ds-md · 12 controls" />
+          <RadiusSwatch className="rounded-ds-lg" label="ds-lg · 16 cards" />
+          <RadiusSwatch className="rounded-ds-xl" label="ds-xl · 20 modals" />
+        </View>
+      </Section>
+
       <Section title="Elevation (surface-step + border)">
-        <View className={`mb-3 rounded-lg p-4 ${ELEVATION[1]}`}>
+        <View className={`mb-3 rounded-ds-lg p-4 ${ELEVATION[1]}`}>
           <Text variant="body-sm" className="text-fg-secondary">
             elev-1 — surface/primary + border/subtle
           </Text>
         </View>
-        <View className={`rounded-lg p-4 ${ELEVATION[2]}`}>
+        <View className={`rounded-ds-lg p-4 ${ELEVATION[2]}`}>
           <Text variant="body-sm" className="text-fg-secondary">
             elev-2 — surface/elevated + border/default
           </Text>
