@@ -100,3 +100,94 @@ Extracted from the Week 3 vehicle-dashboard sessions (list, add-vehicle, detail,
 - The **screen** manages subscribe/unsubscribe with `useEffect`, not TanStack Query. TanStack Query is for fetching; a one-shot query (`useCurrentState`) supplies the initial seed, and Realtime pushes overwrite it from there. Screen-local subscription state lives in `useState`/`useRef`, not Zustand.
 - Always store the returned unsubscribe fn in a ref and call it on unmount **unconditionally** — the channel must never outlive the screen. Dependency array is `[id]` only, so a vehicle change tears down and re-subscribes.
 - The mock emitter (`subscribeToCurrentStateMock`) and the real `subscribeToCurrentState` share the **same external interface** — `(vehicleId, onUpdate, onChannelStatus) => () => void` — so the swap is a per-capability flag flip in `source.ts`, not a screen change. Note the real `@caeorta/supabase` helper does **not** natively match that shape (it needs a client, returns a `RealtimeChannel`, has a separate async `unsubscribe`, and emits no channel status); the live branch owns a thin adapter that maps it onto the seam contract, keeping the adapter — and the shape mismatch — out of the screen.
+
+## Design system
+
+The mobile design system foundation (Week 4, session 26). Source of truth for the
+values is `docs/design/00_design_system.md` (the delivered Figma build report, §4);
+the values are translated once into code in **`apps/mobile/design/tokens.js`** — a
+plain-CommonJS single source required by BOTH `tailwind.config.js` (which generates
+the className scales) and the typed app layer (`src/design/`, via the sibling
+`tokens.d.ts`). Never edit token values in two places; edit `tokens.js`.
+
+### Dark-default / light-re-skin policy
+
+- **Dark is the only live theme.** Its values are `colorsDark` in `tokens.js` and are
+  wired straight into `theme.extend.colors` — a **static** theme, not CSS variables.
+  (NativeWind's `:root` CSS-variable theming was considered and rejected for now given
+  the react-native-css-interop fragility logged in earlier sessions; static values
+  carry no runtime-resolution risk.)
+- **Light is captured but not wired.** `colorsLight` mirrors `colorsDark` key-for-key
+  (a test enforces structural parity) so turning light on is a Week-8 mechanism task,
+  not a token re-authoring pass. Screens bind to semantic token **names**, so light
+  needs **zero screen edits** — only a config/theme swap.
+
+### Semantic token → className mapping
+
+Colour groups map to Tailwind class prefixes. The text group is aliased **`fg`** (to
+avoid the `text-text-*` stutter and to match shadcn's `foreground` on the web side);
+every other group keeps its Figma name.
+
+| Group (Figma) | className prefix | Example |
+|---|---|---|
+| `surface/*` | `bg-surface-*` | `bg-surface-canvas`, `bg-surface-elevated` |
+| `text/*` → **`fg`** | `text-fg-*` | `text-fg-primary`, `text-fg-secondary` |
+| `border/*` | `border-border-*` | `border-border-default`, `border-border-subtle` |
+| `brand/*` | `bg-brand-*` / `text-brand-*` | `bg-brand-default`, `text-brand-text` |
+| `severity/*` | `bg-severity-*` / `text-severity-*` | `text-severity-warning`, `bg-severity-critical-tint` |
+| `status/*` | `bg-status-*` | `bg-status-live`, `bg-status-offline` |
+| `interactive/*` | `bg-interactive-*` | `bg-interactive-disabled` |
+
+Spacing is the 4dp scale (`p-1`=4 … `p-6`=24, half-step `p-0.5`=2). Radius is
+**re-defined** to the design scale: `rounded-sm`=8, `rounded-md`=12, `rounded-lg`=16
+(cards), `rounded-xl`=20 (modals/takeover), `rounded-full`=999 — this differs from
+stock Tailwind (see forward-only note). Elevation is surface-step + border, exposed as
+the `ELEVATION` recipe strings (`ELEVATION[1]`, `ELEVATION[2]`) so surfaces don't
+re-type the combo.
+
+### Forward-only migration policy
+
+This foundation is **forward-only**. New screens (Day 2 of Week 4 onward) build against
+these tokens. The Week 1–3 screens keep their current stock-palette classes and are
+**not** migrated here — that is the Week 8 polish pass. Do not restyle old screens in
+token PRs.
+
+One caveat: because the radius scale re-defines `rounded-sm/md/lg/xl/full`, the
+un-migrated screens' existing `rounded-*` usages render at the new values (e.g. cards
+`rounded-xl` 12→20dp) until Week 8. This is config-only (no screen JSX changes) and is
+reconciled in the Week 8 pass.
+
+### Typography — reference a style by name
+
+Use the **`<Text variant>`** primitive (`@/components/ui/Text`), never ad-hoc
+size/weight/tracking. The 12 named styles (§4.4) live in `tokens.textStyles`:
+`display`, `h1`–`h3`, `body-lg`/`body`/`body-sm`, `caption`, `label`, and the tabular
+Geist Mono `data-xl`/`data-lg`/`data`. The variant sets family + size + line-height +
+tracking; **colour stays a className** so the two compose (`<Text variant="h1"
+className="text-fg-primary">`). Line-heights are generous on purpose (§4.4) — don't
+pixel-lock text in fixed-height containers; they must tolerate ~30% dynamic scaling.
+Fonts are Geist / Geist Mono (OFL, vendored in `assets/fonts/`), loaded in the root
+layout's boot sequence with the splash gated on them (no unstyled-text flash).
+
+### Icons
+
+Use **lucide-react-native** via the **`Icon`** wrapper (`@/components/ui/Icon`):
+`<Icon icon={Activity} />` defaults to 18dp / ~2px stroke / round caps / `fg/secondary`
+colour, the common 18-in-36-container pairing (§4.6). Pass colour **from a token**
+(`color={colorsDark.severity.warning}`), never a raw hex. This supersedes the earlier
+`expo-symbols` direction (SF Symbols are iOS-flavoured; this build is Android-only).
+
+### Interaction constants
+
+- **Pressed, not hover.** Touch has no hover; every interactive element needs a pressed
+  state at **`PRESSED_OPACITY`** (0.72). Import the constant from `@/design`; don't
+  retype `0.72`.
+- **48dp minimum tap target** (`MIN_TOUCH_TARGET`), including icon-only buttons, even
+  where the drawn control is smaller — pad the tap area.
+
+### No raw hex / stock palette in NEW code
+
+New components bind to tokens — no raw hex, no stock Tailwind palette (`bg-amber-100`,
+`text-neutral-500`, …). This is a convention, **not** an enforced lint rule: a repo-wide
+rule would flag the un-migrated Week 1–3 screens, which is a Week 8 concern. Reviewers
+watch for it in new files.
