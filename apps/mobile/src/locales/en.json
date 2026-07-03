@@ -175,7 +175,8 @@
       "severity": {
         "critical": "Critical",
         "warning": "Warning",
-        "info": "Info"
+        "info": "Info",
+        "insufficient_data": "Insufficient data"
       },
       "urgency": {
         "now": "Now",
@@ -197,7 +198,23 @@
       "error": {
         "title": "Couldn't load drives",
         "body": "Something went wrong loading your drives. Check your connection and try again."
+      },
+      "detail": {
+        "summary": "Summary",
+        "diagnostics": "Diagnostics from this drive",
+        "noDiagnostics": "No diagnostics from this drive.",
+        "notFoundTitle": "Drive not found",
+        "notFoundBody": "We couldn't find that drive. It may have been removed.",
+        "error": {
+          "title": "Couldn't load this drive",
+          "body": "Something went wrong loading this drive. Check your connection and try again."
+        }
       }
+    },
+    "health": {
+      "clean": "Clean",
+      "needs_look": "Needs a look",
+      "check_now": "Check now"
     },
     "live": {
       "title": "Live metrics",

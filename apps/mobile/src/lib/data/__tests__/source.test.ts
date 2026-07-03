@@ -4,6 +4,8 @@ import type { Tables } from '@caeorta/supabase';
 import {
   DATA_SOURCE,
   fetchCurrentState,
+  fetchDrive,
+  fetchDriveDiagnostics,
   fetchDrives,
   fetchLastDrive,
   fetchRecentDiagnostics,
@@ -11,7 +13,8 @@ import {
   fetchVehicles,
   subscribeToCurrentStateMock,
 } from '../source';
-import { MOCK_VEHICLE_ID, mockDrives } from '../mocks';
+import { MOCK_DRIVE_ID, MOCK_VEHICLE_ID, mockDrives } from '../mocks';
+import { deriveDriveHealth } from '../../driveHealth';
 
 const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
 
@@ -104,7 +107,61 @@ describe('fetchDrives (keyset pagination)', () => {
   });
 
   it('returns an empty page with a null cursor for an unknown vehicle', async () => {
-    expect(await fetchDrives(UNKNOWN_ID, { limit: LIMIT })).toEqual({ drives: [], nextCursor: null });
+    expect(await fetchDrives(UNKNOWN_ID, { limit: LIMIT })).toEqual({
+      drives: [],
+      healthByDriveId: {},
+      nextCursor: null,
+    });
+  });
+
+  it('carries per-drive health flags for exactly the drives on the page', async () => {
+    const page = await fetchDrives(MOCK_VEHICLE_ID, { limit: LIMIT });
+    // The sidecar map keys are exactly this page's drive ids (no more, no less).
+    expect(Object.keys(page.healthByDriveId).sort()).toEqual(
+      page.drives.map((d) => d.id).sort(),
+    );
+    // The last drive has both a critical and a warning diagnostic → both flags set.
+    expect(page.healthByDriveId[MOCK_DRIVE_ID]).toEqual({ hasCritical: true, hasWarning: true });
+  });
+});
+
+describe('fetchDrive / fetchDriveDiagnostics', () => {
+  it('fetchDrive returns the drive by id, null for an unknown id', async () => {
+    const drive = await fetchDrive(MOCK_DRIVE_ID);
+    expect(drive?.id).toBe(MOCK_DRIVE_ID);
+    expect(await fetchDrive(UNKNOWN_ID)).toBeNull();
+  });
+
+  it('fetchDriveDiagnostics returns the drive-linked diagnostics, newest-first', async () => {
+    const diagnostics = await fetchDriveDiagnostics(MOCK_DRIVE_ID);
+    // The last drive carries the three seeded diagnostics (critical/warning/info).
+    expect(diagnostics.length).toBeGreaterThanOrEqual(3);
+    expect(diagnostics.every((d) => d.referenced_drive_id === MOCK_DRIVE_ID)).toBe(true);
+    const times = diagnostics.map((d) => Date.parse(d.generated_at));
+    expect(times).toEqual([...times].sort((a, b) => b - a));
+  });
+
+  it('fetchDriveDiagnostics is empty for a drive with no linked diagnostics', async () => {
+    expect(await fetchDriveDiagnostics(UNKNOWN_ID)).toEqual([]);
+  });
+
+  // The fixture set must exercise every derived health tier (see deriveDriveHealth),
+  // including the off-the-ladder insufficient_data case, so the screen states are real.
+  it('the mock fixtures span all three health tiers plus the insufficient_data case', async () => {
+    const NEEDS_LOOK_DRIVE = '77777777-7777-4777-8777-777777777702'; // warning-only
+    const INSUFFICIENT_DRIVE = '77777777-7777-4777-8777-777777777707'; // insufficient_data-only
+    const CLEAN_DRIVE = '77777777-7777-4777-8777-777777777703'; // no diagnostics
+
+    expect(deriveDriveHealth(await fetchDriveDiagnostics(MOCK_DRIVE_ID))).toBe('check_now');
+    expect(deriveDriveHealth(await fetchDriveDiagnostics(NEEDS_LOOK_DRIVE))).toBe('needs_look');
+    expect(deriveDriveHealth(await fetchDriveDiagnostics(CLEAN_DRIVE))).toBe('clean');
+
+    // insufficient_data must NOT elevate: the drive still reads clean despite having a
+    // linked diagnostic.
+    const insufficient = await fetchDriveDiagnostics(INSUFFICIENT_DRIVE);
+    expect(insufficient).toHaveLength(1);
+    expect(insufficient[0]?.severity).toBe('insufficient_data');
+    expect(deriveDriveHealth(insufficient)).toBe('clean');
   });
 });
 

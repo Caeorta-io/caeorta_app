@@ -2,11 +2,14 @@ import { Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { Tables } from '@caeorta/supabase';
 
-import { AnomalyBadge } from '@/components/AnomalyBadge';
+import { HealthIndicator } from '@/components/HealthIndicator';
 import { formatDistanceKm, formatDuration, formatSpeedKph, selectPeakMetrics } from '@/lib/format';
+import type { DriveHealth } from '@/lib/driveHealth';
 
 interface LastDriveCardProps {
   drive: Tables<'drives'>;
+  /** Derived three-state health for this drive (see `deriveDriveHealth`). */
+  health: DriveHealth;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -42,7 +45,7 @@ const PEAK_METRIC_KEYS = Object.keys(PEAK_METRICS);
  * Presentation only — all values come from the passed `drive` row; formatting and
  * peak-metric selection are delegated to the pure helpers in `lib/format`.
  */
-export function LastDriveCard({ drive }: LastDriveCardProps) {
+export function LastDriveCard({ drive, health }: LastDriveCardProps) {
   const { t } = useTranslation();
   const peaks = selectPeakMetrics(drive.peak_metrics, PEAK_METRIC_KEYS);
 
@@ -56,11 +59,9 @@ export function LastDriveCard({ drive }: LastDriveCardProps) {
         <Stat label={t('vehicles.detail.avgSpeed')} value={formatSpeedKph(drive.average_speed_kph)} />
       </View>
 
-      {drive.has_anomaly ? (
-        <View className="mt-4">
-          <AnomalyBadge />
-        </View>
-      ) : null}
+      <View className="mt-4">
+        <HealthIndicator health={health} />
+      </View>
 
       {peaks.length > 0 ? (
         <View className="mt-4 border-t border-neutral-100 pt-3">

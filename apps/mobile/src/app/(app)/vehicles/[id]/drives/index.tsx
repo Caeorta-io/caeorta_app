@@ -1,15 +1,18 @@
 import { useCallback, useMemo } from 'react';
-import { FlatList, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { FlatList, Pressable, Text, View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import type { Tables } from '@caeorta/supabase';
 
-import { AnomalyBadge } from '@/components/AnomalyBadge';
+import { HealthIndicator } from '@/components/HealthIndicator';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import { useDrives } from '@/hooks';
-import { buildDriveListItems, formatDriveTime, type DriveListItem } from '@/lib/drives';
+import { driveHealthFromFlags, type DriveHealth, type DriveHealthFlags } from '@/lib/driveHealth';
+import { buildDriveListItems, formatDriveTime } from '@/lib/drives';
 import { formatDistanceKm, formatDuration } from '@/lib/format';
+
+const NO_ELEVATING_DIAGNOSTICS: DriveHealthFlags = { hasCritical: false, hasWarning: false };
 
 /**
  * Paginated, date-grouped list of a vehicle's completed drives. Reached via the
@@ -24,6 +27,7 @@ import { formatDistanceKm, formatDuration } from '@/lib/format';
  */
 export default function VehicleDrivesScreen() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const query = useDrives(id);
@@ -33,6 +37,20 @@ export default function VehicleDrivesScreen() {
   // re-runs when a new page arrives, not on every unrelated re-render.
   const drives = useMemo(() => data?.pages.flatMap((page) => page.drives) ?? [], [data]);
   const items = useMemo(() => buildDriveListItems(drives), [drives]);
+
+  // Merge every loaded page's health-flag sidecar into one id→flags lookup, so a row
+  // renders its three-state pill WITHOUT an extra per-drive fetch (see DrivesPage).
+  const healthByDriveId = useMemo(() => {
+    const merged: Record<string, DriveHealthFlags> = {};
+    for (const page of data?.pages ?? []) Object.assign(merged, page.healthByDriveId);
+    return merged;
+  }, [data]);
+
+  const healthOf = useCallback(
+    (driveId: string): DriveHealth =>
+      driveHealthFromFlags(healthByDriveId[driveId] ?? NO_ELEVATING_DIAGNOSTICS),
+    [healthByDriveId],
+  );
 
   const onEndReached = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
@@ -84,7 +102,22 @@ export default function VehicleDrivesScreen() {
         className="mt-2"
         data={items}
         keyExtractor={(item) => item.id}
-        renderItem={({ item }) => <DriveListRow item={item} />}
+        renderItem={({ item }) =>
+          item.kind === 'header' ? (
+            <DateHeader label={item.label} />
+          ) : (
+            <DriveRow
+              drive={item.drive}
+              health={healthOf(item.drive.id)}
+              onPress={() =>
+                router.push({
+                  pathname: '/vehicles/[id]/drives/[driveId]',
+                  params: { id, driveId: item.drive.id },
+                })
+              }
+            />
+          )
+        }
         onEndReached={onEndReached}
         onEndReachedThreshold={0.5}
         ListFooterComponent={isFetchingNextPage ? <LoadMoreSkeleton /> : null}
@@ -99,24 +132,35 @@ function ScreenHeading() {
   return <Text className="pt-2 text-2xl font-semibold text-neutral-900">{t('vehicles.drives.title')}</Text>;
 }
 
-/** Dispatch a flat-list row to its header or drive presentation. */
-function DriveListRow({ item }: { item: DriveListItem }) {
-  if (item.kind === 'header') {
-    return (
-      <View className="bg-white pb-1 pt-5">
-        <Text className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-          {item.label}
-        </Text>
-      </View>
-    );
-  }
-  return <DriveRow drive={item.drive} />;
+/** A date section header row. */
+function DateHeader({ label }: { label: string }) {
+  return (
+    <View className="bg-white pb-1 pt-5">
+      <Text className="text-xs font-medium uppercase tracking-wide text-neutral-400">{label}</Text>
+    </View>
+  );
 }
 
-/** One drive: distance headline, start time · duration below, amber marker if flagged. */
-function DriveRow({ drive }: { drive: Tables<'drives'> }) {
+/**
+ * One drive: distance headline, start time · duration below, three-state health pill.
+ * Tapping the row opens the drive-detail screen. `health` is derived list-side from
+ * the page's health-flag sidecar (no per-row fetch).
+ */
+function DriveRow({
+  drive,
+  health,
+  onPress,
+}: {
+  drive: Tables<'drives'>;
+  health: DriveHealth;
+  onPress: () => void;
+}) {
   return (
-    <View className="flex-row items-center justify-between border-b border-neutral-100 py-3">
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      className="flex-row items-center justify-between border-b border-neutral-100 py-3 active:opacity-70"
+    >
       <View className="flex-1 pr-3">
         <Text className="text-base font-semibold text-neutral-900">
           {formatDistanceKm(drive.distance_km)}
@@ -125,8 +169,8 @@ function DriveRow({ drive }: { drive: Tables<'drives'> }) {
           {formatDriveTime(drive.started_at)} · {formatDuration(drive.duration_seconds)}
         </Text>
       </View>
-      {drive.has_anomaly ? <AnomalyBadge /> : null}
-    </View>
+      <HealthIndicator health={health} />
+    </Pressable>
   );
 }
 

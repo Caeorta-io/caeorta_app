@@ -3,9 +3,11 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { describe, expect, it } from 'vitest';
 
-import { MOCK_VEHICLE_ID } from '@/lib/data/mocks';
+import { MOCK_DRIVE_ID, MOCK_VEHICLE_ID } from '@/lib/data/mocks';
 
 import { useCurrentState } from '../useCurrentState';
+import { useDrive } from '../useDrive';
+import { useDriveDiagnostics } from '../useDriveDiagnostics';
 import { useDrives, DRIVES_PAGE_SIZE } from '../useDrives';
 import { useLastDrive } from '../useLastDrive';
 import { useRecentDiagnostics } from '../useRecentDiagnostics';
@@ -53,6 +55,22 @@ describe('vehicle dashboard hooks resolve mock data', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toHaveLength(3);
     expect(result.current.data?.[0]?.severity).toBe('critical');
+  });
+
+  it('useDrive resolves a single drive by id', async () => {
+    const { result } = renderHook(() => useDrive(MOCK_VEHICLE_ID, MOCK_DRIVE_ID), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.id).toBe(MOCK_DRIVE_ID);
+  });
+
+  it('useDriveDiagnostics resolves the drive-linked diagnostics', async () => {
+    const { result } = renderHook(() => useDriveDiagnostics(MOCK_VEHICLE_ID, MOCK_DRIVE_ID), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.every((d) => d.referenced_drive_id === MOCK_DRIVE_ID)).toBe(true);
   });
 
   it('useCurrentState resolves the latest snapshot', async () => {
