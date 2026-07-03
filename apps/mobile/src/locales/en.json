@@ -208,6 +208,20 @@
         "error": {
           "title": "Couldn't load this drive",
           "body": "Something went wrong loading this drive. Check your connection and try again."
+        },
+        "charts": {
+          "title": "Telemetry",
+          "speed": { "label": "Speed" },
+          "boost": { "label": "Boost" },
+          "coolant": { "label": "Coolant" },
+          "empty": "No data for this metric on this drive.",
+          "error": {
+            "unauthorized": "Your session expired — sign in again to see telemetry.",
+            "forbidden": "You don't have access to this drive's telemetry.",
+            "notFound": "No telemetry found for this drive.",
+            "server": "Couldn't load telemetry. Please try again.",
+            "network": "Couldn't reach Caeorta. Check your connection and try again."
+          }
         }
       }
     },

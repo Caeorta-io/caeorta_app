@@ -19,8 +19,12 @@ import { deriveDriveHealth } from '../../driveHealth';
 const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
 
 describe('data source factory (mock mode)', () => {
-  it('defaults every capability to mock — no live calls in this build', () => {
-    expect(Object.values(DATA_SOURCE).every((mode) => mode === 'mock')).toBe(true);
+  it('defaults every capability to mock EXCEPT driveTelemetry (live from day one)', () => {
+    const { driveTelemetry, ...rest } = DATA_SOURCE;
+    // driveTelemetry is the deliberate exception: get_drive_telemetry is deployed, so it
+    // reads live with no mock path (see source.ts). Everything else stays mock this build.
+    expect(driveTelemetry).toBe('live');
+    expect(Object.values(rest).every((mode) => mode === 'mock')).toBe(true);
   });
 
   it('fetchVehicles resolves the seeded vehicle', async () => {

@@ -8,11 +8,14 @@ import type { Tables } from '@caeorta/supabase';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { HealthIndicator } from '@/components/HealthIndicator';
-import { useDrive, useDriveDiagnostics } from '@/hooks';
+import { TelemetryChartCard, type TelemetryErrorVariant } from '@/components/TelemetryChart';
+import { colorsDark } from '@/design';
+import { useDrive, useDriveDiagnostics, useDriveTelemetry } from '@/hooks';
 import { deriveDriveHealth } from '@/lib/driveHealth';
 import { sortDiagnosticsByPriority } from '@/lib/diagnostics';
 import { driveDateKey, formatDriveDateHeading, formatDriveTime } from '@/lib/drives';
 import { formatDistanceKm, formatDuration, formatSpeedKph, selectPeakMetrics } from '@/lib/format';
+import { splitTelemetryChannels, TelemetryFetchError, type TelemetrySample } from '@/lib/telemetry';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TODO(metric-keys): provisional keys — reconcile against the hardware/AI-agent
@@ -31,6 +34,56 @@ const PEAK_METRICS: Record<string, PeakMetricDisplay> = {
 };
 const PEAK_METRIC_KEYS = Object.keys(PEAK_METRICS);
 
+// ─────────────────────────────────────────────────────────────────────────────
+// TODO(metric-keys): the three telemetry-chart channels. PROVISIONAL keys from the
+// SAME vocabulary as PEAK_METRICS above — `speed_kph` and `coolant_temp_c` are reused
+// verbatim; `boost_pressure_kpa` is the provisional boost key (already present in the
+// mock `PROVISIONAL_METRIC_KEYS`, though not in the peaks display map). Reconcile all
+// three against the hardware/AI-agent contract before trusting them on live data — the
+// jsonb `metrics` blob is opaque, so a wrong key silently yields an empty chart, not an
+// error. (Note: telemetry is a LIVE-only capability, so there is no mock fixture path
+// for these charts — see DATA_SOURCE.driveTelemetry.)
+//
+// TODO(coolant-hot-threshold): a SECOND, adjacent provisional guess — distinct from the
+// key-name guess above so a future reconciliation pass catches both. No canonical coolant
+// "hot" cutoff is defined anywhere in the docs; 105 °C is a placeholder sitting just above
+// typical operating temperature. Above it, the coolant chart switches to severity/warning
+// (design §10 "coolant peak amber"). Replace with the real threshold when the metric
+// contract lands. Flagged in the PR, not just here, so it doesn't read as authoritative.
+// ─────────────────────────────────────────────────────────────────────────────
+const COOLANT_HOT_THRESHOLD_C = 105;
+
+interface ChartChannel {
+  channel: 'speed' | 'boost' | 'coolant';
+  metricKey: string;
+  hotThreshold?: number;
+}
+const CHART_CHANNELS: ChartChannel[] = [
+  { channel: 'speed', metricKey: 'speed_kph' },
+  { channel: 'boost', metricKey: 'boost_pressure_kpa' },
+  { channel: 'coolant', metricKey: 'coolant_temp_c', hotThreshold: COOLANT_HOT_THRESHOLD_C },
+];
+const CHART_CHANNEL_KEYS = CHART_CHANNELS.map((c) => c.metricKey);
+
+/** Map a thrown telemetry error to the per-chart copy variant (distinct 401/403/404/500/network). */
+function telemetryErrorVariant(error: unknown): TelemetryErrorVariant {
+  if (error instanceof TelemetryFetchError) {
+    switch (error.status) {
+      case 401:
+        return 'unauthorized';
+      case 403:
+        return 'forbidden';
+      case 404:
+        return 'notFound';
+      case 'network':
+        return 'network';
+      default:
+        return 'server';
+    }
+  }
+  return 'server';
+}
+
 /** Severity → dot colour class (design tokens). Unknown/insufficient → neutral (§4.3). */
 const SEVERITY_DOT: Record<string, string> = {
   critical: 'bg-severity-critical',
@@ -46,9 +99,10 @@ const SEVERITY_DOT: Record<string, string> = {
  * `rounded-ds-*` card radii. Reached by tapping a row on the drives list.
  *
  * Error policy mirrors the vehicle-detail screen: a `useDrive` error blocks the
- * screen (there's nothing to show without the drive); the diagnostics query fails
- * soft (an error reads as "no diagnostics", not a crashed screen). No charts yet —
- * the Speed/Boost/Coolant trio is a later (Day-3) build.
+ * screen (there's nothing to show without the drive); the diagnostics query and the
+ * telemetry charts each fail soft (an error there degrades just that section, not the
+ * whole screen). The Speed/Boost/Coolant charts are the app's first LIVE Edge Function
+ * read (`get_drive_telemetry`) — every other read on this screen is still mock.
  */
 export default function DriveDetailScreen() {
   const { t } = useTranslation();
@@ -57,6 +111,9 @@ export default function DriveDetailScreen() {
 
   const driveQuery = useDrive(id, driveId);
   const diagnosticsQuery = useDriveDiagnostics(id, driveId);
+  // Live telemetry for the three charts. Called before the early returns below (hooks
+  // must run unconditionally); its own loading/error/empty states live inside each card.
+  const telemetryQuery = useDriveTelemetry(driveId);
 
   if (driveQuery.isPending) {
     return (
@@ -115,6 +172,19 @@ export default function DriveDetailScreen() {
 
   const dateHeading = formatDriveDateHeading(driveDateKey(drive.started_at));
 
+  // Telemetry: one request → all channels, split client-side into three per-channel series.
+  // The whole-query status drives each card's loading/error state; per-channel emptiness
+  // (a channel absent from every point) is an honest empty state, decided inside the card.
+  const telemetryStatus: 'loading' | 'error' | 'ready' = telemetryQuery.isPending
+    ? 'loading'
+    : telemetryQuery.isError
+      ? 'error'
+      : 'ready';
+  const telemetrySeries: Record<string, TelemetrySample[]> = telemetryQuery.data
+    ? splitTelemetryChannels(telemetryQuery.data.points, CHART_CHANNEL_KEYS)
+    : {};
+  const telemetryError = telemetryErrorVariant(telemetryQuery.error);
+
   return (
     <Frame>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
@@ -165,6 +235,27 @@ export default function DriveDetailScreen() {
               </View>
             </View>
           ) : null}
+        </View>
+
+        {/* Telemetry charts: Speed / Boost / Coolant (coolant peak → amber). One live read
+            feeds all three; each card fails soft on its own (design §6 S4, §10). */}
+        <View className="mt-6">
+          <Text variant="label" className="text-fg-tertiary">
+            {t('vehicles.drives.detail.charts.title')}
+          </Text>
+          {CHART_CHANNELS.map((ch) => (
+            <TelemetryChartCard
+              key={ch.channel}
+              channel={ch.channel}
+              samples={telemetrySeries[ch.metricKey] ?? []}
+              color={colorsDark.brand.default}
+              hotThreshold={ch.hotThreshold}
+              hotColor={colorsDark.severity.warning}
+              status={telemetryStatus}
+              errorVariant={telemetryError}
+              onRetry={() => void telemetryQuery.refetch()}
+            />
+          ))}
         </View>
 
         {/* Diagnostics linked to this drive. */}
