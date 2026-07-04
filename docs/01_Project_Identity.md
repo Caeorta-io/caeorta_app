@@ -81,7 +81,7 @@ These decisions were made through careful conversation and should not be revisit
 
 ### Auth (v1)
 
-- **Email magic link via Supabase Auth.** Easiest path, works for pilot. Phone OTP added later for GCC commercial launch.
+- **Email OTP (6-digit code) via Supabase Auth.** This is what actually shipped, from Week 1 on: the user enters their email, receives a 6-digit code, and types it into the verify screen (`useAuthLifecycle`'s verify flow; `detectSessionInUrl` is deliberately **off** — a native app has no browser URL for a magic-link callback to land on). *Doc correction (2026-07-04): an earlier version of this line described a "magic link." That was never the implemented path. Native apps have no reliable magic-link deep-link path without the universal-links / app-links infrastructure this project doesn't set up, so a copy-paste 6-digit code is the dependable choice. CLAUDE.md (session 10) and `docs/03_Tech_Stack.md` (session 11) were corrected earlier; this line was the straggler.* Phone OTP is added later for GCC commercial launch.
 - **Apple Sign-In** added in Week 12 if Apple's review requires it (any social sign-in triggers this requirement).
 
 ### Scope decisions

@@ -196,3 +196,40 @@ New components bind to tokens — no raw hex, no stock Tailwind palette (`bg-amb
 `text-neutral-500`, …). This is a convention, **not** an enforced lint rule: a repo-wide
 rule would flag the un-migrated Week 1–3 screens, which is a Week 8 concern. Reviewers
 watch for it in new files.
+
+## State coverage patterns
+
+Extracted from the Week-3 dashboard screens and the Week-4 drive-detail polish pass. The
+loading/error/empty bar every data-backed screen holds to.
+
+### Skeleton-first loading, per-shape empty, blocking-vs-soft error
+
+- **Loading is a skeleton, not a spinner** — a placeholder shaped like the content that's
+  coming (see `DriveDetailSkeleton`, `DrivesListSkeleton`, `LastDriveCardSkeleton`). Mark
+  skeletons `accessibilityElementsHidden` + `importantForAccessibility="no-hide-descendants"`.
+- **Distinguish first-load from load-more.** A paginated list shows the full skeleton on
+  first page (`isPending`) and a small **footer** skeleton while fetching the next page
+  (`isFetchingNextPage`) — never a blank screen on page 2 (see `drives/index.tsx`).
+- **Primary query blocks; secondary queries fail soft.** The one query the screen can't
+  exist without (e.g. `useDrive`, `useVehicle`) renders a full error + retry. Every
+  *secondary* query (diagnostics, telemetry, current-state) degrades **just its own section**
+  and never crashes the screen — an error there reads as its section's empty/quiet-error
+  state. This is deliberate, not a stub.
+
+### One query backing many cards → hoist the error to the section
+
+When a **single** query feeds several sibling cards (e.g. the ONE `get_drive_telemetry`
+read behind the Speed/Boost/Coolant trio), an error is a **whole-section event** — render it
+**once** (one message + one retry) at the section level, not as N identical per-card error
+boxes. Keep **loading** (skeletons) and **empty** *per-card*, because emptiness is genuinely
+per-card (boost can be absent while speed has data). See `[driveId].tsx` `TelemetrySectionError`
++ the charts section. This recurs anywhere one fetch fans out into repeated cards.
+
+### Honest placeholder for an un-plumbed capability
+
+A designed slot whose data isn't wired yet gets an **honest empty state**, never "coming
+soon." State the current reality in the product's calibrated-honesty voice (design §8) —
+e.g. the drive-detail route-map slot reads "No route to show — this drive has no GPS location
+data," gated behind a `TODO(…)` that names the missing key + missing library, with **no
+dependency added**. Distinct from a provisional guess (`TODO(metric-keys)`): this is a
+*missing* capability, not a *guessed* one.

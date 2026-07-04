@@ -222,6 +222,10 @@
             "server": "Couldn't load telemetry. Please try again.",
             "network": "Couldn't reach Caeorta. Check your connection and try again."
           }
+        },
+        "map": {
+          "title": "Route",
+          "body": "No route to show — this drive has no GPS location data."
         }
       }
     },

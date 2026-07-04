@@ -175,7 +175,7 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 
 **Risk:** Freelance designer becomes unavailable mid-build. We're now blocked on design decisions or stuck with incomplete Figma.
 
-**Likelihood:** Low-Medium
+**Likelihood:** Low (downgraded 2026-07-04 — see status)
 
 **Mitigations:**
 - Get the design system locked in Week 1 (tokens, primitives, key components)
@@ -183,7 +183,7 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 - shadcn/ui and v0 give us fallback patterns
 - The founder has a relationship with the designer; flag any responsiveness issues early
 
-**Status:** Active.
+**Status:** Active but **downgraded (2026-07-04, Week-4 close).** The core exposure this risk guarded against has largely resolved: the designer delivered a **complete, documented, cleanly extractable** system — 96 Figma variables across 3 collections, 12 text styles, and a full screen inventory (`docs/design/00_design_system.md`) — which was translated into code and **adopted in PR #32** (the mobile token/type/icon foundation) with no designer round-trips needed to build against it. We can now extend the system from the documented tokens without the designer for the foreseeable build. Residual exposure is narrow: a handful of parked design refinements (design-doc §13 — Home car silhouette, confirm mocked area charts vs. real Victory Native output, confirm-dialog styling) and the eventual light-mode spot-check. Keep the row open until those parked items are either done or explicitly cut, but the "blocked on the designer" scenario is no longer likely.
 
 ---
 
@@ -364,19 +364,29 @@ than "Caeorta." Less professional for commercial launch.
 
 ---
 
-## R22: Provisional jsonb metric key vocabulary unreconciled
+## R22: Provisional jsonb metric key vocabulary unreconciled (+ a second, distinct provisional guess: the coolant "hot" threshold)
 
 **Risk:** The `peak_metrics`, `summary_metrics`, and `latest_metrics` jsonb fields use a provisional key set in `mocks.ts`. The canonical set is owned by the hardware/AI-agent contract. A mismatch is not compiler-caught (the columns are opaque `Json`). Every live-flip of the `lastDrive`, `currentState`, or `recentDiagnostics` capabilities is blocked until the canonical set is confirmed and the `TODO(metric-keys)` flags are resolved.
+
+There are **two distinct open questions** here — do not conflate them:
+
+1. **`TODO(metric-keys)` — provisional key *names* (a naming guess).** Which jsonb keys the device/agent actually write. Resolved by the hardware/AI-agent contract confirming the canonical key set.
+2. **`TODO(coolant-hot-threshold)` — a provisional *value* (a magnitude guess).** `105 °C` is a placeholder cutoff above which the coolant chart trips `severity/warning` amber (design §10 "coolant peak amber"). No canonical "hot" threshold is documented anywhere; this is a *number*, not a key name, and needs its own reconciliation against whatever the hardware/agent contract (or a domain source) eventually defines. A right key with a wrong threshold still misleads.
 
 **Likelihood:** Medium (the contract exists; reconciliation just hasn't happened).
 
 **Impact:** High (silently wrong data in production if skipped).
 
 **Mitigations:**
-- Treat `TODO(metric-keys)` as a hard gate on each capability's live flip.
-- Add a checklist item to the live-flip runbook (to be written in Week 4) that explicitly confirms metric-key reconciliation before the flip is approved.
+- Treat `TODO(metric-keys)` **and** `TODO(coolant-hot-threshold)` as **two** hard gates on the relevant live flips.
+- Add a checklist item to the live-flip runbook (to be written) that explicitly confirms metric-key reconciliation AND threshold reconciliation before the flip is approved.
 
 **Status:** Open. New at Week-3 close (App-track session 24). Related: R1 (AI agent contract drift). See the Week-3 carried-forward table in `docs/08_12_Week_Action_Plan.md`.
+
+**2026-07-04 (Week-4 close) — the vocabulary is now load-bearing in more places, and a second kind of guess was added.** Week 4 (drive-detail, session 27; telemetry charts, session 28) put the provisional vocabulary on-screen in three additional, now user-visible sites — all of which must be re-checked before their live flip:
+- **Drive-detail peak metrics** (`[driveId].tsx` `PEAK_METRICS`: `rpm` / `speed_kph` / `coolant_temp_c`) — the same `TODO(metric-keys)` set as `LastDriveCard`.
+- **The three telemetry-chart channel keys** (`CHART_CHANNELS`: `speed_kph` / `boost_pressure_kpa` / `coolant_temp_c`) — these **reuse the existing provisional set, no new key was invented** (`boost_pressure_kpa` already existed in the mock `PROVISIONAL_METRIC_KEYS`). They are the FIRST *live-read* consumers of the vocabulary (`get_drive_telemetry` is the app's first live Edge Function read), so a key mismatch here yields a silently-empty chart, not a compiler error.
+- **The coolant "hot" threshold** (`COOLANT_HOT_THRESHOLD_C = 105`) — the SECOND, distinct kind of open guess described above (a value, not a key). Tracked separately as `TODO(coolant-hot-threshold)`.
 
 ---
 

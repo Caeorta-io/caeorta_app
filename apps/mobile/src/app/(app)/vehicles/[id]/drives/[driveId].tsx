@@ -3,10 +3,12 @@ import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+import { MapPin } from 'lucide-react-native';
 import type { Tables } from '@caeorta/supabase';
 
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { Icon } from '@/components/ui/Icon';
 import { HealthIndicator } from '@/components/HealthIndicator';
 import { TelemetryChartCard, type TelemetryErrorVariant } from '@/components/TelemetryChart';
 import { colorsDark } from '@/design';
@@ -237,26 +239,40 @@ export default function DriveDetailScreen() {
           ) : null}
         </View>
 
-        {/* Telemetry charts: Speed / Boost / Coolant (coolant peak → amber). One live read
-            feeds all three; each card fails soft on its own (design §6 S4, §10). */}
+        {/* Telemetry charts: Speed / Boost / Coolant (coolant peak → amber). ONE live read
+            feeds all three, so an error is a whole-section failure — rendered once here (one
+            message, one retry) rather than as three identical per-card error boxes. Loading
+            (skeletons) and empty stay per-card: emptiness is genuinely per-channel (e.g. boost
+            absent while speed has data). Each card still fails soft (design §6 S4, §10). */}
         <View className="mt-6">
           <Text variant="label" className="text-fg-tertiary">
             {t('vehicles.drives.detail.charts.title')}
           </Text>
-          {CHART_CHANNELS.map((ch) => (
-            <TelemetryChartCard
-              key={ch.channel}
-              channel={ch.channel}
-              samples={telemetrySeries[ch.metricKey] ?? []}
-              color={colorsDark.brand.default}
-              hotThreshold={ch.hotThreshold}
-              hotColor={colorsDark.severity.warning}
-              status={telemetryStatus}
-              errorVariant={telemetryError}
+          {telemetryStatus === 'error' ? (
+            <TelemetrySectionError
+              copy={t(`vehicles.drives.detail.charts.error.${telemetryError}`)}
+              retryLabel={t('common.retry')}
               onRetry={() => void telemetryQuery.refetch()}
             />
-          ))}
+          ) : (
+            CHART_CHANNELS.map((ch) => (
+              <TelemetryChartCard
+                key={ch.channel}
+                channel={ch.channel}
+                samples={telemetrySeries[ch.metricKey] ?? []}
+                color={colorsDark.brand.default}
+                hotThreshold={ch.hotThreshold}
+                hotColor={colorsDark.severity.warning}
+                status={telemetryStatus}
+                onRetry={() => void telemetryQuery.refetch()}
+              />
+            ))
+          )}
         </View>
+
+        {/* Route map slot (design §6 S4, between charts and diagnostics). Placeholder only —
+            see DriveMapPlaceholder / TODO(gps-route). */}
+        <DriveMapPlaceholder />
 
         {/* Diagnostics linked to this drive. */}
         <View className="mt-6">
@@ -329,6 +345,64 @@ function DriveDiagnosticRow({ diagnostic }: { diagnostic: Tables<'diagnostic_out
       <View className="rounded-full border border-border-strong px-2 py-0.5">
         <Text variant="caption" className="text-fg-secondary">
           {t(`vehicles.detail.urgency.${diagnostic.urgency}`, diagnostic.urgency)}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+/**
+ * Section-level telemetry error. One live `get_drive_telemetry` request backs all three
+ * charts, so a failure is a single event — shown once (one message + one retry) instead of
+ * three identical per-card errors. Quiet token card; does NOT take over the screen.
+ */
+function TelemetrySectionError({
+  copy,
+  retryLabel,
+  onRetry,
+}: {
+  copy: string;
+  retryLabel: string;
+  onRetry: () => void;
+}) {
+  return (
+    <View className="mt-3 items-center rounded-ds-lg border border-border-subtle bg-surface-primary p-6">
+      <Text variant="body-sm" className="text-center text-fg-tertiary">
+        {copy}
+      </Text>
+      <View className="mt-2">
+        <Button label={retryLabel} variant="ghost" onPress={onRetry} />
+      </View>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TODO(gps-route): render a real route map here once BOTH are settled — (1) a GPS
+// location key is confirmed in the metric vocabulary (none exists today; docs/07 mentions
+// GPS only conditionally — "distance_km from GPS if available, else …" — and there is no
+// lat/lng key anywhere in the provisional set), and (2) a map library is chosen (the stack
+// currently lists MapLibre for the *admin* surface only, not the app). No map dependency is
+// added here on purpose. Distinct from TODO(metric-keys)/TODO(coolant-hot-threshold): this
+// is a missing capability + missing key, not a provisional guess to reconcile.
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * Route-map slot (design §6 S4 places a map between the charts and the diagnostics).
+ * Honest placeholder — an empty state, not "coming soon": if this drive carries no GPS
+ * location data there is genuinely nothing to draw. Reads in the app's calibrated-honesty
+ * voice (§8), the same register as the per-chart "no data for this metric" empty state.
+ */
+function DriveMapPlaceholder() {
+  const { t } = useTranslation();
+  return (
+    <View className="mt-6">
+      <Text variant="label" className="text-fg-tertiary">
+        {t('vehicles.drives.detail.map.title')}
+      </Text>
+      <View className="mt-2 items-center rounded-ds-lg border border-border-subtle bg-surface-primary p-8">
+        <Icon icon={MapPin} size={24} color={colorsDark.fg.tertiary} />
+        <Text variant="body-sm" className="mt-3 text-center text-fg-tertiary">
+          {t('vehicles.drives.detail.map.body')}
         </Text>
       </View>
     </View>
