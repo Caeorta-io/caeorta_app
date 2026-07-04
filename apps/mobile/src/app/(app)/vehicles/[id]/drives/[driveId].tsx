@@ -10,14 +10,13 @@ import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { Icon } from '@/components/ui/Icon';
 import { HealthIndicator } from '@/components/HealthIndicator';
-import { TelemetryChartCard, type TelemetryErrorVariant } from '@/components/TelemetryChart';
+import { DriveTelemetrySection } from '@/components/DriveTelemetrySection';
 import { colorsDark } from '@/design';
-import { useDrive, useDriveDiagnostics, useDriveTelemetry } from '@/hooks';
+import { useDrive, useDriveDiagnostics } from '@/hooks';
 import { deriveDriveHealth } from '@/lib/driveHealth';
 import { sortDiagnosticsByPriority } from '@/lib/diagnostics';
 import { driveDateKey, formatDriveDateHeading, formatDriveTime } from '@/lib/drives';
 import { formatDistanceKm, formatDuration, formatSpeedKph, selectPeakMetrics } from '@/lib/format';
-import { splitTelemetryChannels, TelemetryFetchError, type TelemetrySample } from '@/lib/telemetry';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TODO(metric-keys): provisional keys — reconcile against the hardware/AI-agent
@@ -36,55 +35,11 @@ const PEAK_METRICS: Record<string, PeakMetricDisplay> = {
 };
 const PEAK_METRIC_KEYS = Object.keys(PEAK_METRICS);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TODO(metric-keys): the three telemetry-chart channels. PROVISIONAL keys from the
-// SAME vocabulary as PEAK_METRICS above — `speed_kph` and `coolant_temp_c` are reused
-// verbatim; `boost_pressure_kpa` is the provisional boost key (already present in the
-// mock `PROVISIONAL_METRIC_KEYS`, though not in the peaks display map). Reconcile all
-// three against the hardware/AI-agent contract before trusting them on live data — the
-// jsonb `metrics` blob is opaque, so a wrong key silently yields an empty chart, not an
-// error. (Note: telemetry is a LIVE-only capability, so there is no mock fixture path
-// for these charts — see DATA_SOURCE.driveTelemetry.)
-//
-// TODO(coolant-hot-threshold): a SECOND, adjacent provisional guess — distinct from the
-// key-name guess above so a future reconciliation pass catches both. No canonical coolant
-// "hot" cutoff is defined anywhere in the docs; 105 °C is a placeholder sitting just above
-// typical operating temperature. Above it, the coolant chart switches to severity/warning
-// (design §10 "coolant peak amber"). Replace with the real threshold when the metric
-// contract lands. Flagged in the PR, not just here, so it doesn't read as authoritative.
-// ─────────────────────────────────────────────────────────────────────────────
-const COOLANT_HOT_THRESHOLD_C = 105;
-
-interface ChartChannel {
-  channel: 'speed' | 'boost' | 'coolant';
-  metricKey: string;
-  hotThreshold?: number;
-}
-const CHART_CHANNELS: ChartChannel[] = [
-  { channel: 'speed', metricKey: 'speed_kph' },
-  { channel: 'boost', metricKey: 'boost_pressure_kpa' },
-  { channel: 'coolant', metricKey: 'coolant_temp_c', hotThreshold: COOLANT_HOT_THRESHOLD_C },
-];
-const CHART_CHANNEL_KEYS = CHART_CHANNELS.map((c) => c.metricKey);
-
-/** Map a thrown telemetry error to the per-chart copy variant (distinct 401/403/404/500/network). */
-function telemetryErrorVariant(error: unknown): TelemetryErrorVariant {
-  if (error instanceof TelemetryFetchError) {
-    switch (error.status) {
-      case 401:
-        return 'unauthorized';
-      case 403:
-        return 'forbidden';
-      case 404:
-        return 'notFound';
-      case 'network':
-        return 'network';
-      default:
-        return 'server';
-    }
-  }
-  return 'server';
-}
+// The Speed / Boost / Coolant telemetry charts (the app's first LIVE Edge Function read)
+// live in <DriveTelemetrySection>. It depends only on `driveId` via `useDriveTelemetry` —
+// no `useDrive`, no vehicle context — which is what lets the same code back both this screen
+// and the `/dev/telemetry` harness. The provisional-metric-key and coolant-hot-threshold
+// TODOs moved with it (see components/DriveTelemetrySection.tsx).
 
 /** Severity → dot colour class (design tokens). Unknown/insufficient → neutral (§4.3). */
 const SEVERITY_DOT: Record<string, string> = {
@@ -113,9 +68,6 @@ export default function DriveDetailScreen() {
 
   const driveQuery = useDrive(id, driveId);
   const diagnosticsQuery = useDriveDiagnostics(id, driveId);
-  // Live telemetry for the three charts. Called before the early returns below (hooks
-  // must run unconditionally); its own loading/error/empty states live inside each card.
-  const telemetryQuery = useDriveTelemetry(driveId);
 
   if (driveQuery.isPending) {
     return (
@@ -174,19 +126,6 @@ export default function DriveDetailScreen() {
 
   const dateHeading = formatDriveDateHeading(driveDateKey(drive.started_at));
 
-  // Telemetry: one request → all channels, split client-side into three per-channel series.
-  // The whole-query status drives each card's loading/error state; per-channel emptiness
-  // (a channel absent from every point) is an honest empty state, decided inside the card.
-  const telemetryStatus: 'loading' | 'error' | 'ready' = telemetryQuery.isPending
-    ? 'loading'
-    : telemetryQuery.isError
-      ? 'error'
-      : 'ready';
-  const telemetrySeries: Record<string, TelemetrySample[]> = telemetryQuery.data
-    ? splitTelemetryChannels(telemetryQuery.data.points, CHART_CHANNEL_KEYS)
-    : {};
-  const telemetryError = telemetryErrorVariant(telemetryQuery.error);
-
   return (
     <Frame>
       <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
@@ -239,36 +178,10 @@ export default function DriveDetailScreen() {
           ) : null}
         </View>
 
-        {/* Telemetry charts: Speed / Boost / Coolant (coolant peak → amber). ONE live read
-            feeds all three, so an error is a whole-section failure — rendered once here (one
-            message, one retry) rather than as three identical per-card error boxes. Loading
-            (skeletons) and empty stay per-card: emptiness is genuinely per-channel (e.g. boost
-            absent while speed has data). Each card still fails soft (design §6 S4, §10). */}
-        <View className="mt-6">
-          <Text variant="label" className="text-fg-tertiary">
-            {t('vehicles.drives.detail.charts.title')}
-          </Text>
-          {telemetryStatus === 'error' ? (
-            <TelemetrySectionError
-              copy={t(`vehicles.drives.detail.charts.error.${telemetryError}`)}
-              retryLabel={t('common.retry')}
-              onRetry={() => void telemetryQuery.refetch()}
-            />
-          ) : (
-            CHART_CHANNELS.map((ch) => (
-              <TelemetryChartCard
-                key={ch.channel}
-                channel={ch.channel}
-                samples={telemetrySeries[ch.metricKey] ?? []}
-                color={colorsDark.brand.default}
-                hotThreshold={ch.hotThreshold}
-                hotColor={colorsDark.severity.warning}
-                status={telemetryStatus}
-                onRetry={() => void telemetryQuery.refetch()}
-              />
-            ))
-          )}
-        </View>
+        {/* Telemetry charts: Speed / Boost / Coolant (coolant peak → amber). The app's first
+            LIVE Edge Function read; depends only on `driveId`, so the same component backs the
+            /dev/telemetry harness. See components/DriveTelemetrySection.tsx. */}
+        <DriveTelemetrySection driveId={driveId} />
 
         {/* Route map slot (design §6 S4, between charts and diagnostics). Placeholder only —
             see DriveMapPlaceholder / TODO(gps-route). */}
@@ -346,32 +259,6 @@ function DriveDiagnosticRow({ diagnostic }: { diagnostic: Tables<'diagnostic_out
         <Text variant="caption" className="text-fg-secondary">
           {t(`vehicles.detail.urgency.${diagnostic.urgency}`, diagnostic.urgency)}
         </Text>
-      </View>
-    </View>
-  );
-}
-
-/**
- * Section-level telemetry error. One live `get_drive_telemetry` request backs all three
- * charts, so a failure is a single event — shown once (one message + one retry) instead of
- * three identical per-card errors. Quiet token card; does NOT take over the screen.
- */
-function TelemetrySectionError({
-  copy,
-  retryLabel,
-  onRetry,
-}: {
-  copy: string;
-  retryLabel: string;
-  onRetry: () => void;
-}) {
-  return (
-    <View className="mt-3 items-center rounded-ds-lg border border-border-subtle bg-surface-primary p-6">
-      <Text variant="body-sm" className="text-center text-fg-tertiary">
-        {copy}
-      </Text>
-      <View className="mt-2">
-        <Button label={retryLabel} variant="ghost" onPress={onRetry} />
       </View>
     </View>
   );
