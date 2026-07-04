@@ -24,8 +24,9 @@ If a future conversation proposes changing one of these, the burden is on the pr
 | Forms | react-hook-form + zod | Validation parity across mobile + web |
 | Client state | Zustand | Lightweight, avoids Redux complexity |
 | Server state | TanStack Query | Caching, retry, optimistic updates |
-| Charts | Victory Native (v1) | Re-evaluate to react-native-skia in Week 9 if perf demands |
-| Icons | lucide-react-native + lucide-react | Same icon set both platforms |
+| Charts | victory-native 41.26.0 (Skia-backed "XL") + @shopify/react-native-skia 2.6.2 | victory-native XL renders on Skia (not react-native-svg); **Expo SDK 56 bundles Skia 2.6.2 exactly**, so peers align with no force-install and Skia autolinks (no config plugin). Charting-library re-evaluation still scheduled for Week 9 if perf demands (see action plan). |
+| Fonts | Geist + Geist Mono (OFL) via expo-font | UI/display = Geist, tabular telemetry numerals = Geist Mono (design §4.4). Both weights vendored in `apps/mobile/assets/fonts/`, loaded in the root-layout boot with the splash gated on them (no fallback-font flash). |
+| Icons | lucide-react-native + lucide-react | Same icon set both platforms. Supersedes the earlier expo-symbols / SF-Symbols direction (SF Symbols are iOS-flavoured; this build is Android-only). **`expo-symbols` is now unused — kept as a dependency pending removal in a later cleanup.** |
 | Animation | react-native-reanimated 4 | Industry standard; uses react-native-worklets |
 | QR scanning | expo-camera | Built-in |
 | Wi-Fi provisioning | react-native-wifi-reborn | Android-first; iOS limitations documented |
