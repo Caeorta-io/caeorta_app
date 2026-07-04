@@ -19,6 +19,7 @@ import { createVehicleInputSchema, type CreateVehicleInput } from '@caeorta/type
 import type { Tables } from '@caeorta/supabase';
 
 import type { DriveHealthFlags } from '../driveHealth';
+import type { DriveTelemetry } from '../telemetry';
 import * as mocks from './mocks';
 
 export type DataSourceMode = 'mock' | 'live';
@@ -35,6 +36,7 @@ export type DataCapability =
   | 'drives'
   | 'drive'
   | 'driveDiagnostics'
+  | 'driveTelemetry'
   | 'recentDiagnostics'
   | 'currentState'
   | 'currentStateSubscription'
@@ -60,6 +62,13 @@ export const DATA_SOURCE: Record<DataCapability, DataSourceMode> = {
   drives: ENV_DEFAULT,
   drive: ENV_DEFAULT,
   driveDiagnostics: ENV_DEFAULT,
+  // THE EXCEPTION. Every other capability defaults to mock (and throws on 'live' until
+  // its Platform query lands). `driveTelemetry` is the reverse: it defaults DIRECTLY to
+  // 'live' and has NO mock path. The `get_drive_telemetry` Edge Function is already
+  // deployed on main, there's no Platform-side blocker, and the founder approved wiring
+  // it live from day one (Week-4 decision) — so mocking it would be busywork. In 'mock'
+  // mode it throws {@link notImplemented} (the inverse of the usual pattern).
+  driveTelemetry: 'live',
   recentDiagnostics: ENV_DEFAULT,
   currentState: ENV_DEFAULT,
   currentStateSubscription: ENV_DEFAULT,
@@ -154,6 +163,25 @@ export async function fetchDriveDiagnostics(
 ): Promise<Tables<'diagnostic_outputs'>[]> {
   if (DATA_SOURCE.driveDiagnostics === 'live') return notImplemented('driveDiagnostics');
   return mocks.diagnosticsForDrive(driveId);
+}
+
+/**
+ * A drive's full telemetry (all channels, downsampled server-side to <= 300 points) for
+ * the drive-detail Speed/Boost/Coolant charts — the app's FIRST live Edge Function read.
+ *
+ * This is the ONE fetcher that breaks the module's Node-pure / mock-default rule: it has
+ * no mock branch (throws {@link notImplemented} in 'mock' mode) and its live branch is a
+ * real network call. To keep THIS module free of Supabase/React-Native imports at the
+ * top level (so `source.ts` and its tests still run in plain Node/vitest), the live
+ * implementation lives in `./telemetryLive.ts` and is pulled in with a lazy `import()`
+ * that only runs when the live branch executes. It throws `TelemetryFetchError` (HTTP
+ * status or `'network'`) on failure — a read, so no never-throws orchestrator; the hook's
+ * error state surfaces it. See `DATA_SOURCE.driveTelemetry` above for why it's live.
+ */
+export async function fetchDriveTelemetry(driveId: string): Promise<DriveTelemetry> {
+  if (DATA_SOURCE.driveTelemetry !== 'live') return notImplemented('driveTelemetry');
+  const { fetchDriveTelemetryLive } = await import('./telemetryLive');
+  return fetchDriveTelemetryLive(driveId);
 }
 
 /**

@@ -15,6 +15,10 @@ export const queryKeys = {
     ['vehicles', vehicleId, 'drive', driveId] as const,
   driveDiagnostics: (vehicleId: string, driveId: string) =>
     ['vehicles', vehicleId, 'drive', driveId, 'diagnostics'] as const,
+  // Telemetry is keyed by driveId ALONE (not under the vehicle subtree): a drive's
+  // telemetry is immutable once synced and identified fully by its own id, so it needn't
+  // be swept by a per-vehicle invalidation.
+  driveTelemetry: (driveId: string) => ['drive-telemetry', driveId] as const,
   recentDiagnostics: (vehicleId: string, limit: number) =>
     ['vehicles', vehicleId, 'diagnostics', { limit }] as const,
   currentState: (vehicleId: string) => ['vehicles', vehicleId, 'current-state'] as const,
