@@ -171,17 +171,32 @@ Harder than it sounds because it touches firmware, Supabase, and the app simulta
 
 ### Carry from Week 1
 
-Logged in the 2026-06-19 Week 1 reconciliation (see `docs/workdiary.md` Week 1 retrospective and the Plan revision log below). Each line: what slipped, why, what unblocks it.
+Logged in the 2026-06-19 Week 1 reconciliation (see `docs/workdiary.md` Week 1
+retrospective and the Plan revision log below). Full detail — re-verified
+against `main`, with owner and unblock — now lives in
+**`docs/11_Carry_Forwards.md`**. Summary:
 
-- **Prod migration promotion (2 of 5 migrations remain) + Dashboard OTP config.** The three Week 1 v1 migrations (`enable_extensions` / `initial_schema` / `rls_policies`) were promoted to prod on 2026-06-21 via the `docs/05` ritual (prod verified: 4 extensions, 26 tables, 36 indexes, RLS on all 26 tables, and the anon→`vehicles` / authenticated→`audit_log` isolation tests both return 0). The two Week 5 migrations (`add_notify_agent` / `add_pg_cron_jobs`) were intentionally left dev-only — the 2026-06-21 session was scoped to the three Week 1 migrations — and still need promotion in a follow-up prod-link session (note: `add_pg_cron_jobs` starts its nightly jobs the moment it lands on prod, so confirm that's desired first). Still outstanding alongside this: the Dashboard-side OTP email config on prod (magic-link template → `{{ .Token }}`, confirm-email off, OTP length 6 — see `docs/05` § Supabase Dashboard configuration).
-- **`agent_role` read-only Postgres role migration.** Gated on AI Agent Contract v0 review. The v0 contract exists (App-track session 12, `docs/ai-agent-contract.md`) but is on an unmerged branch and not yet shared with the agent project, so the role's exact read scope isn't final. Unblocked when the contract v0 merges and the agent project confirms which tables/columns it reads.
-- **`devices` column-scope follow-up migration.** Deferred in the RLS migration (session 7) until `mint_device_token` firmed up. `mint_device_token` now exists (Sulaiman's session 4), so this is unblocked: REVOKE UPDATE on device-managed columns from `authenticated`, GRANT the owner-writable subset (likely just `status`).
-- **AI Agent Contract: share with agent project + weekly-sync calendar invite.** Channel (GitHub issue on the agent repo) and cadence (Friday 16:00 IST, 30 min) are decided (session 12) but not executed — no agent repo is reachable from the App founder's `gh`, and there's no calendar integration. Founder action: confirm the agent repo + access (or have the agent owner file the issue) and create the recurring invite. This is the standing R1 mitigation.
-- **Auth-decision doc fix.** "Magic link" in Week 1's deliverables/DoD corrected to "email OTP (code-only)" in this reconciliation (see revision log).
+- **Prod migration promotion (2 of 5 remain) + prod Dashboard OTP config.** The
+  three Week-1 migrations are promoted/verified on prod; the two Week-5
+  migrations (`add_notify_agent` / `add_pg_cron_jobs`) stay dev-only, and the
+  prod OTP config is still pending. See `docs/11_Carry_Forwards.md` § CF-17.
+- **`agent_role` read-only Postgres role migration** — gated on AI Agent
+  Contract v0 review. See `docs/11_Carry_Forwards.md` § CF-04.
+- **`devices` column-scope follow-up migration** — now unblocked
+  (`mint_device_token` exists). See `docs/11_Carry_Forwards.md` § CF-18.
+- **AI Agent Contract: share + weekly-sync invite** — the standing R1
+  mitigation, not yet executed. See `docs/11_Carry_Forwards.md` § CF-03.
+- **Auth-decision doc fix** — "magic link" → "email OTP (code-only)" corrected
+  in this reconciliation (done; see revision log).
 
 Already completed by Sulaiman in Weeks 2–5 (so NOT carried, recorded for honesty): **Edge Function scaffolding** (the Week-1 Platform item "Initialize Edge Function scaffolding" was deferred to Week 2 and is done — all Week 2–5 functions are on `main`) and **`supabase/seed.sql`** (present on `main`, Sulaiman's session 5).
 
-Slipped from Week 1's "Together"/working-agreement set and still open as founder actions (not code): designer 90-min working session, Figma component-system confirmation, recurring daily-sync + Friday-retro calendar events, and the GitHub Issues + project board. Per the 2026-06-19 retro these had not happened; founder intends to do them after that session.
+Slipped from Week 1's "Together"/working-agreement set and still open as founder
+actions (not code): recurring daily-sync + Friday-retro calendar events and the
+GitHub Issues + project board (the designer 90-min session + Figma
+component-system confirmation are now effectively satisfied — the designer
+delivered a complete adopted system, PR #32). See
+`docs/11_Carry_Forwards.md` § CF-27.
 
 ### Platform founder
 - [ ] Edge Function: `pair_device` (per `07_Sync_Architecture.md`)
@@ -270,14 +285,19 @@ The actual product starts to take shape. Default view is "your last drive," not 
 - **Screens shipped:** vehicle list, add-vehicle flow, vehicle detail, live mode. Live mode
   runs against the data seam's mock Realtime emitter (`subscribeToCurrentStateMock`), which
   matches the real subscription's external contract so the swap is a per-capability flag flip.
-**Carried forward (detailed).** These four items are the reference point for Week 4 planning; the Realtime-adapter and metric-keys items are also tracked as standing risks (R21, R22 in `docs/09_Risks_And_Mitigations.md`). Recorded in full in App-track session 24.
+**Carried forward.** Full detail (re-verified against `main`, with owner and
+unblock) now lives in **`docs/11_Carry_Forwards.md`** — the canonical registry.
+The four Week-3 carries, in summary:
 
-| Item | Status | What is needed to resolve | Owner |
-|------|--------|--------------------------|-------|
-| **`create_vehicle` E2E** | Built, not E2E-verified. | Platform-side `create_vehicle` Edge Function deployed and accessible. Once live: flip `DATA_SOURCE.createVehicle` to `'live'` in `source.ts` and wire the real `fetch` call in the live branch. Then run the add-vehicle flow on device with a claimed `device_id` and confirm a `vehicles` row is created with the correct `owner_user_id`, `device_id`, and fields. See `docs/create_vehicle_contract.md` (incl. the `ecu_type` Open question, which must be agreed before this flip). | Platform track (Edge Function); App track (live-branch wiring + E2E run). |
-| **`TODO(metric-keys)` — provisional jsonb vocabulary** | Open. All three jsonb fields (`peak_metrics`, `summary_metrics`, `latest_metrics`) use a provisional key set marked with `TODO(metric-keys)` in `mocks.ts`, `LastDriveCard`, `DiagnosticsPreview`, and the live screen. | The hardware/AI-agent contract must confirm the canonical key set. Once confirmed: update the `mocks.ts` provisional keys to match, update any hardcoded key references in `LastDriveCard` and the live metrics panel, and remove the `TODO` flags. A key mismatch is **NOT** caught by the compiler (opaque jsonb) — this must be a deliberate reconciliation step before any live flip of the `lastDrive`, `currentState`, or `recentDiagnostics` capabilities. | Hardware/AI-agent project (canonical set); App track (reconciliation + `TODO` removal). |
-| **Live Realtime swap — adapter gap** | Open. The live branch of the `currentStateSubscription` capability in `source.ts` throws `notImplemented`. The real `subscribeToCurrentState` in `packages/supabase/src/realtime.ts` takes a Supabase client and returns a `RealtimeChannel` — it does **not** match the mock emitter's interface `(onUpdate, onChannelStatus) => () => void`. The swap is not a one-liner. | A thin adapter (in `packages/supabase` or `apps/mobile`) that wraps `RealtimeChannel` into the mock's interface shape — bridging the channel's event callbacks to `onUpdate` and synthesising `onChannelStatus` from the channel's `subscribe` callback status codes. This adapter must be agreed with the Platform track before it is authored (it touches `packages/supabase`). Once the adapter exists, the `source.ts` live branch imports and calls it; the mock emitter is retired for that capability. | App track (adapter design); Platform track (`packages/supabase` boundary sign-off); both tracks must agree the interface before authoring. |
-| **Pairing on-device E2E** | Unrun. The pairing flow (`lib/pairing.ts`, `(app)/pair/*` screens) is built and all unit tests pass, but the live handshake against a real seed device has never been executed. | A fresh EAS development build carrying both `expo-camera` (~56.0.8) and `@orbital-systems/react-native-esp-idf-provisioning` (~0.5.5). Run the full pairing flow on a physical Android device: claim a real seed device, confirm the `devices` row flips (`claimed_by_user_id` set, `status='active'`), confirm the `audit_log` row, and exercise all four documented error states. This is the only gap between "Week 2 built" and "Week 2 verified." | App track (Muhammed, on hardware). |
+- **`create_vehicle` E2E** — built, not E2E-verified; blocked on the Platform
+  `create_vehicle` Edge Function. See `docs/11_Carry_Forwards.md` § CF-01.
+- **`TODO(metric-keys)` provisional jsonb vocabulary** — open; reconcile before
+  any live flip (also risk R22). See `docs/11_Carry_Forwards.md` § CF-07.
+- **Live Realtime swap — cross-track adapter gap** — open; interface must be
+  agreed cross-track before authoring (also risk R21). See
+  `docs/11_Carry_Forwards.md` § CF-02.
+- **Pairing on-device E2E** — unrun since Week 2; needs an EAS dev build on
+  physical Android. See `docs/11_Carry_Forwards.md` § CF-09.
 
 ---
 
@@ -315,15 +335,25 @@ The actual product starts to take shape. Default view is "your last drive," not 
 
 - **DoD reality check.** "Browse drives → tap → detailed charts" is **built and green** at the fetch/auth/error/empty level; the **real-data on-device chart render has NOT yet been observed** (see the on-device-verification row below — it is currently *blocked*, not merely pending). "30-day-old data doesn't slow queries" rests on Platform's `get_drive_telemetry` server-side downsample (≤300 points) and the pg_cron aggregation job; the app exercises the >300→downsample path via the dev seed fixture, but the **Together perf test with 30 days of simulated data has not been run**.
 
-**Carried forward (detailed).** The reference point for Week 5 planning; the exhaustive carry (incl. re-verified Week 2/3 items) lives in `docs/workdiary.md` session 29. The metric-keys / coolant-threshold and Realtime items are also standing risks (R22, R21).
+**Carried forward.** Full detail (re-verified against `main`, with owner and
+unblock) now lives in **`docs/11_Carry_Forwards.md`** — the canonical registry.
+The Week-4 carries, in summary:
 
-| Item | Status | What is needed to resolve | Owner |
-|------|--------|--------------------------|-------|
-| **On-device real-data chart render (the "built ≠ verified" item)** | **Blocked** — not observed. Seed fixture + owner-account login (RLS) are necessary but **not sufficient**: the drive-detail screen fetches the drive via the *mock* `drive` capability, which does not contain the seed fixture, and the `drive`/`driveDiagnostics` live branches throw `notImplemented`. So `useDrive` returns `null` and the screen shows "Drive not found" before the charts ever mount. Only `driveTelemetry` is live. | Either a throwaway **local** live fetch for `drive`(+`driveDiagnostics`) or a small **dev harness route** that renders `TelemetryChartCard` against `useDriveTelemetry(seededId)` directly (bypassing `useDrive`) — both out of the docs+polish scope of session 29. Then: apply the seed to dev, log in as the fixture's owner account, and observe the coolant amber-trip, boost-starts-late, and >300 downsample. | App track (Muhammed, on device). |
-| **`TODO(metric-keys)` + `TODO(coolant-hot-threshold)`** | Open (R22). Now load-bearing in the drive-detail peaks + the three chart channel keys (first *live-read* consumers) + the 105 °C coolant threshold (a distinct value-guess). | Hardware/AI-agent contract confirms the canonical key set AND a real coolant "hot" threshold; reconcile both before any live flip. | Hardware/AI-agent (canonical); App (reconciliation). |
-| **Full Diagnostic Card (§5.1, 8 variants)** | Not built. Drive-detail uses a simplified token diagnostic row; the vehicle-detail preview stays stock. | Build the 8-variant component — it is a **Week-5 dependency** (the reusable diagnostic atom for DTC + agent-feed work). | App track. |
-| **Admin dashboard: drive-list-per-device** | Unbuilt (Platform Week-4 item). | Platform-track build. | Platform track (Sulaiman). |
-| **Perf test — 30 days simulated data** | Not run (Together item). | A dev build + seeded 30-day dataset; profile chart smoothness (feeds the Week-9 charting re-eval). | Both. |
+- **On-device real-data chart render (the "built ≠ verified" item)** —
+  **RESOLVED in session 30**, no longer a carry. The `/dev/telemetry` harness
+  (PR #36) rendered all three charts from real seed data — the app's first live
+  `get_drive_telemetry` path is confirmed working, and the coolant whole-series
+  amber switch passed. (Was "Blocked" at Week-4 close; closed the next session.)
+- **`TODO(metric-keys)` + `TODO(coolant-hot-threshold)`** — both open; two
+  distinct provisional guesses (key names vs. the 105 °C value), reconcile
+  before any live flip (also risk R22). See `docs/11_Carry_Forwards.md` § CF-07
+  and § CF-08.
+- **Full eight-variant Diagnostic Card (§5.1)** — not built; a Week-5
+  dependency. See `docs/11_Carry_Forwards.md` § CF-13.
+- **Admin dashboard drive-list-per-device** — unbuilt (Platform Week-4 item).
+  See `docs/11_Carry_Forwards.md` § CF-05.
+- **Perf test — 30 days simulated data** — not run (Together item); feeds the
+  Week-9 charting re-eval. See `docs/11_Carry_Forwards.md` § CF-11.
 
 ---
 

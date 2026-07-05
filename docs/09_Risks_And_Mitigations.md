@@ -20,6 +20,8 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 
 **2026-06-22 (Week 2 close):** unchanged in practice. The contract's six open-question defaults remain **unacknowledged by the AI agent project** — no response received, the contract still sits on an unmerged branch (`docs/ai-agent-contract.md` is not on `main`), no agent repo is reachable from the App founder's `gh`, and the weekly cross-project sync is still not calendared. Carried into Week 3 as-is; the mitigation stays on paper.
 
+**Carry:** the six unacknowledged questions + share/sync are tracked as an outstanding work item in `docs/11_Carry_Forwards.md` § CF-03 (and the gated `agent_role` migration as § CF-04).
+
 ---
 
 ## R2: iOS Wi-Fi provisioning is painful
@@ -185,6 +187,8 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 
 **Status:** Active but **downgraded (2026-07-04, Week-4 close).** The core exposure this risk guarded against has largely resolved: the designer delivered a **complete, documented, cleanly extractable** system — 96 Figma variables across 3 collections, 12 text styles, and a full screen inventory (`docs/design/00_design_system.md`) — which was translated into code and **adopted in PR #32** (the mobile token/type/icon foundation) with no designer round-trips needed to build against it. We can now extend the system from the documented tokens without the designer for the foreseeable build. Residual exposure is narrow: a handful of parked design refinements (design-doc §13 — Home car silhouette, confirm mocked area charts vs. real Victory Native output, confirm-dialog styling) and the eventual light-mode spot-check. Keep the row open until those parked items are either done or explicitly cut, but the "blocked on the designer" scenario is no longer likely.
 
+**Carry:** the residual outstanding work is tracked in `docs/11_Carry_Forwards.md` § CF-14 (light-mode wiring + spot-check) and § CF-16 (the parked §13 design refinements).
+
 ---
 
 ## R12: Hotspot battery / data drain ruins pilot UX
@@ -238,6 +242,8 @@ A living watch list. When a new risk appears, add it. When a risk materializes, 
 **Status:** Active. Reframed 2026-06-02 from the prior R14 ("Two founders' coding styles diverge"), which is obsolete now that the execution model has collapsed to a single code author. The original divergence-of-style risk no longer applies.
 
 **2026-06-19 Week 1 retro check:** the **EAS Update + EAS Build emergency-release runbook** listed above as a mitigation **does not yet exist** as an artifact — a repo-wide search found no runbook doc, only this mitigation text referencing it. It has been a paper mitigation since session 4. Outstanding action: write the runbook in `docs/` (the conditions that triggered listing it — Muhammed unavailable, urgent JS-only fix needed — are unchanged). The other mitigations (rich `CLAUDE.md`/`docs/`, ADRs, strict TS + Zod, Sulaiman reviewing every PR) are in place and active.
+
+**Carry:** the missing EAS emergency-release runbook is tracked as an outstanding work item in `docs/11_Carry_Forwards.md` § CF-19.
 
 ---
 
@@ -328,6 +334,8 @@ than "Caeorta." Less professional for commercial launch.
 
 **Status:** Active. New at the 2026-06-19 Week 1 retro, formalizing a pattern that bit three times. The process guidance already lives in `docs/conventions.md`; this register entry records it as a standing risk because recurrence shows the guidance alone hasn't prevented it.
 
+**Carry:** the concrete repo-hygiene work (squash-only setting + branch protection) is tracked in `docs/11_Carry_Forwards.md` § CF-20.
+
 ---
 
 ## R20: Wi-Fi provisioning contract (PoP + security scheme) unratified
@@ -346,6 +354,8 @@ than "Caeorta." Less professional for commercial launch.
 
 **Status:** Active. New at Week-2 close (2026-06-22). Latent until firmware exposes a provisioning endpoint; becomes live the moment on-device integration starts.
 
+**Carry:** the firmware-gated Wi-Fi provisioning E2E is tracked as an outstanding work item in `docs/11_Carry_Forwards.md` § CF-10.
+
 ---
 
 ## R21: Live Realtime swap requires a cross-track adapter
@@ -361,6 +371,8 @@ than "Caeorta." Less professional for commercial launch.
 - Both tracks agree on the interface; adapter implementation follows the agreed contract.
 
 **Status:** Open. New at Week-3 close (App-track session 24). See the Week-3 carried-forward table in `docs/08_12_Week_Action_Plan.md` and the `currentStateSubscription` live-branch comment in `source.ts`.
+
+**Carry:** tracked as an outstanding work item in `docs/11_Carry_Forwards.md` § CF-02 (re-verified 2026-07-05: Platform now has `update_current_state` + `subscribeToCurrentState`, but the App-side adapter is still unwritten).
 
 ---
 
@@ -387,6 +399,8 @@ There are **two distinct open questions** here — do not conflate them:
 - **Drive-detail peak metrics** (`[driveId].tsx` `PEAK_METRICS`: `rpm` / `speed_kph` / `coolant_temp_c`) — the same `TODO(metric-keys)` set as `LastDriveCard`.
 - **The three telemetry-chart channel keys** (`CHART_CHANNELS`: `speed_kph` / `boost_pressure_kpa` / `coolant_temp_c`) — these **reuse the existing provisional set, no new key was invented** (`boost_pressure_kpa` already existed in the mock `PROVISIONAL_METRIC_KEYS`). They are the FIRST *live-read* consumers of the vocabulary (`get_drive_telemetry` is the app's first live Edge Function read), so a key mismatch here yields a silently-empty chart, not a compiler error.
 - **The coolant "hot" threshold** (`COOLANT_HOT_THRESHOLD_C = 105`) — the SECOND, distinct kind of open guess described above (a value, not a key). Tracked separately as `TODO(coolant-hot-threshold)`.
+
+**Carry:** the two guesses are tracked as separate outstanding work items in `docs/11_Carry_Forwards.md` § CF-07 (metric-key names) and § CF-08 (the 105 °C coolant threshold value).
 
 ---
 
