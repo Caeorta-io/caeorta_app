@@ -1357,6 +1357,41 @@ The brief assumed Expo Go, but **SDK 56 isn't on the Play Store Expo Go** (it sh
 - The useful finding this session is the boost check itself: a check can be structurally unobservable by the very implementation it's meant to verify. When multiple charts share a data source, the *visual* is the wrong verification surface for per-point/missing-data logic — the data transform's unit tests are. Codified in `conventions.md` so Week 5's Diagnostic Card doesn't repeat it.
 - Confirming the coolant amber against the *actual* `isHot` expression (whole-series `.some()`, not a gradient) mattered — the informal mental model of "the line goes amber where it's hot" would have set up a check that also couldn't pass.
 
+### 2026-07-05 — Carry-forwards registry: consolidate every carry into `docs/11` (App track, session 31)
+
+**Goal of session:** Create `docs/11_Carry_Forwards.md` as the single canonical registry of every carried-forward item across both tracks (Week 1 onward), consolidating what was scattered across `docs/08`'s per-week close tables, `docs/09`'s risk register, and this workdiary's per-session "open items." Re-verify each item against current `main` (not transcribe stale tables), then point the source docs at the new file instead of duplicating. **Docs only — no code touched.**
+
+**Verified main first.** `git fetch`; `origin/main` = `697a652` (PR #38, the session-30 workdiary/conventions squash — confirmed it contains session 30). Branched `docs/carry-forwards-registry` **off `origin/main`** (not stacked). The session-30 workdiary branch had just merged, resolving the base-branch question (founder confirmed the merge).
+
+**Re-verification against `main` (method + result):**
+- **`create_vehicle` still absent** — `ls supabase/functions/` shows 10 functions, no `create_vehicle` (a new `update_current_state` function *does* exist — relevant to R21). CF-01 stands.
+- **Admin drive-list-per-device still unbuilt** — `ls apps/admin/app/` shows only `login/`, devices `page.tsx`, `auth/callback/`. CF-05 stands.
+- **R1's six questions still unacknowledged** — `docs/06` changelog stops at "v0.1 draft, to be reviewed Week 1"; the six open questions are unresolved. CF-03 stands.
+- **R21 refined** — Platform now has `update_current_state` + `subscribeToCurrentState`, but the App-side adapter is still unwritten; R21/CF-02 stays open (noted the Platform groundwork now exists).
+- **seed.sql** — confirmed PR #37 reworked it to an ordered child→parent DELETE teardown (not "ON CONFLICT DO NOTHING"); `docs/05`'s Test-fixtures claim was stale and is now corrected (CF-25).
+- **design §6 S4** — confirmed no map row despite the shipped `DriveMapPlaceholder` (CF-24).
+- **On-device chart render** — confirmed **already resolved** in session 30; deliberately NOT listed as an open carry (and `docs/08`'s Week-4 table row updated from "Blocked" to "resolved").
+
+**Corrections surfaced (flagged in PR description):**
+- The Week-4 "on-device chart render" carry, listed **Blocked** at Week-4 close, is now **resolved** (session 30) — updated in `docs/08`, not left standing as open.
+- Beyond the task's named R1/R11/R20/R21/R22, two more risks are *also* literal carries and got CF entries + xrefs: **R14** (the missing EAS emergency-release runbook → CF-19) and **R19** (squash-only setting + branch protection → CF-20).
+
+**Done — docs:**
+- **`docs/11_Carry_Forwards.md`** (new) — 27 entries (CF-01…CF-27), one consistent schema, grouped by category (extended the suggested six with "on-device verification pending," "app-build dependency," and "founder logistics" where items didn't fit). Every "Current status" re-verified as of 2026-07-05.
+- **`docs/08`** — collapsed the Week-2 "Carry from Week 1" detail, the Week-3 close table, and the Week-4 close table to summary lines + `docs/11` pointers; kept each week's "what shipped / how it diverged" narrative prose intact.
+- **`docs/09`** — added a one-line **Carry:** cross-reference to R1, R11, R14, R19, R20, R21, R22 pointing at their CF entries; left each risk's likelihood/mitigation framing unchanged.
+- **`docs/05`** — corrected the Test-fixtures "safe to re-run" claim to cite PR #37's child→parent DELETE teardown (and the `ON DELETE RESTRICT` FK that made ON CONFLICT insufficient).
+- **`docs/00_README.md`** — added the `11_Carry_Forwards.md` row ("check before planning any new week").
+
+**Files / commits:** single `docs: add carry-forwards registry (docs/11); point 05/08/09/README at it`. Branch `docs/carry-forwards-registry` off `origin/main` (`697a652`); **PR for @22SHY review, not self-merged.** PR description flags that this touches 05/08/09/README-plus-workdiary outside Claude Code's usual footprint (careful review, same as prior doc-correction PRs) and states the two corrections (on-device chart render now resolved; R14/R19 added as literal carries) up front.
+
+**Decisions taken:** none new (no product/architecture decisions; a documentation consolidation).
+
+**Open items rolled forward:** the registry itself is now the roll-forward surface — see `docs/11_Carry_Forwards.md`. Note deliberately kept OUT of the registry: minor Platform-internal test-tooling (e.g. extending `device_simulation.sh` to cover the sync flow) and transient "test admin login once the email rate limit resets" notes — Sulaiman's internal backlog, not cross-track carries.
+
+**Notes / lessons:**
+- The point of a registry is re-verification, not transcription: two items had drifted since they were last written (R21's Platform groundwork now exists; the on-device chart render was already closed) and one doc claim (docs/05 seed.sql) was stale — all caught only by checking `main`, not by copying the old tables.
+
 ---
 
 ## Template for future entries
