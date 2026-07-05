@@ -225,6 +225,20 @@ boxes. Keep **loading** (skeletons) and **empty** *per-card*, because emptiness 
 per-card (boost can be absent while speed has data). See `[driveId].tsx` `TelemetrySectionError`
 + the charts section. This recurs anywhere one fetch fans out into repeated cards.
 
+### Victory Native charts auto-scale x-domain per instance
+
+`CartesianChart` (Victory Native) auto-scales its x-domain to whatever data **that one
+instance** is handed — there is no shared or absolute time axis across sibling charts, even
+when they're fed from the same source. So when several cards are built from one read (the
+Speed/Boost/Coolant trio off a single `get_drive_telemetry`), a point one card correctly drops
+(an early boost-less sample excluded by `splitTelemetryChannels`' missing-≠-zero rule) produces
+**no visible gap** — that card's axis simply starts later. Don't reason about what a chart
+*should* visually show — especially missing-data or gap-based checks — as if the cards shared
+one absolute axis; they don't. Verify per-point / missing-data logic with **unit tests on the
+data transform** (`splitTelemetryChannels`), not by eyeballing the chart. (Learned verifying
+PR #34's charts on-device; see workdiary session 30. Applies to any future multi-chart screen —
+e.g. the Week-5 Diagnostic Card.)
+
 ### Honest placeholder for an un-plumbed capability
 
 A designed slot whose data isn't wired yet gets an **honest empty state**, never "coming
