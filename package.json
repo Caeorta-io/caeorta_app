@@ -21,6 +21,13 @@
   "pnpm": {
     "overrides": {
       "typescript": "5.9.3"
-    }
+    },
+    "onlyBuiltDependencies": [
+      "@sentry/cli",
+      "@shopify/react-native-skia",
+      "msgpackr-extract",
+      "sharp",
+      "unrs-resolver"
+    ]
   }
 }
