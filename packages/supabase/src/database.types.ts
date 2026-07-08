@@ -496,6 +496,30 @@ export type Database = {
           },
         ]
       }
+      dtc_lookup: {
+        Row: {
+          code: string
+          common_causes: string | null
+          description: string
+          severity_hint: string | null
+          system: string
+        }
+        Insert: {
+          code: string
+          common_causes?: string | null
+          description: string
+          severity_hint?: string | null
+          system: string
+        }
+        Update: {
+          code?: string
+          common_causes?: string | null
+          description?: string
+          severity_hint?: string | null
+          system?: string
+        }
+        Relationships: []
+      }
       dtcs: {
         Row: {
           cleared_at: string | null
