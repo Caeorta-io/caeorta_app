@@ -95,7 +95,9 @@ export default async function DashboardPage() {
             {devices.map((device) => (
               <tr key={device.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 font-mono text-xs text-gray-500">
-                  {device.id.slice(0, 8)}...
+                  <a href={`/devices/${device.id}`} className="hover:underline text-blue-600">
+                    {device.id.slice(0, 8)}...
+                  </a>
                 </td>
                 <td className="px-4 py-3">
                   <StatusBadge status={device.status} />
