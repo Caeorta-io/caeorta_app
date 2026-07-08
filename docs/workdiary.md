@@ -1679,3 +1679,25 @@ create_vehicle
 - OBD-II DTC seed data (P0xxx lookup table) — Week 5 Platform item
 - Admin DTC timeline needs real DTC data (currently shows 0 codes — correct for seed)
 - Week 6: AI agent integration — needs coordination with AI agent project
+
+---
+
+### 2026-07-08 (later) — DTC lookup table (session 13)
+
+**Goal of session:** Build OBD-II DTC reference table — last Week 5 Platform item.
+
+**Done:**
+- Created dtc_lookup table (public read-only reference, RLS: select-all policy)
+- Seeded 52 common P0xxx codes (SAE J2012 standard), prioritized for tuned/modified vehicles:
+  fuel/air metering, ignition/misfire, turbo boost, knock, O2 sensors, transmission
+  Each row has: code, description, system category, severity_hint, common_causes
+- Regenerated TS types, committed (commit d069a58)
+
+**Week 5 Platform — now fully complete:**
+- get_drive_telemetry, send_diagnostic_notification, pg_cron jobs
+- update_current_state + Realtime helpers
+- dtc_lookup table seeded
+
+**Open items rolled forward:**
+- Week 6: AI agent trigger wiring — needs AI agent project coordination
+- Raslan is on Week 5 Day 1 (diagnostic card component) — will benefit from dtc_lookup for DTC detail screen (S6)
