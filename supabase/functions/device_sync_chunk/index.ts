@@ -79,6 +79,8 @@ serve(async (req) => {
         .single();
 
       if (!existing) {
+        // Capture freeze-frame: latest telemetry row at DTC first-seen time
+        const latestRow = telemetryRows.length > 0 ? telemetryRows[telemetryRows.length - 1] : null;
         await adminClient.from('dtcs').insert({
           vehicle_id: session.vehicle_id,
           sync_session_id: session_id,
@@ -88,6 +90,7 @@ serve(async (req) => {
           first_seen_at: new Date().toISOString(),
           last_seen_at: new Date().toISOString(),
           is_active: true,
+          freeze_frame_metrics: latestRow ? latestRow.metrics : null,
         });
       } else {
         await adminClient
