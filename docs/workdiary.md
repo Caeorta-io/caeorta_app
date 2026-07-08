@@ -1644,3 +1644,38 @@ When starting a new entry, copy this scaffold to the bottom of the file. Keep pr
 
 **Notes / lessons:**
 - Supabase CLI v2.107.0 available — update at convenience with brew upgrade supabase
+
+---
+
+### 2026-07-08 — Cross-track catch-up + admin completion (session 12)
+
+**Goal of session:** Verify actual state against workdiary, close remaining Week 3/4 Platform items.
+
+**Found via conversation_search:**
+- Raslan completed Weeks 2, 3, 4 — pairing flow, vehicle dashboard, live mode, drives, charts all merged
+- Raslan is on Week 5 Day 1 — diagnostic card component (8 variants)
+- R23 identified: dtcs table missing freeze_frame_metrics column
+
+**Done:**
+- Built and deployed create_vehicle Edge Function (was blocking App Week 3 E2E)
+- Added freeze_frame_metrics column to dtcs table (migration 20260615000001)
+- Updated device_sync_chunk to capture freeze-frame at DTC first-seen time
+- Regenerated TS types with new column
+- Built admin device detail page — device info, drives list, DTC timeline
+- Fixed admin devices table to show clickable device ID links
+- Fixed pnpm onlyBuiltDependencies + approved @shopify/react-native-skia build
+- Updated admin login to use OTP code verification (6-digit code) instead of magic link
+- Admin dashboard fully working at https://caeorta-admin.vercel.app
+
+**Functions live (11 total):**
+mint_device_token, pair_device, submit_wifi_credentials, ota_check,
+device_sync_start, device_sync_chunk, device_sync_complete,
+get_drive_telemetry, send_diagnostic_notification, update_current_state,
+create_vehicle
+
+**Weeks 3 and 4 Platform — now fully closed**
+
+**Open items rolled forward:**
+- OBD-II DTC seed data (P0xxx lookup table) — Week 5 Platform item
+- Admin DTC timeline needs real DTC data (currently shows 0 codes — correct for seed)
+- Week 6: AI agent integration — needs coordination with AI agent project
