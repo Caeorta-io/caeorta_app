@@ -97,6 +97,36 @@
     "errNetworkTitle": "Couldn't reach the device",
     "errNetworkBody": "Something interrupted the connection to your device. Try again."
   },
+  "diagnosticCard": {
+    "state": {
+      "info": "Info",
+      "warning": "Warning",
+      "critical": "Critical",
+      "insufficient_data": "Insufficient data"
+    },
+    "category": {
+      "engine": "Engine",
+      "fuel": "Fuel",
+      "cooling": "Cooling",
+      "transmission": "Transmission",
+      "electrical": "Electrical",
+      "turbo": "Turbo",
+      "insufficient_data": "Insufficient data",
+      "other": "Other"
+    },
+    "whatItSaw": "What it saw",
+    "whatsNeeded": "What's needed",
+    "recommendedAction": "What to do",
+    "confidence": "Confidence",
+    "confidenceValue": "{{percent}}%",
+    "feedbackPrompt": "Was this helpful?",
+    "thumbsUp": "Mark helpful",
+    "thumbsDown": "Mark not helpful",
+    "markSeen": "Mark as seen",
+    "gotIt": "I've got it",
+    "expand": "Show details",
+    "collapse": "Hide details"
+  },
   "vehicles": {
     "title": "Your vehicles",
     "unnamed": "Unnamed vehicle",
