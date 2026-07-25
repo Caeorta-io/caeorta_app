@@ -20,8 +20,10 @@
  *   opaque `Json`, so a key mismatch would NOT be caught by the compiler.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import type { CreateVehicleInput } from '@caeorta/types';
+import type { CreateVehicleInput, Dtc } from '@caeorta/types';
 import type { Tables } from '@caeorta/supabase';
+
+import { toDtc } from '../dtc';
 
 /**
  * Provisional OBD metric keys used across all jsonb metric blobs in this file.
@@ -398,6 +400,207 @@ export const allMockDiagnostics: Tables<'diagnostic_outputs'>[] = [
   ...mockOtherDriveDiagnostics,
 ];
 
+// ── DTCs (design §6 S5/S6) ───────────────────────────────────────────────────
+
+/**
+ * Diagnostic Trouble Codes for the mock vehicle, spanning the three groups design §6
+ * `S5` renders (Active / Pending / History), varied `severity_raw`, and both the
+ * freeze-frame-present and freeze-frame-absent paths.
+ *
+ * Every `code` below is also a row in Platform's seeded `dtc_lookup`
+ * (`supabase/seed_dtc_lookup.sql`, 52 codes) and has a plain-language title in
+ * `lib/dtcTitles.ts` — a coverage test pins that. Codes are chosen for a tuned,
+ * turbocharged setup (overboost/underboost, misfire, lean trim), matching the
+ * fixture vehicle (a modified GR Corolla).
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * TWO PROVISIONAL AREAS, both isolated here — the ROW SHAPE itself is real
+ * (`Tables<'dtcs'>` on main, freeze-frame column included):
+ *
+ * TODO(metric-keys): the keys inside `freeze_frame_metrics` are the provisional jsonb
+ *   vocabulary (see {@link PROVISIONAL_METRIC_KEYS}, CF-07 / R22). The COLUMN is real
+ *   and `device_sync_chunk` populates it with a telemetry `metrics` blob, so these
+ *   fixtures mirror the true storage shape — a flat key→number bag, not a
+ *   `{value, unit, label}` triple. Only the key names need reconciling.
+ *
+ * TODO(dtc-pending): `is_active` / `cleared_at` are the ONLY state the table carries.
+ *   The Active-vs-Pending split design §6 asks for has no column and no live source;
+ *   {@link MOCK_PENDING_DTC_IDS} below is a MOCK-ONLY overlay so the S5 grouping can
+ *   be built and reviewed this week. See CF-29. Nothing derives Pending from a row.
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+export const mockDtcs = [
+  // ── Active ──
+  {
+    id: '88888888-8888-4888-8888-888888888801',
+    vehicle_id: MOCK_VEHICLE_ID,
+    sync_session_id: MOCK_SYNC_SESSION_ID,
+    code: 'P0234',
+    description: 'Turbocharger/Supercharger Overboost Condition',
+    // severity_raw is free ECU text (docs/05: "As reported by ECU"), NOT the agent's
+    // vocabulary — the casing/wording drift across these fixtures is deliberate, so
+    // any consumer keying on it directly is forced to normalise defensively.
+    severity_raw: 'critical',
+    first_seen_at: '2026-06-22T07:31:12.000Z',
+    last_seen_at: '2026-06-22T07:44:02.000Z',
+    is_active: true,
+    cleared_at: null,
+    cleared_by_user_id: null,
+    freeze_frame_metrics: {
+      rpm: 5820,
+      boost_pressure_kpa: 121.4,
+      coolant_temp_c: 99.2,
+      engine_load_pct: 96,
+      throttle_pct: 100,
+      speed_kph: 108,
+      intake_air_temp_c: 47,
+    },
+  },
+  {
+    id: '88888888-8888-4888-8888-888888888802',
+    vehicle_id: MOCK_VEHICLE_ID,
+    sync_session_id: MOCK_SYNC_SESSION_ID,
+    code: 'P0299',
+    description: 'Turbocharger/Supercharger Underboost Condition',
+    severity_raw: 'WARN',
+    first_seen_at: '2026-06-21T19:52:40.000Z',
+    last_seen_at: '2026-06-22T07:20:15.000Z',
+    is_active: true,
+    cleared_at: null,
+    cleared_by_user_id: null,
+    freeze_frame_metrics: {
+      rpm: 3410,
+      boost_pressure_kpa: 38.6,
+      coolant_temp_c: 92.0,
+      engine_load_pct: 71,
+      throttle_pct: 88,
+    },
+  },
+  {
+    // No freeze frame — the device saw the code but had no telemetry row buffered in
+    // that chunk, so `device_sync_chunk` wrote null. Exercises the empty-panel path.
+    id: '88888888-8888-4888-8888-888888888803',
+    vehicle_id: MOCK_VEHICLE_ID,
+    sync_session_id: MOCK_SYNC_SESSION_ID,
+    code: 'P0128',
+    description: 'Coolant Thermostat Below Regulating Temperature',
+    severity_raw: 'warning',
+    first_seen_at: '2026-06-19T06:14:00.000Z',
+    last_seen_at: '2026-06-22T07:12:30.000Z',
+    is_active: true,
+    cleared_at: null,
+    cleared_by_user_id: null,
+    freeze_frame_metrics: null,
+  },
+
+  // ── Pending (MOCK-ONLY grouping — see TODO(dtc-pending) / CF-29) ──
+  {
+    id: '88888888-8888-4888-8888-888888888804',
+    vehicle_id: MOCK_VEHICLE_ID,
+    sync_session_id: MOCK_SYNC_SESSION_ID,
+    code: 'P0301',
+    description: 'Cylinder 1 Misfire Detected',
+    severity_raw: 'warning',
+    first_seen_at: '2026-06-22T07:38:55.000Z',
+    last_seen_at: '2026-06-22T07:38:55.000Z',
+    is_active: true,
+    cleared_at: null,
+    cleared_by_user_id: null,
+    freeze_frame_metrics: {
+      rpm: 2240,
+      boost_pressure_kpa: 12.8,
+      coolant_temp_c: 88.5,
+      engine_load_pct: 34,
+      throttle_pct: 22,
+      battery_voltage: 14.2,
+    },
+  },
+  {
+    id: '88888888-8888-4888-8888-888888888805',
+    vehicle_id: MOCK_VEHICLE_ID,
+    sync_session_id: MOCK_SYNC_SESSION_ID,
+    code: 'P0171',
+    description: null, // ECU reported no description — title falls back to the map.
+    severity_raw: null,
+    first_seen_at: '2026-06-22T07:41:03.000Z',
+    last_seen_at: '2026-06-22T07:41:03.000Z',
+    is_active: true,
+    cleared_at: null,
+    cleared_by_user_id: null,
+    freeze_frame_metrics: null,
+  },
+
+  // ── History (cleared) ──
+  {
+    id: '88888888-8888-4888-8888-888888888806',
+    vehicle_id: MOCK_VEHICLE_ID,
+    sync_session_id: MOCK_SYNC_SESSION_ID,
+    code: 'P0420',
+    description: 'Catalyst System Efficiency Below Threshold (Bank 1)',
+    severity_raw: 'info',
+    first_seen_at: '2026-06-08T09:22:10.000Z',
+    last_seen_at: '2026-06-14T17:05:44.000Z',
+    // Self-cleared: the code stopped setting and the ECU dropped it — no user action,
+    // so `cleared_by_user_id` stays null (the S6 "auto-clear note" case).
+    is_active: false,
+    cleared_at: '2026-06-15T03:00:00.000Z',
+    cleared_by_user_id: null,
+    freeze_frame_metrics: {
+      rpm: 2100,
+      coolant_temp_c: 94.1,
+      engine_load_pct: 41,
+      speed_kph: 62,
+    },
+  },
+  {
+    id: '88888888-8888-4888-8888-888888888807',
+    vehicle_id: MOCK_VEHICLE_ID,
+    sync_session_id: MOCK_SYNC_SESSION_ID,
+    code: 'P0113',
+    description: 'Intake Air Temperature Circuit High Input',
+    severity_raw: 'INFO',
+    first_seen_at: '2026-06-02T11:40:00.000Z',
+    last_seen_at: '2026-06-05T08:15:20.000Z',
+    // Cleared by the owner from the app — the other History path.
+    is_active: false,
+    cleared_at: '2026-06-05T18:30:00.000Z',
+    cleared_by_user_id: MOCK_OWNER_USER_ID,
+    freeze_frame_metrics: null,
+  },
+] satisfies Tables<'dtcs'>[];
+
+/**
+ * MOCK-ONLY Pending overlay. TODO(dtc-pending) / CF-29: the `dtcs` table has no
+ * pending/confirmed distinction, so this set is the ONLY origin of the `'pending'`
+ * grouping anywhere in the app. It exists so design §6 `S5`'s three-group layout can
+ * be built and reviewed against realistic data this week.
+ *
+ * When Platform lands a real pending signal, DELETE this constant and the mock branch
+ * in `dtcGrouping` below; `deriveDtcGrouping` in `@caeorta/types` then becomes the sole
+ * rule and the live path gains the group for free. Nothing else references it.
+ */
+export const MOCK_PENDING_DTC_IDS: ReadonlySet<string> = new Set([
+  '88888888-8888-4888-8888-888888888804',
+  '88888888-8888-4888-8888-888888888805',
+]);
+
+/**
+ * Mock row → {@link Dtc}. Delegates to the canonical {@link toDtc} converter (boundary
+ * parse of the jsonb freeze frame + real grouping rule) and then layers the mock-only
+ * Pending overlay on top of anything that derived as `'active'`. A cleared row is
+ * History regardless — the overlay can never override real state.
+ *
+ * Deleting {@link MOCK_PENDING_DTC_IDS} and the branch below leaves `toDtc` alone as
+ * the whole rule, which is exactly what the live path uses.
+ */
+function toMockDtc(row: Tables<'dtcs'>): Dtc {
+  const dtc = toDtc(row);
+  if (dtc.grouping === 'active' && MOCK_PENDING_DTC_IDS.has(dtc.id)) {
+    return { ...dtc, grouping: 'pending' };
+  }
+  return dtc;
+}
+
 // ── Selectors ────────────────────────────────────────────────────────────────
 // Narrow, mock-only readers used by `source.ts`. Return the WIDE generated row
 // types (not the narrow literal fixtures) so the seam's surface matches what the
@@ -485,6 +688,25 @@ export function drivesPage(
   }
 
   return { drives, healthByDriveId, nextCursor };
+}
+
+/**
+ * A vehicle's DTCs as the app consumes them — each row stamped with its `grouping`
+ * (see {@link dtcGrouping}). Ordered newest-first by `last_seen_at`, which is the
+ * order the live query returns; the S5 screen does the Active/Pending/History
+ * sectioning itself from the stamped field.
+ */
+export function dtcsForVehicle(vehicleId: string): Dtc[] {
+  if (vehicleId !== MOCK_VEHICLE_ID) return [];
+  return [...mockDtcs]
+    .sort((a, b) => b.last_seen_at.localeCompare(a.last_seen_at))
+    .map(toMockDtc);
+}
+
+/** A single DTC by id, or null if unknown. Mirrors `.eq('id', dtcId).maybeSingle()`. */
+export function dtcById(dtcId: string): Dtc | null {
+  const row = mockDtcs.find((d) => d.id === dtcId);
+  return row === undefined ? null : toMockDtc(row);
 }
 
 export function recentDiagnosticsForVehicle(

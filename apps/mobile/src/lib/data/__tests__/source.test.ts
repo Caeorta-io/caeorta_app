@@ -1,19 +1,29 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Tables } from '@caeorta/supabase';
 
+import { deriveDtcGrouping, dtcRowSchema } from '@caeorta/types';
+
 import {
   DATA_SOURCE,
   fetchCurrentState,
   fetchDrive,
   fetchDriveDiagnostics,
   fetchDrives,
+  fetchDtc,
+  fetchDtcs,
   fetchLastDrive,
   fetchRecentDiagnostics,
   fetchVehicle,
   fetchVehicles,
   subscribeToCurrentStateMock,
 } from '../source';
-import { MOCK_DRIVE_ID, MOCK_VEHICLE_ID, mockDrives } from '../mocks';
+import {
+  MOCK_DRIVE_ID,
+  MOCK_PENDING_DTC_IDS,
+  MOCK_VEHICLE_ID,
+  mockDrives,
+  mockDtcs,
+} from '../mocks';
 import { deriveDriveHealth } from '../../driveHealth';
 
 const UNKNOWN_ID = '00000000-0000-4000-8000-000000000000';
@@ -166,6 +176,73 @@ describe('fetchDrive / fetchDriveDiagnostics', () => {
     expect(insufficient).toHaveLength(1);
     expect(insufficient[0]?.severity).toBe('insufficient_data');
     expect(deriveDriveHealth(insufficient)).toBe('clean');
+  });
+});
+
+describe('DTC seam (mock mode)', () => {
+  it('fetchDtcs returns the vehicle rows newest-first by last_seen_at', async () => {
+    const dtcs = await fetchDtcs(MOCK_VEHICLE_ID);
+    expect(dtcs.length).toBe(mockDtcs.length);
+    expect(dtcs.every((d) => d.vehicle_id === MOCK_VEHICLE_ID)).toBe(true);
+    const times = dtcs.map((d) => Date.parse(d.last_seen_at));
+    expect(times).toEqual([...times].sort((a, b) => b - a));
+  });
+
+  it('fetchDtcs is empty for an unknown vehicle', async () => {
+    expect(await fetchDtcs(UNKNOWN_ID)).toEqual([]);
+  });
+
+  it('fetchDtc returns the row by id, null when unknown', async () => {
+    const target = mockDtcs[0] as Tables<'dtcs'>;
+    expect((await fetchDtc(target.id))?.code).toBe(target.code);
+    expect(await fetchDtc(UNKNOWN_ID)).toBeNull();
+  });
+
+  // The fixtures must exercise all three S5 sections, or the Day-3 list screen would be
+  // built against data that can't show two of them.
+  it('the fixtures span all three groupings', async () => {
+    const dtcs = await fetchDtcs(MOCK_VEHICLE_ID);
+    const groups = new Set(dtcs.map((d) => d.grouping));
+    expect([...groups].sort()).toEqual(['active', 'history', 'pending']);
+  });
+
+  it('every cleared row groups as history and every history row is cleared', async () => {
+    const dtcs = await fetchDtcs(MOCK_VEHICLE_ID);
+    for (const d of dtcs) {
+      const cleared = d.cleared_at !== null || !d.is_active;
+      expect(d.grouping === 'history').toBe(cleared);
+    }
+  });
+
+  // CF-29: 'pending' exists ONLY because the mock seam overlays it. Nothing on the row
+  // distinguishes a pending DTC from an active one — this test documents that, so a
+  // future live flip that silently drops the group is caught here.
+  it('pending is indistinguishable from active on the row itself (CF-29)', async () => {
+    const dtcs = await fetchDtcs(MOCK_VEHICLE_ID);
+    const pending = dtcs.filter((d) => d.grouping === 'pending');
+    expect(pending.length).toBeGreaterThan(0);
+    for (const d of pending) {
+      // Same column state as an active row; only MOCK_PENDING_DTC_IDS separates them.
+      expect(d.is_active).toBe(true);
+      expect(d.cleared_at).toBeNull();
+      expect(deriveDtcGrouping(d)).toBe('active');
+      expect(MOCK_PENDING_DTC_IDS.has(d.id)).toBe(true);
+    }
+  });
+
+  it('the fixtures cover both the freeze-frame-present and freeze-frame-absent paths', async () => {
+    const dtcs = await fetchDtcs(MOCK_VEHICLE_ID);
+    expect(dtcs.some((d) => d.freeze_frame_metrics !== null)).toBe(true);
+    expect(dtcs.some((d) => d.freeze_frame_metrics === null)).toBe(true);
+  });
+
+  it('every fixture row satisfies the boundary schema', async () => {
+    // mocks.ts pins the fixtures to Tables<'dtcs'> structurally; this pins the VALUES
+    // (uuid shapes, non-empty codes, finite freeze-frame numbers) the seam promises.
+    for (const dtc of await fetchDtcs(MOCK_VEHICLE_ID)) {
+      const { grouping: _grouping, ...row } = dtc;
+      expect(dtcRowSchema.safeParse(row).success).toBe(true);
+    }
   });
 });
 
