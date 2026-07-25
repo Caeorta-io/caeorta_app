@@ -64,6 +64,14 @@ original six:
 
 > **Verification date for all "Current status" lines below: 2026-07-05**
 > (branched off `origin/main` `697a652`, which includes App-track session 30).
+>
+> **Partial re-verification 2026-07-26** (session 33, off `origin/main` `c0b1119`).
+> `main` moved a long way in between — Platform sessions 12–13 landed
+> `create_vehicle`, `dtcs.freeze_frame_metrics`, the `dtc_lookup` table and the admin
+> device-detail page. Entries **CF-01**, **CF-05** and **CF-13** were re-checked and
+> their status lines updated; **CF-28**, **CF-29** and **CF-30** were added. Every
+> other entry still carries its 2026-07-05 verification and may be stale — re-verify
+> before relying on one.
 
 ---
 
@@ -75,13 +83,14 @@ original six:
 - **Origin:** Week 3. Decision session 19 (2026-06-22); wire contract authored
   session 21 (2026-06-23, `docs/create_vehicle_contract.md`); recorded in the
   Week-3 close table, session 24 (PR #30).
-- **Current status:** The `create_vehicle` Edge Function is **still absent** —
-  confirmed via `ls supabase/functions/` (10 functions present:
-  `pair_device`, `mint_device_token`, `submit_wifi_credentials`, `ota_check`,
-  `device_sync_start/chunk/complete`, `get_drive_telemetry`,
-  `send_diagnostic_notification`, `update_current_state`; no `create_vehicle`).
-  The App-side add-vehicle flow (`lib/vehicles.ts`, form, Zod, result states)
-  is built and unit-tested against the contract — "built, not E2E-verified."
+- **Current status:** **Platform half now DONE; App half still open.** Re-verified
+  against `origin/main` on 2026-07-26: `create_vehicle` **exists** (Platform session
+  12, commit `1dc0589`; 11 functions now present). This supersedes the previous
+  "still absent" status recorded on 2026-07-05. The App-side add-vehicle flow
+  (`lib/vehicles.ts`, form, Zod, result states) is built and unit-tested against the
+  contract, but `DATA_SOURCE.createVehicle` is **still `'mock'`**, the live `fetch`
+  is unwired, and no E2E run has happened — so this stays "built, not E2E-verified."
+  The `ecu_type` open question below is also still unresolved.
 - **What's needed to resolve:** Platform deploys `create_vehicle`; both tracks
   agree the contract's `ecu_type` open question (currently free text
   `z.string().min(1).max(60)` until the hardware track locks a canonical set);
@@ -169,16 +178,23 @@ original six:
 
 - **Category:** Cross-track dependency / flag
 - **Origin:** Week 4 Platform-track item.
-- **Current status:** Unbuilt, re-verified via `ls apps/admin/app/` — only
-  `login/page.tsx`, a ~120-line devices dashboard `page.tsx`, and
-  `auth/callback/route.ts` exist; no per-device drive-list page. Platform's
-  Week-4 sync pipeline (`device_sync_*`, `get_drive_telemetry`) is built, but
-  the admin drive-list view is not.
-- **What's needed to resolve:** Platform builds the per-device drive-list page in
-  the admin app.
+- **Current status:** **Built — effectively closed.** Re-verified against
+  `origin/main` on 2026-07-26: `apps/admin/app/devices/[id]/page.tsx` exists
+  (Platform session 12, commit `22acf4c`) with device info, a drives list and a DTC
+  timeline, and the devices table links through to it. This supersedes the
+  "unbuilt" status recorded on 2026-07-05. The admin dashboard is deployed and
+  working.
+  **One caveat, not a blocker for this item:** that page currently fails
+  `pnpm --filter @caeorta/admin lint` with 3 errors (two `no-explicit-any`, one
+  `no-html-link-for-pages`), so `main` is lint-red in the admin workspace. Noted
+  here because it is Platform-owned code and App-track PRs cannot make the repo-wide
+  lint gate green until it's fixed.
+- **What's needed to resolve:** Nothing for the drive-list itself. Separately,
+  Platform should clear the three admin lint errors so the workspace-wide gate is
+  green again.
 - **Owner:** Platform track (Sulaiman).
 - **Cross-references:** `docs/08` Week-4 plan + close table; workdiary sessions
-  29, 30 (re-verified absent).
+  29, 30 (recorded absent), Platform session 12 (built), 33 (re-verified present).
 
 ### CF-06 — `supabase/seed.sql` is cross-track-owned (clobber-risk flag)
 
@@ -223,6 +239,112 @@ original six:
   + `TODO` removal).
 - **Cross-references:** R22 (#1); `docs/08` Week-3 + Week-4 close tables;
   workdiary sessions 22, 24, 28, 29, 30 + decisions log 2026-06-22.
+
+### CF-28 — Freeze-frame capture fidelity + key vocabulary (R24 #2)
+
+- **Category:** Provisional-value-reconciliation
+- **Origin:** Week 5 Day 2, session 33 (2026-07-26), building the DTC seam.
+- **Current status:** Open — but **narrower than originally scoped.** The Day-2 brief
+  assumed no freeze-frame column existed and that the App would mock one. That is now
+  **false**: Platform added `dtcs.freeze_frame_metrics jsonb` (migration
+  `20260615000001`, commit `a024a43`) and wired ingestion, closing R23. Verified on
+  `origin/main`. **The schema gap is closed; two fidelity gaps remain:**
+  1. **Capture point.** `device_sync_chunk` stores `latestRow.metrics` — the **last
+     telemetry row of the sync chunk** — not the sample at the moment the code set
+     (`supabase/functions/device_sync_chunk/index.ts:93`). The column comment claims
+     "at the moment the DTC was first seen"; the code does not implement that. For a
+     long chunk the freeze frame can describe conditions minutes away from the fault,
+     which is actively misleading on a screen whose entire purpose is "what the car was
+     doing when this happened."
+  2. **Key vocabulary.** The blob is the same provisional metric-key set as
+     `telemetry.metrics` — a **CF-07 / R22 instance**, not a new vocabulary. A wrong key
+     renders an **empty** freeze-frame panel, not an error.
+  The App side models this honestly: `freezeFrameMetricsSchema` mirrors the real flat
+  `key → number` shape (no invented `{value,unit,label}` triple), `toDtc` boundary-parses
+  the opaque `Json`, and `toFreezeFrameTiles` does the §5.5 Metric Tile shaping app-side.
+- **What's needed to resolve:** (1) Cross-track decision on capture semantics — either
+  hardware/Platform capture the sample at fault time (correct fix) or the doc + UI copy
+  are corrected to say "conditions around this time" (honest fallback). Either way the
+  column comment must stop claiming something the code doesn't do. (2) CF-07 resolves the
+  key set. Both gate any live flip of `DATA_SOURCE.dtcs`.
+- **Owner:** Platform track (`device_sync_chunk` capture semantics) + hardware/AI-agent
+  team (canonical keys, via CF-07) + App track (reconcile + UI copy).
+- **Cross-references:** R24 (#2); R23 (resolved predecessor — the column itself); CF-07 /
+  R22 (the shared key vocabulary); design §6 `S6` + §5.5; `lib/dtc.ts`
+  `TODO(metric-keys)`; the `fetchDtcs` live-adapter note in `source.ts`; workdiary
+  session 33.
+
+### CF-29 — Pending DTC state has no schema backing (R24 #1)
+
+- **Category:** Provisional-value-reconciliation
+- **Origin:** Week 5 Day 2, session 33 (2026-07-26).
+- **Current status:** Open, and **confirmed unchanged** against `origin/main` — unlike
+  CF-28, Platform has NOT added anything here. `dtcs` carries binary state only:
+  `is_active boolean` plus a `cleared_at timestamptz`. There is no pending/confirmed
+  column, and nothing else on the row distinguishes a pending code (OBD-II sets one after
+  a single failed drive cycle) from a confirmed one. Design §6 `S5` nevertheless specifies
+  three sections: **Active / Pending / History**.
+  App-side containment: `deriveDtcGrouping` in `@caeorta/types` returns
+  `'active' | 'history'` **only** — the narrowed return type records the gap in the type
+  system, so widening it later is a compile-time event at every call site. `'pending'` is
+  produced by exactly one thing, the mock-only `MOCK_PENDING_DTC_IDS` overlay in
+  `mocks.ts`, applied in `toMockDtc`. A unit test asserts `deriveDtcGrouping` can never
+  return `'pending'` across all four `is_active`/`cleared_at` permutations, and a seam
+  test asserts the pending fixtures are column-identical to active ones.
+- **What's needed to resolve:** A **founder decision first**, then possibly Platform work:
+  either (a) Platform adds the signal (a `status` column, or a `is_pending`/confirmed
+  flag, plus device-side capture of the OBD-II pending-vs-confirmed distinction — this is
+  a hardware-capability question, not only a schema one), or (b) the founder cuts the
+  Pending group from v1 and design §6 `S5` is amended to two sections. **Do not flip
+  `DATA_SOURCE.dtcs` to live before one of these lands** — the live path silently renders
+  two sections where the design specifies three.
+- **Owner:** Founder decision (keep or cut the group) → then Platform track (schema) +
+  hardware team (whether the device can even report pending) + App track (delete the
+  overlay).
+- **Cross-references:** R24 (#1); design §6 `S5`; `packages/types/src/dtc.ts`
+  `TODO(dtc-pending)`; `MOCK_PENDING_DTC_IDS` in `mocks.ts`; the `fetchDtcs` live-adapter
+  note in `source.ts`; workdiary session 33.
+
+### CF-30 — `insufficient_data` modeled as a severity vs. the contract's category
+
+- **Category:** Provisional-value-reconciliation
+- **Origin:** Week 5 Day 1 (PR #40, `deriveDiagnosticCardState`); audited and scoped in
+  Day 2, session 33 (2026-07-26).
+- **Current status:** Open as a **vocabulary/modeling** inconsistency. The Day-2 brief
+  hypothesised that `driveHealth` keys on `severity` only and would therefore fail to give
+  contract-shaped rows the insufficient-data treatment. **The audit does not support
+  that** — recorded here precisely so the wrong version isn't carried forward:
+  - `deriveDriveHealth` (`lib/driveHealth.ts`) elevates only when a severity's
+    `SEVERITY_RANK` equals `critical` (0) or `warning` (1). `insufficient_data` is absent
+    from that map. So the app's sentinel shape (`severity='insufficient_data'` → rank
+    `undefined`) and the contract shape (`severity='info'` → rank 2) **both fall through
+    to `clean`** — which is exactly the intended treatment ("never elevates health",
+    §4.3, locked by `driveHealth.test.ts`). **There is no behavioural gap in
+    `driveHealth`, and nothing there needs fixing.**
+
+  The real exposure is narrower and sits elsewhere:
+  - **`mocks.ts` writes a non-contract value into `diagnostic_outputs.severity`.** docs/06
+    defines `insufficient_data` as a **category** (paired with `severity='info'`,
+    confidence < 0.3); the fixture at `mocks.ts` uses it as a severity sentinel, and two
+    tests lock that shape. The fixtures are contract-invalid — this is the actual debt.
+  - **Any surface keyed on `severity` alone diverges between the two shapes.** Two existed.
+    Drive-detail's `SEVERITY_DOT` map would have rendered a contract-shaped row as a blue
+    *info* dot instead of neutral — **closed in session 33**, because the DiagnosticCard
+    swap routes through `deriveDiagnosticCardState`, which recognises either field. The
+    remaining one is `sortDiagnosticsByPriority`: the sentinel sorts **last** (unknown rank)
+    while a contract-shaped row sorts as `info` (rank 2), so ordering differs between
+    shapes. Cosmetic, but real, and drive-detail still uses that sort.
+- **What's needed to resolve:** The AI-agent team confirms the canonical field (docs/06
+  open question #4 is adjacent). Then the App reconciles **one** internal model — most
+  likely: fixtures move to the contract shape (`category='insufficient_data'`,
+  `severity='info'`), the two locked tests are updated **deliberately**, and
+  `sortDiagnosticsByPriority` gains the same either-field check the card already has.
+  Gate on any live flip of `driveDiagnostics` / `recentDiagnostics`.
+- **Owner:** AI-agent team (confirm the canonical field) + App track (reconcile the
+  internal model).
+- **Cross-references:** R24; CF-03 / R1 (contract vocabulary, docs/06 open questions);
+  CF-07 / R22; PR #40 decisions row; `lib/diagnostics.ts` `deriveDiagnosticCardState`
+  precedence note; workdiary sessions 32, 33.
 
 ### CF-08 — Coolant "hot" threshold — `TODO(coolant-hot-threshold)` = provisional 105 °C (R22 #2)
 
@@ -330,18 +452,29 @@ original six:
 
 - **Category:** App-build dependency
 - **Origin:** Week 4, sessions 27–29 (drive-detail uses a simplified stand-in).
-- **Current status:** Not built. Drive-detail uses a simplified token diagnostic
-  row; the vehicle-detail preview stays stock. The full eight-variant Diagnostic
-  Card is the reusable diagnostic atom for the rest of the build and is
-  explicitly a **Week-5 dependency** (DTC list/detail + the agent feed depend on
-  it).
-- **What's needed to resolve:** Build the eight-variant component
-  (severity-coloured, expandable, thumbs UI, mark-seen, dismiss) at the start of
-  Week 5. Note: session 30's finding that each Victory Native `CartesianChart`
-  auto-scales its own x-domain applies directly to this card's chart.
+- **Current status:** **Mostly closed.** The atom itself was **built in Week 5 Day 1**
+  (PR #40, session 32): all four visual states × collapsed/expanded = the eight
+  documented variants, with the severity→state rule centralised in
+  `deriveDiagnosticCardState` and a `__DEV__` harness at `/dev/diagnostic-card`.
+  **Day 2 (session 33) swapped it into drive-detail**, deleting the simplified
+  severity-dot stand-in and the screen-local `SEVERITY_DOT` map — so the
+  drive-detail half of this carry is closed (and closed a live-flip mis-render on
+  the way; see CF-30).
+  **What remains:** (a) the **vehicle-detail `DiagnosticsPreview`** still renders
+  the stock-Tailwind stand-in — it sits on an un-migrated Week-1–3 screen, so
+  lifting it across the token boundary is entangled with CF-15 rather than being a
+  clean swap; (b) neither surface is **on-device verified** yet — the swap is
+  typecheck/test-green only.
+- **What's needed to resolve:** Swap `DiagnosticsPreview` to the atom (naturally
+  done with CF-15's Week-8 token migration of that screen, or earlier if the
+  diagnostics feed lands first), and run drive-detail on-device to confirm the
+  cards render and expand. Note: session 30's finding that each Victory Native
+  `CartesianChart` auto-scales its own x-domain applies to any future chart inside
+  this card (the shipped card uses a styled `View` confidence bar, not a chart).
 - **Owner:** App track.
 - **Cross-references:** `docs/08` Week-4 close table + Week-5 plan; design §5.1;
-  workdiary sessions 27, 28, 29, 30.
+  CF-15 (un-migrated screens), CF-30 (the mis-render the swap closed); PR #40;
+  workdiary sessions 27, 28, 29, 30, 32, 33.
 
 ---
 
