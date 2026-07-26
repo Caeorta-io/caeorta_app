@@ -301,9 +301,29 @@ original six:
 - **Owner:** Founder decision (keep or cut the group) → then Platform track (schema) +
   hardware team (whether the device can even report pending) + App track (delete the
   overlay).
+- **Update 2026-07-26 (session 34, PR #42) — a SCREEN now depends on the overlay, and
+  the cost of collapsing was deliberately capped.** S5 ships rendering all three
+  sections, so the mock overlay is no longer seam-only; it is visible product. Two
+  containment measures were built specifically for this entry:
+  1. **One split point.** `groupDtcs` (`apps/mobile/src/lib/dtc.ts`) is the ONLY place
+     the three-way split is decided, typed as `Record<DtcGrouping, Dtc[]>` — so
+     narrowing `DTC_GROUPINGS` in `@caeorta/types` turns the `pending: []` line into a
+     **compile error**, not a silently dead branch. Resolution (b) is therefore a
+     two-edit change: the types union + deleting `MOCK_PENDING_DTC_IDS` and the
+     `toMockDtc` overlay branch. **The S5 screen needs no edit at all** — it builds its
+     sections by mapping `DTC_GROUPING_ORDER`, so a two-member union renders two
+     sections on its own. A unit test asserts an empty Pending bucket still exists for
+     the live-shaped input.
+  2. **The regression stays visible.** All three section headers render even when
+     empty (founder call, session 34). If `DATA_SOURCE.dtcs` were flipped live before
+     this entry resolves, Pending would stand permanently empty — a visible question
+     mark — rather than vanishing into the two-section layout §6 doesn't specify.
+  This does not weaken the gate: **still do not flip `DATA_SOURCE.dtcs` to live** until
+  the founder decision lands.
 - **Cross-references:** R24 (#1); design §6 `S5`; `packages/types/src/dtc.ts`
-  `TODO(dtc-pending)`; `MOCK_PENDING_DTC_IDS` in `mocks.ts`; the `fetchDtcs` live-adapter
-  note in `source.ts`; workdiary session 33.
+  `TODO(dtc-pending)`; `MOCK_PENDING_DTC_IDS` in `mocks.ts`; `groupDtcs` in
+  `apps/mobile/src/lib/dtc.ts`; the `fetchDtcs` live-adapter note in `source.ts`;
+  workdiary sessions 33, 34.
 
 ### CF-30 — `insufficient_data` modeled as a severity vs. the contract's category
 
@@ -379,13 +399,54 @@ original six:
     both have a legitimate use for. Keep both registers; don't trade one for the other.
 - **Owner:** Founder / designer (the plain-language copy — the blocking input) + Platform
   track (the `dtc_lookup` column, if (a)) + App track (the stopgap and the eventual swap).
+- **Update 2026-07-26 (session 34, PR #42):** `dtcTitle()` is now **load-bearing on a
+  shipped screen** — every S5 row headline comes from it. The map's coverage is still
+  pinned to the fixtures by test, so the stopgap cannot silently fall behind, and an
+  uncovered code degrades to the ECU `description` and then to the raw code rather than
+  blanking. Unchanged otherwise: the blocking input is still the **content decision**
+  (who authors the plain-language copy).
 - **Cross-references:** R24 (#3); CF-07 (the adjacent provisional-vocabulary carry);
   design §6 `S5`/`S6` + §8 voice; `apps/mobile/src/lib/dtcTitles.ts` (the flip-point, with
-  the same two options recorded in-file); `supabase/seed_dtc_lookup.sql`; PR #41; workdiary
-  session 33.
+  the same two options recorded in-file); `supabase/seed_dtc_lookup.sql`; PR #41; the S5
+  row headline in `vehicles/[id]/dtcs/index.tsx` (PR #42); workdiary sessions 33, 34.
 - **Gate:** blocks any live-flip of DTC **titles** specifically. Distinct from CF-29 (which
   gates the whole `DATA_SOURCE.dtcs` flip) — titles could in principle flip independently
   once the copy exists.
+
+### CF-32 — DTC `severity_raw` has no vocabulary — `TODO(dtc-severity-vocab)` (R24 #4)
+
+- **Category:** Provisional-value-reconciliation
+- **Origin:** Week 5 Day 3, session 34 (2026-07-26) — building the S5 badge derivation.
+- **Current status:** Open. `dtcs.severity_raw` is plain `text` with **no CHECK
+  constraint and no documented vocabulary** (verified on `origin/main`, migration
+  `20260602130000`); `docs/05` describes it only as "as reported by ECU". S5 tints each
+  code badge from it, so the app needs a bounded tier — supplied by
+  `deriveDtcBadgeSeverity` (`apps/mobile/src/lib/dtc.ts`), the canonical derivation.
+  **Nothing was invented.** The map covers exactly the values the mock fixtures carry
+  (`critical` / `warning` / `warn` / `info`, case- and whitespace-normalised) and the
+  target union matches the ladder Platform **already** CHECK-constrains on
+  `dtc_lookup.severity_hint` — `('info','warning','critical')`, migration
+  `20260615000002` — rather than adding a fourth vocabulary to the project. Anything
+  unrecognised (including `null`, blank, and a non-string from an unvalidated live row)
+  renders the off-ladder neutral **`unknown`** badge; unit tests lock the no-throw and
+  no-mis-tint behaviour. **Failure mode is understatement, never overstatement or a
+  crash:** a real ECU string this map omits shows as unrated rather than as its true
+  tier — quiet and wrong, not alarming and wrong.
+- **What's needed to resolve:** The hardware/firmware track confirms what the device
+  actually writes into `severity_raw` (it may be free OEM text with no closed set at
+  all, in which case say so and the `unknown` fallback becomes the documented steady
+  state, not a gap). Two follow-ons then become available, both currently unwired:
+  (a) `dtc_lookup.severity_hint` is a per-code canonical tier and is the obvious
+  fallback for a row whose `severity_raw` is null — it needs the lookup table joined
+  into the DTC seam first; (b) if a closed ECU set exists, extend the map and consider a
+  CHECK on the column. Gate on any live flip of `DATA_SOURCE.dtcs`.
+- **Owner:** Hardware/firmware team (what the device writes) + Platform track
+  (`dtc_lookup` join / any CHECK) + App track (extend the map, remove the TODO).
+- **Cross-references:** R24 (#4); CF-07 / R22 (the adjacent provisional-vocabulary
+  carry); CF-30 (the severity-vs-category vocabulary question on the *agent* side —
+  related but a different column and a different owner); design §4.3 + §6 `S5`;
+  `TODO(dtc-severity-vocab)` in `apps/mobile/src/lib/dtc.ts`; PR #42; workdiary
+  session 34.
 
 ### CF-08 — Coolant "hot" threshold — `TODO(coolant-hot-threshold)` = provisional 105 °C (R22 #2)
 
@@ -714,6 +775,30 @@ original six:
 - **Owner:** Designer.
 - **Cross-references:** design §6 (S4); `docs/08` Week-4 close (map placeholder);
   workdiary sessions 29, 30.
+
+### CF-33 — Design §7's link graph has no route INTO the DTC list (S5)
+
+- **Category:** Documentation-gap
+- **Origin:** Week 5 Day 3, session 34 (2026-07-26) — building S5.
+- **Current status:** Confirmed gap, same species as CF-24. `docs/design/00_design_system.md`
+  §7 ("Navigation & link graph", whose stated rule is **"No dead ends. Every tappable
+  link/chevron resolves to a real screen"**) carries a row **out of** the DTC list
+  (`DTC list | tap code | → DTC detail (S6)`) but **no row into it** — nothing in §6 or
+  §7 says where a user reaches S5 from. §6's Home/Vehicle-Detail inventory lists the
+  last-drive card, Live mode and the Recent Diagnostics preview + "See all"; fault codes
+  appear nowhere. The app therefore made a placement call (founder, session 34): a
+  **"View fault codes" link on vehicle detail**, directly mirroring the existing
+  "View all drives" link, which was itself an App-track addition to the same screen.
+  Not a blocker — S5 is reachable and the link is one line to move — but the *designed*
+  entry point is unrecorded, so the built nav and the doc's link graph disagree.
+- **What's needed to resolve:** The designer adds a row to §7 (`Vehicle detail | View
+  fault codes | → DTC list (S5)`) and a fault-codes entry to §6's Home/Vehicle-Detail
+  inventory — or specifies a different placement, in which case the App moves the link.
+  Designer-owned doc; not editable from this track.
+- **Owner:** Designer (§7 + §6 inventory) + App track (move the link if placement changes).
+- **Cross-references:** CF-24 (the parallel §6 S4 map-row gap); design §6 + §7;
+  the entry-point link in `apps/mobile/src/app/(app)/vehicles/[id]/index.tsx`; PR #42;
+  workdiary session 34.
 
 ### CF-25 — `docs/05` stale seed.sql "safe to re-run" claim  *(resolved in this PR)*
 

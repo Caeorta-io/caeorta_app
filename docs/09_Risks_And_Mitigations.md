@@ -444,7 +444,8 @@ behave differently — or silently worse — the moment its capability flips to 
 these are compiler-caught: the gaps are missing *columns* and unreconciled *values*, not
 type errors, so `tsc` stays green while the screen quietly loses content.
 
-The three specific gaps, all surfaced building the Day-2 seam:
+The specific gaps — the first three surfaced building the Day-2 seam, the fourth building
+the Day-3 S5 badge:
 
 1. **Pending grouping (§6 `S5`: "grouped Active/Pending/History").** `dtcs` models state as
    binary `is_active` + `cleared_at`. There is no pending/confirmed column, so a live flip
@@ -458,31 +459,52 @@ The three specific gaps, all surfaced building the Day-2 seam:
    explicitly reject for a headline. The App-side title map covering the mocked codes is a
    stopgap with no live counterpart, and the blocking input is a **content decision** (who
    authors the plain-language copy) rather than schema work. Tracked as CF-31.
+4. **Severity vocabulary (§6 `S5`: "severity-tinted code badges").** *Added Day 3,
+   session 34.* `dtcs.severity_raw` is plain `text` with no CHECK and no documented
+   vocabulary — the badge tier has to be derived from free ECU text.
+   `deriveDtcBadgeSeverity` maps only the values the fixtures carry and sends everything
+   else to a neutral `unknown` badge, so a real ECU string the map omits renders
+   **unrated rather than at its true tier** — understated, never overstated, never a
+   crash. Tracked as CF-32. Note this is a *different* column and owner from CF-30's
+   agent-side `severity`-vs-`category` question.
 
-**Likelihood:** High (all three are live today in the seam, and Days 3-4 build screens on them).
+**Likelihood:** High (all four are live today in the seam, and Days 3-4 build screens on them).
 
 **Impact:** Medium — nothing is *wrong* while the capability stays mock; the exposure is
-entirely at live-flip, where a section vanishes, a panel empties, or jargon reaches a
-headline. High if a flip happens without the gate below.
+entirely at live-flip, where a section vanishes, a panel empties, jargon reaches a
+headline, or a badge understates a real fault. High if a flip happens without the gate below.
 
 **Mitigations:**
 - **Mock-first.** `DATA_SOURCE.dtcs` defaults to `'mock'`; the live branch throws
   `notImplemented` and carries a written adapter note listing all three gaps.
 - **Isolate every provisional element to one deletable place** — `MOCK_PENDING_DTC_IDS`
-  (the only origin of `'pending'` anywhere), the `TODO(metric-keys)` freeze-frame keys, and
-  the `dtcTitles.ts` map. Each is a single flip-point, not a scattered assumption.
+  (the only origin of `'pending'` anywhere), `groupDtcs` (the only three-way split point),
+  `deriveDtcBadgeSeverity` (the only `severity_raw` → tier rule), the
+  `TODO(metric-keys)` freeze-frame keys, and the `dtcTitles.ts` map. Each is a single
+  flip-point, not a scattered assumption.
 - **Encode the gap in types and tests, not just comments.** `deriveDtcGrouping` returns
   `'active' | 'history'` only, so widening it is a compile-time event; a test asserts it
   can never return `'pending'`, and another pins title coverage to the fixtures.
-- **Gate the live flip.** Resolving CF-28, CF-29 and CF-07/R22 is a precondition for
-  flipping `DATA_SOURCE.dtcs`. Add these to the live-flip runbook alongside R22's checks.
+  `groupDtcs` is typed `Record<DtcGrouping, Dtc[]>`, so *narrowing* the union is likewise
+  a compile error rather than a dead branch (session 34).
+- **Fail quiet, not loud, on unknown values.** Every DTC derivation degrades toward
+  understatement: an unreadable severity is an `unknown` badge rather than a guessed
+  tier, an off-union grouping lands in the visible `active` group rather than vanishing,
+  a malformed freeze frame renders no panel rather than `NaN` tiles. None of them throw.
+- **Keep the unbacked element VISIBLE rather than silently absent.** S5 renders all
+  three section headers even when a group is empty, so a premature live flip leaves
+  Pending standing empty instead of quietly collapsing the layout (session 34).
+- **Gate the live flip.** Resolving CF-28, CF-29, CF-32 and CF-07/R22 is a precondition
+  for flipping `DATA_SOURCE.dtcs`. Add these to the live-flip runbook alongside R22's checks.
 
-**Status:** Open. New at Week-5 Day 2 (App-track session 33). Related: R1 / R22 (vocabulary
-drift), R23 (resolved predecessor).
+**Status:** Open. New at Week-5 Day 2 (App-track session 33); a fourth gap (#4, severity
+vocabulary) added at Day 3 (session 34). Related: R1 / R22 (vocabulary drift), R23
+(resolved predecessor).
 
 **Carry:** tracked as outstanding work items in `docs/11_Carry_Forwards.md` § CF-28
 (freeze-frame fidelity), § CF-29 (Pending state), § CF-30 (`insufficient_data`
-category-vs-severity), § CF-31 (plain-language DTC titles).
+category-vs-severity), § CF-31 (plain-language DTC titles), § CF-32 (`severity_raw`
+vocabulary).
 
 ---
 
