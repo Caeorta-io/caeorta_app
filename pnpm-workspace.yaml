@@ -5,6 +5,10 @@ packages:
 # Native packages allowed to run install/build scripts (pnpm blocks these by default).
 allowBuilds:
   '@sentry/cli': true
+  # Victory Native's renderer — needs its native build step. Already listed in the
+  # root package.json `onlyBuiltDependencies`; mirrored here so pnpm 11 stops
+  # prompting on install (it writes an unresolved placeholder otherwise).
+  '@shopify/react-native-skia': true
   '@tailwindcss/oxide': true
   esbuild: true
   msgpackr-extract: true

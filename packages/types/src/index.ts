@@ -9,3 +9,4 @@ export * from './device';
 export * from './provisioning';
 export * from './drive';
 export * from './sync';
+export * from './dtc';

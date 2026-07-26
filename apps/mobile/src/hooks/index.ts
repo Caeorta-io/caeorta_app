@@ -7,4 +7,5 @@ export { useDriveDiagnostics } from './useDriveDiagnostics';
 export { useDriveTelemetry } from './useDriveTelemetry';
 export { useRecentDiagnostics, DEFAULT_RECENT_DIAGNOSTICS_LIMIT } from './useRecentDiagnostics';
 export { useCurrentState } from './useCurrentState';
+export { useDtcs, useDtc } from './useDtcs';
 export { queryKeys } from './queryKeys';

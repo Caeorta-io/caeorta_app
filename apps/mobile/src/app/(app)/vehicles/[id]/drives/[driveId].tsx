@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -11,10 +11,16 @@ import { Text } from '@/components/ui/Text';
 import { Icon } from '@/components/ui/Icon';
 import { HealthIndicator } from '@/components/HealthIndicator';
 import { DriveTelemetrySection } from '@/components/DriveTelemetrySection';
+import { DiagnosticCard, type DiagnosticMetric } from '@/components/diagnostics/DiagnosticCard';
 import { colorsDark } from '@/design';
 import { useDrive, useDriveDiagnostics } from '@/hooks';
 import { deriveDriveHealth } from '@/lib/driveHealth';
-import { sortDiagnosticsByPriority } from '@/lib/diagnostics';
+import { deriveDiagnosticCardState, sortDiagnosticsByPriority } from '@/lib/diagnostics';
+import {
+  mockDiagnosticActions,
+  type FeedbackRating,
+  type SeenStatus,
+} from '@/lib/data/diagnosticActions';
 import { driveDateKey, formatDriveDateHeading, formatDriveTime } from '@/lib/drives';
 import { formatDistanceKm, formatDuration, formatSpeedKph, selectPeakMetrics } from '@/lib/format';
 
@@ -40,14 +46,6 @@ const PEAK_METRIC_KEYS = Object.keys(PEAK_METRICS);
 // no `useDrive`, no vehicle context — which is what lets the same code back both this screen
 // and the `/dev/telemetry` harness. The provisional-metric-key and coolant-hot-threshold
 // TODOs moved with it (see components/DriveTelemetrySection.tsx).
-
-/** Severity → dot colour class (design tokens). Unknown/insufficient → neutral (§4.3). */
-const SEVERITY_DOT: Record<string, string> = {
-  critical: 'bg-severity-critical',
-  warning: 'bg-severity-warning',
-  info: 'bg-severity-info',
-  insufficient_data: 'bg-severity-insufficient',
-};
 
 /**
  * Drive detail — summary stats, a derived three-state health indicator, and the
@@ -124,6 +122,19 @@ export default function DriveDetailScreen() {
   const sorted = sortDiagnosticsByPriority(diagnostics);
   const peaks = selectPeakMetrics(drive.peak_metrics, PEAK_METRIC_KEYS);
 
+  // "WHAT IT SAW" tiles for the diagnostic cards, reusing THIS drive's peaks — the
+  // diagnostics are linked to this drive, so its peaks are the readings the agent saw.
+  // Derived from the same PEAK_METRICS map as the summary card above, so the two
+  // sections can't disagree about units or precision. The card caps the list at 3.
+  const whatItSaw: DiagnosticMetric[] = peaks.map(({ key, value }) => {
+    const display = PEAK_METRICS[key];
+    return {
+      key,
+      value: value.toFixed(display?.decimals ?? 0),
+      ...(display?.unit !== undefined ? { unit: display.unit } : {}),
+    };
+  });
+
   const dateHeading = formatDriveDateHeading(driveDateKey(drive.started_at));
 
   return (
@@ -199,9 +210,11 @@ export default function DriveDetailScreen() {
               {t('vehicles.drives.detail.noDiagnostics')}
             </Text>
           ) : (
-            <View className="mt-2">
+            // gap-3 replaces the old rows' hairline dividers: the cards are discrete
+            // surfaces with their own borders, so they separate by spacing, not rules.
+            <View className="mt-2 gap-3">
               {sorted.map((d) => (
-                <DriveDiagnosticRow key={d.id} diagnostic={d} />
+                <DriveDiagnosticCard key={d.id} diagnostic={d} metrics={whatItSaw} />
               ))}
             </View>
           )}
@@ -237,30 +250,57 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 /**
- * A single diagnostic row: severity dot + title + urgency chip. A token-styled
- * counterpart to DiagnosticsPreview's row (which stays stock-Tailwind on the
- * un-migrated vehicle-detail screen — not a clean lift across the token boundary).
- * The full eight-variant Diagnostic Card (design §5.1) is a Week-5 build.
+ * One linked diagnostic, rendered through the real Diagnostic Card atom (design §5.1,
+ * PR #40) — collapsed by default, self-toggling on header press. This replaced the
+ * simplified severity-dot stand-in that stood here through Week 4; the card is now the
+ * single diagnostic surface, so the severity→visual rule lives ONLY in
+ * `deriveDiagnosticCardState` and this screen no longer maps severity itself.
+ *
+ * Feedback + mark-seen route through {@link mockDiagnosticActions} — the no-op write
+ * seam (no Supabase I/O; live-wired Week 6, see lib/data/diagnosticActions.ts). Local
+ * state reflects the tap so the active thumb and "seen" state are visible; nothing is
+ * persisted, so the state resets on remount. That is the honest behaviour of a mock
+ * write seam, not a bug to work around here.
  */
-function DriveDiagnosticRow({ diagnostic }: { diagnostic: Tables<'diagnostic_outputs'> }) {
-  const { t } = useTranslation();
-  const dotClass = SEVERITY_DOT[diagnostic.severity] ?? 'bg-severity-insufficient';
+function DriveDiagnosticCard({
+  diagnostic,
+  metrics,
+}: {
+  diagnostic: Tables<'diagnostic_outputs'>;
+  metrics: DiagnosticMetric[];
+}) {
+  const [feedback, setFeedback] = useState<FeedbackRating | null>(null);
+  const [seen, setSeen] = useState(false);
+
+  const isInsufficient = deriveDiagnosticCardState(diagnostic) === 'insufficient_data';
+
+  const handleFeedback = useCallback(
+    (rating: FeedbackRating) => {
+      setFeedback(rating);
+      void mockDiagnosticActions.submitFeedback({ diagnosticId: diagnostic.id, rating });
+    },
+    [diagnostic.id],
+  );
+
+  const handleMarkSeen = useCallback(
+    (status: SeenStatus) => {
+      setSeen(true);
+      void mockDiagnosticActions.markSeen({ diagnosticId: diagnostic.id, status });
+    },
+    [diagnostic.id],
+  );
 
   return (
-    <View className="flex-row items-center border-b border-border-subtle py-3">
-      <View
-        className={`mr-3 h-2.5 w-2.5 rounded-full ${dotClass}`}
-        aria-label={t(`vehicles.detail.severity.${diagnostic.severity}`, diagnostic.severity)}
-      />
-      <Text variant="body-sm" className="flex-1 pr-3 text-fg-primary" numberOfLines={1}>
-        {diagnostic.title}
-      </Text>
-      <View className="rounded-full border border-border-strong px-2 py-0.5">
-        <Text variant="caption" className="text-fg-secondary">
-          {t(`vehicles.detail.urgency.${diagnostic.urgency}`, diagnostic.urgency)}
-        </Text>
-      </View>
-    </View>
+    <DiagnosticCard
+      diagnostic={diagnostic}
+      // insufficient_data shows a "WHAT'S NEEDED" note instead of metrics (§5.1), so
+      // passing tiles there would be dead data — the card ignores them.
+      metrics={isInsufficient ? undefined : metrics}
+      feedback={feedback}
+      onFeedback={handleFeedback}
+      seen={seen}
+      onMarkSeen={handleMarkSeen}
+    />
   );
 }
 
@@ -315,8 +355,10 @@ function DiagnosticsSkeleton() {
   return (
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" className="mt-6">
       <View className="h-4 w-32 rounded bg-surface-elevated" />
+      {/* Card-shaped blocks, not hairline rows — these approximate a collapsed
+          DiagnosticCard so the layout doesn't jump when the real cards land. */}
       {[0, 1, 2].map((i) => (
-        <View key={i} className="mt-3 h-4 w-full rounded bg-surface-elevated" />
+        <View key={i} className="mt-3 h-24 w-full rounded-ds-lg bg-surface-elevated" />
       ))}
     </View>
   );

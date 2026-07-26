@@ -404,6 +404,88 @@ There are **two distinct open questions** here — do not conflate them:
 
 ---
 
+## R23: `dtcs` missing a freeze-frame column *(RESOLVED)*
+
+> **Numbering note.** R23 was assigned by the **Platform track** during its session 12
+> (2026-07-08) and recorded only in `docs/workdiary.md` — it was never written into this
+> register. It is backfilled here, already resolved, so the number is not silently
+> reused and the workdiary's reference resolves to something. The Week-5 App-track risk
+> that would otherwise have taken this number is **R24** below.
+
+**Risk:** The DTC detail screen (design §6 `S6`) specifies a "freeze-frame conditions"
+panel — the sensor snapshot at the moment a code set, rendered as Metric Tiles (§5.5).
+The `dtcs` table carried no column for it, so the screen had no possible data source.
+
+**Likelihood / Impact:** N/A — resolved before the screen was built.
+
+**Mitigations (applied):**
+- Platform added `freeze_frame_metrics jsonb` (migration `20260615000001`) and updated
+  `device_sync_chunk` to populate it during ingestion; TS types regenerated.
+
+**Status:** **Resolved 2026-07-08** (Platform session 12, commit `a024a43`). Verified on
+`origin/main` by the App track on 2026-07-26: the column is present in
+`packages/supabase/src/database.types.ts` and written at
+`supabase/functions/device_sync_chunk/index.ts:93`.
+
+**Residual — NOT covered by this resolution, tracked separately:** the column exists and
+is populated, but (a) the ingestion captures the **last telemetry row of the sync chunk**,
+not the row at fault time, and (b) the **keys** inside the blob are the unreconciled
+provisional metric vocabulary. Both are tracked as `docs/11_Carry_Forwards.md` § CF-28.
+Do not read "R23 resolved" as "freeze-frame is trustworthy."
+
+---
+
+## R24: DTC screens depend on design elements with no live schema backing
+
+**Risk:** The Week-5 DTC screens (design §6 `S5` list, `S6` detail) are specified against
+design elements that no live data source can currently produce. Building them mock-first
+is correct, but each unbacked element is a place where the app will look finished and
+behave differently — or silently worse — the moment its capability flips to live. None of
+these are compiler-caught: the gaps are missing *columns* and unreconciled *values*, not
+type errors, so `tsc` stays green while the screen quietly loses content.
+
+The three specific gaps, all surfaced building the Day-2 seam:
+
+1. **Pending grouping (§6 `S5`: "grouped Active/Pending/History").** `dtcs` models state as
+   binary `is_active` + `cleared_at`. There is no pending/confirmed column, so a live flip
+   renders **two** sections where the design specifies three. Tracked as CF-29.
+2. **Freeze-frame fidelity (§6 `S6`, §5.5 Metric Tiles).** The column exists (R23) but the
+   captured values may not correspond to the moment the code set, and its keys are the
+   provisional vocabulary (R22). A wrong key yields an **empty panel, not an error**.
+   Tracked as CF-28.
+3. **Plain-language titles (§6 `S5`: "plain-language titles").** Platform's `dtc_lookup`
+   table exists and is seeded (52 codes) but carries raw SAE J2012 wording, which §6/§8
+   explicitly reject for a headline. The App-side title map covering the mocked codes is a
+   stopgap with no live counterpart, and the blocking input is a **content decision** (who
+   authors the plain-language copy) rather than schema work. Tracked as CF-31.
+
+**Likelihood:** High (all three are live today in the seam, and Days 3-4 build screens on them).
+
+**Impact:** Medium — nothing is *wrong* while the capability stays mock; the exposure is
+entirely at live-flip, where a section vanishes, a panel empties, or jargon reaches a
+headline. High if a flip happens without the gate below.
+
+**Mitigations:**
+- **Mock-first.** `DATA_SOURCE.dtcs` defaults to `'mock'`; the live branch throws
+  `notImplemented` and carries a written adapter note listing all three gaps.
+- **Isolate every provisional element to one deletable place** — `MOCK_PENDING_DTC_IDS`
+  (the only origin of `'pending'` anywhere), the `TODO(metric-keys)` freeze-frame keys, and
+  the `dtcTitles.ts` map. Each is a single flip-point, not a scattered assumption.
+- **Encode the gap in types and tests, not just comments.** `deriveDtcGrouping` returns
+  `'active' | 'history'` only, so widening it is a compile-time event; a test asserts it
+  can never return `'pending'`, and another pins title coverage to the fixtures.
+- **Gate the live flip.** Resolving CF-28, CF-29 and CF-07/R22 is a precondition for
+  flipping `DATA_SOURCE.dtcs`. Add these to the live-flip runbook alongside R22's checks.
+
+**Status:** Open. New at Week-5 Day 2 (App-track session 33). Related: R1 / R22 (vocabulary
+drift), R23 (resolved predecessor).
+
+**Carry:** tracked as outstanding work items in `docs/11_Carry_Forwards.md` § CF-28
+(freeze-frame fidelity), § CF-29 (Pending state), § CF-30 (`insufficient_data`
+category-vs-severity), § CF-31 (plain-language DTC titles).
+
+---
+
 ## How to use this document
 
 - **Weekly retro:** Walk this list. Any risks worsening? Any new ones to add? Any to resolve?

@@ -15,7 +15,7 @@
  * plain Node/vitest environment. Wire the real queries here when each capability
  * is promoted (see the per-table notes on each `fetch*`).
  */
-import { createVehicleInputSchema, type CreateVehicleInput } from '@caeorta/types';
+import { createVehicleInputSchema, type CreateVehicleInput, type Dtc } from '@caeorta/types';
 import type { Tables } from '@caeorta/supabase';
 
 import type { DriveHealthFlags } from '../driveHealth';
@@ -40,7 +40,8 @@ export type DataCapability =
   | 'recentDiagnostics'
   | 'currentState'
   | 'currentStateSubscription'
-  | 'createVehicle';
+  | 'createVehicle'
+  | 'dtcs';
 
 /**
  * Optional global default via env: `EXPO_PUBLIC_DATA_SOURCE=live` flips every
@@ -73,6 +74,11 @@ export const DATA_SOURCE: Record<DataCapability, DataSourceMode> = {
   currentState: ENV_DEFAULT,
   currentStateSubscription: ENV_DEFAULT,
   createVehicle: ENV_DEFAULT,
+  // Mock-default despite the `dtcs` table (and `freeze_frame_metrics`) being fully
+  // present on main: the Active/Pending split the S5 screen groups on has no column
+  // behind it, so a live flip today would silently collapse the list to two groups.
+  // See the adapter note on `fetchDtcs` and CF-29.
+  dtcs: ENV_DEFAULT,
 };
 
 function notImplemented(capability: DataCapability): never {
@@ -207,6 +213,49 @@ export async function fetchCurrentState(
 ): Promise<Tables<'current_state'> | null> {
   if (DATA_SOURCE.currentState === 'live') return notImplemented('currentState');
   return mocks.currentStateForVehicle(vehicleId);
+}
+
+// ── DTCs (design §6 S5/S6) ───────────────────────────────────────────────────
+// Both fetchers return `Dtc` — a `dtcs` row plus a derived `grouping` — so screens
+// group on ONE field and never re-derive the rule. Stamping happens at the seam
+// because that is where the mock-only Pending overlay lives (CF-29); everything
+// downstream is unaware of whether a group came from a column or a fixture.
+//
+// LIVE ADAPTER NOTE (read before flipping `DATA_SOURCE.dtcs`):
+//   1. The QUERY is trivial — `…eq('vehicle_id', …).order('last_seen_at', desc)` for
+//      the list, `…eq('id', dtcId).maybeSingle()` for the detail. No Edge Function is
+//      involved; `dtcs` is RLS-scoped to the owner via `vehicle_id`.
+//   2. Map each row through `toDtc` (lib/dtc.ts) — the SAME converter the mock uses.
+//      It boundary-parses the opaque `Json` freeze-frame column and stamps `grouping`
+//      via `deriveDtcGrouping`, which returns only 'active' | 'history'. **The Pending
+//      group disappears on the live path** — there is no pending/confirmed column on
+//      `dtcs`. Resolve CF-29 (Platform adds the signal, or the founder cuts the group
+//      from v1) BEFORE the flip, or S5 silently renders two sections where the design
+//      specifies three.
+//   3. `freeze_frame_metrics` is a real column populated by `device_sync_chunk`, but
+//      its KEYS are the provisional metric vocabulary — reconcile CF-07 / R22 first or
+//      the S6 freeze-frame panel renders empty rather than erroring.
+//   4. `device_sync_chunk` captures the freeze frame as the LAST telemetry row of the
+//      sync chunk, not the row at fault time — see CF-28. Values may not correspond to
+//      the moment the code actually set.
+
+/**
+ * All DTCs recorded for a vehicle, newest-first by `last_seen_at`, each stamped with
+ * its Active/Pending/History group. Empty array for an unknown vehicle.
+ * Live: see the adapter note above.
+ */
+export async function fetchDtcs(vehicleId: string): Promise<Dtc[]> {
+  if (DATA_SOURCE.dtcs === 'live') return notImplemented('dtcs');
+  return mocks.dtcsForVehicle(vehicleId);
+}
+
+/**
+ * A single DTC by id, or null if not found — the S6 detail screen's primary read.
+ * Live: see the adapter note above.
+ */
+export async function fetchDtc(dtcId: string): Promise<Dtc | null> {
+  if (DATA_SOURCE.dtcs === 'live') return notImplemented('dtcs');
+  return mocks.dtcById(dtcId);
 }
 
 /** Simulated mock-mode latency for the write path, so the form's busy state is visible. */

@@ -22,4 +22,8 @@ export const queryKeys = {
   recentDiagnostics: (vehicleId: string, limit: number) =>
     ['vehicles', vehicleId, 'diagnostics', { limit }] as const,
   currentState: (vehicleId: string) => ['vehicles', vehicleId, 'current-state'] as const,
+  // DTCs sit under the vehicle subtree: clearing a code invalidates both the list and
+  // that code's detail, and a per-vehicle sweep should catch both.
+  dtcs: (vehicleId: string) => ['vehicles', vehicleId, 'dtcs'] as const,
+  dtc: (vehicleId: string, dtcId: string) => ['vehicles', vehicleId, 'dtcs', dtcId] as const,
 } as const;
