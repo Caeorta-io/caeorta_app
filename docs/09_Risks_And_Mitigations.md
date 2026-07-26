@@ -456,7 +456,8 @@ The three specific gaps, all surfaced building the Day-2 seam:
 3. **Plain-language titles (§6 `S5`: "plain-language titles").** Platform's `dtc_lookup`
    table exists and is seeded (52 codes) but carries raw SAE J2012 wording, which §6/§8
    explicitly reject for a headline. The App-side title map covering the mocked codes is a
-   stopgap with no live counterpart.
+   stopgap with no live counterpart, and the blocking input is a **content decision** (who
+   authors the plain-language copy) rather than schema work. Tracked as CF-31.
 
 **Likelihood:** High (all three are live today in the seam, and Days 3-4 build screens on them).
 
@@ -481,7 +482,7 @@ drift), R23 (resolved predecessor).
 
 **Carry:** tracked as outstanding work items in `docs/11_Carry_Forwards.md` § CF-28
 (freeze-frame fidelity), § CF-29 (Pending state), § CF-30 (`insufficient_data`
-category-vs-severity).
+category-vs-severity), § CF-31 (plain-language DTC titles).
 
 ---
 

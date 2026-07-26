@@ -346,6 +346,47 @@ original six:
   CF-07 / R22; PR #40 decisions row; `lib/diagnostics.ts` `deriveDiagnosticCardState`
   precedence note; workdiary sessions 32, 33.
 
+### CF-31 — `dtcTitles.ts` plain-language stopgap for DTC titles (R24 #3)
+
+- **Category:** Provisional-value-reconciliation
+- **Origin:** Week 5 Day 2, session 33 (2026-07-26) — shipped in PR #41 alongside the DTC
+  seam; promoted to its own entry at the founder's call rather than staying folded into
+  R24 #3.
+- **Current status:** Open. `dtc_lookup` **exists and is seeded** (Platform migration
+  `20260615000002`, 52 P0xxx codes with `description` / `system` / `severity_hint` /
+  `common_causes`) — so this is **not** a missing-table carry. The gap is *register*: every
+  `description` value is verbatim SAE J2012 wording (e.g. P0101 → "Mass Air Flow Circuit
+  Range/Performance"), while design §6 (`S5` list, `S6` detail) calls for **plain-language
+  titles** and §8's voice rules rule out raw jargon in a headline.
+  The app therefore ships `apps/mobile/src/lib/dtcTitles.ts` — a local `P0xxx → plain-language
+  title` map covering exactly the codes the mock fixtures use, **all of which are also rows
+  in the seeded `dtc_lookup`**, so the eventual promotion is a genuine swap and not a
+  rewrite. It is deliberately NOT a general OBD-II table: growing it by hand would duplicate
+  Platform's seeded data and drift from it. `dtcTitle()` is the single call site, with a
+  three-step fallback (plain title → the row's own `description` → the raw code) so an
+  uncovered code degrades to jargon rather than to a blank headline. A test pins map
+  coverage to the fixtures, so adding a fixture code without a title fails CI.
+- **What's needed to resolve:** A **content decision first** — the plain-language copy is a
+  content/voice call (designer/founder), not something Platform can generate from the SAE
+  data. Then one of two shapes; note that the obvious-sounding third option is a trap:
+  - **(a) Platform adds a `plain_title` column** to `dtc_lookup` alongside `description`,
+    populated with the agreed copy. App drops the map and reads the column.
+  - **(b) The App-side title layer stays permanent**, sitting over live `dtc_lookup` rows
+    (which supply `description` / `system` / `severity_hint` / `common_causes` for the S6
+    body). `dtcTitles.ts` stops being a stopgap and becomes the content layer.
+  - **(NOT) overwriting `dtc_lookup.description` with plain language** — this would destroy
+    the technical wording, which `S6`'s "what it means" section and the admin DTC timeline
+    both have a legitimate use for. Keep both registers; don't trade one for the other.
+- **Owner:** Founder / designer (the plain-language copy — the blocking input) + Platform
+  track (the `dtc_lookup` column, if (a)) + App track (the stopgap and the eventual swap).
+- **Cross-references:** R24 (#3); CF-07 (the adjacent provisional-vocabulary carry);
+  design §6 `S5`/`S6` + §8 voice; `apps/mobile/src/lib/dtcTitles.ts` (the flip-point, with
+  the same two options recorded in-file); `supabase/seed_dtc_lookup.sql`; PR #41; workdiary
+  session 33.
+- **Gate:** blocks any live-flip of DTC **titles** specifically. Distinct from CF-29 (which
+  gates the whole `DATA_SOURCE.dtcs` flip) — titles could in principle flip independently
+  once the copy exists.
+
 ### CF-08 — Coolant "hot" threshold — `TODO(coolant-hot-threshold)` = provisional 105 °C (R22 #2)
 
 - **Category:** Provisional-value-reconciliation

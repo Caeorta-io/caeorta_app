@@ -12,7 +12,8 @@
  *     *technical* description and precisely the register design §6 rejects for a title.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * STOPGAP — NOT a general OBD-II database, and deliberately not one.
+ * TODO(dtc-titles) → CF-31. STOPGAP — NOT a general OBD-II database, and
+ * deliberately not one.
  * This map covers ONLY the codes the mock fixtures use (see `lib/data/mocks.ts`), all
  * of which are also rows in the seeded `dtc_lookup`, so promoting this to the live
  * table is a genuine swap rather than a rewrite. Do not grow it into a full code table
@@ -21,10 +22,16 @@
  * FLIP POINT: when the DTC seam goes live, `dtc_lookup` supplies `description`,
  * `system`, `severity_hint` and `common_causes` per code (join on `code`, or a cached
  * read — it's public reference data with a permissive RLS SELECT policy). The
- * plain-language TITLE layer below still has no live source at that point: it is an
- * App/content concern, not a schema one. Either keep this map as the title layer over
- * live lookup rows, or agree a `plain_title` column with Platform. Whichever wins,
- * {@link dtcTitle} stays the single call site so nothing else changes.
+ * plain-language TITLE layer below still has no live source at that point: the blocking
+ * input is a CONTENT decision (who authors the copy), not schema work. Two acceptable
+ * resolutions, per CF-31 — (a) Platform adds a `plain_title` column alongside
+ * `description` and this map is deleted, or (b) this stays permanently as the content
+ * layer over live lookup rows. Whichever wins, {@link dtcTitle} stays the single call
+ * site so nothing else changes.
+ *
+ * DO NOT resolve it by overwriting `dtc_lookup.description` with plain language — that
+ * destroys the technical wording, which the S6 "what it means" section and the admin
+ * DTC timeline both use. Keep both registers.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
