@@ -141,6 +141,23 @@ export default function VehicleDetailScreen() {
           <Text className="text-sm font-medium text-blue-600">{t('vehicles.drives.viewAll')}</Text>
         </Pressable>
 
+        {/* Entry point to S5 · DTC list. Design §7's link graph has a row OUT of the
+            DTC list (tap code → S6) but none INTO it, so placement is an App-track
+            call (founder, session 34): mirror the drives link on this screen. Logged
+            as a designer-owned §7 gap, same species as CF-24.
+            Stock Tailwind, NOT design tokens: this screen is un-migrated (CF-15), so
+            the link matches its neighbours here rather than the token palette of the
+            screen it opens. Week 8 migrates both together. */}
+        <Pressable
+          accessibilityRole="link"
+          onPress={() =>
+            router.push({ pathname: '/vehicles/[id]/dtcs', params: { id: vehicle.id } })
+          }
+          className="self-start py-2 active:opacity-70"
+        >
+          <Text className="text-sm font-medium text-blue-600">{t('vehicles.dtcs.viewAll')}</Text>
+        </Pressable>
+
         {diagnosticsQuery.isPending ? (
           <DiagnosticsSkeleton />
         ) : (

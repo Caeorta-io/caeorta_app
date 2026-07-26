@@ -221,6 +221,38 @@
         "body": "Something went wrong loading this vehicle. Check your connection and try again."
       }
     },
+    "dtcs": {
+      "title": "Fault codes",
+      "viewAll": "View fault codes",
+      "empty": "No fault codes. Your ECU hasn't reported anything.",
+      "error": {
+        "title": "Couldn't load fault codes",
+        "body": "Something went wrong loading your fault codes. Check your connection and try again."
+      },
+      "group": {
+        "active": "Active",
+        "pending": "Pending",
+        "history": "History"
+      },
+      "groupEmpty": {
+        "active": "No active codes.",
+        "pending": "Nothing pending — no codes waiting to confirm.",
+        "history": "Nothing cleared yet."
+      },
+      "severity": {
+        "critical": "Critical",
+        "warning": "Warning",
+        "info": "Info",
+        "unknown": "Unrated"
+      },
+      "badgeA11y": "{{severity}} severity, code {{code}}",
+      "rowMeta": "{{severity}} · last seen {{lastSeen}}",
+      "detail": {
+        "eyebrow": "Fault code",
+        "notFound": "Not found",
+        "stubBody": "The full detail for this code — what it means, likely causes and the conditions when it set — lands in the next build."
+      }
+    },
     "drives": {
       "title": "Drives",
       "viewAll": "View all drives",
