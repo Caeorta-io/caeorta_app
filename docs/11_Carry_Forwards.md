@@ -320,11 +320,18 @@ original six:
      mark — rather than vanishing into the two-section layout §6 doesn't specify.
   This does not weaken the gate: **still do not flip `DATA_SOURCE.dtcs` to live** until
   the founder decision lands.
-  **Verification caveat (2026-07-27, session 34b):** S5 was confirmed on a physical device
-  and the three-group render is correct — but **the empty-group branch was NOT exercised**,
-  because all three mock groups are populated. That branch is exactly what a premature live
-  flip would surface, so it remains the one unobserved path. Cheapest check when next on a
-  device: temporarily empty `MOCK_PENDING_DTC_IDS` and reload.
+  **Verification (2026-07-27, sessions 34b + 34c): COMPLETE, including the live shape.**
+  The three-group render was confirmed on a physical device in 34b. The empty-group branch
+  — initially unexercised, since all three mock groups are populated — was closed in 34c by
+  adding `__DEV__`-only fixture variants (`DEV_DTC_FIXTURE_VEHICLE_IDS` in `mocks.ts`) that
+  filter the existing fixtures. **The `noPending` variant renders exactly what a live flip
+  would produce today** — Active and History populated, Pending carrying its header plus
+  "Nothing pending — no codes waiting to confirm." — and was observed on-device. All three
+  `groupEmpty` strings have now rendered.
+  This **validates the session-34 always-render decision empirically**: the group does not
+  silently vanish, it stands visibly empty. It does **not** weaken the gate — the copy is
+  still a stopgap for a group with no live source, and the founder decision is still what
+  resolves this entry.
 - **Cross-references:** R24 (#1); design §6 `S5`; `packages/types/src/dtc.ts`
   `TODO(dtc-pending)`; `MOCK_PENDING_DTC_IDS` in `mocks.ts`; `groupDtcs` in
   `apps/mobile/src/lib/dtc.ts`; the `fetchDtcs` live-adapter note in `source.ts`;

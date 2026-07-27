@@ -1572,7 +1572,7 @@ The P0171 case is the one worth looking at: it is the **most recent** pending co
 
 **Also confirmed on-device: the session-33 CF-30 audit conclusion.** `insufficient_data` does not elevate drive health — the pill reads Clean next to an insufficient-data card. That had been an audit + unit-test claim; it is now an observed fact.
 
-**Residual gap — the per-group empty states were NOT exercised.** All three fixture groups are populated, so `vehicles.dtcs.groupEmpty.*` never rendered. That branch is the one a premature CF-29 live flip would expose (Pending standing empty), so it is precisely the path worth seeing. Cheapest fix when someone is next on a device: temporarily empty `MOCK_PENDING_DTC_IDS` and reload. Not worth a fixture change on its own.
+**Residual gap — the per-group empty states were NOT exercised.** All three fixture groups are populated, so `vehicles.dtcs.groupEmpty.*` never rendered. That branch is the one a premature CF-29 live flip would expose (Pending standing empty), so it is precisely the path worth seeing. **→ CLOSED the same day in session 34c below.**
 
 **Environment — this took far longer than the verification itself, and all of it belongs in CF-23's local-setup writeup:**
 
@@ -1598,6 +1598,57 @@ The P0171 case is the one worth looking at: it is the **most recent** pending co
 - **"No dependency changes" ≠ "this APK will run."** ABI is an independent axis, and it silently differs per build depending on what was plugged in at the time. Check `lib/` inside the APK, not just `package.json`.
 - **A screenshot verified something the unit tests could not.** The tests assert ordering; the device showed *why it matters* — the critical code jumping the queue and the unrated one sinking despite recency are legible at a glance in a way an assertion list is not.
 - **The environment fight dwarfed the verification.** Roughly five minutes of actual screen-checking sat behind an emulator install, a failed native build, and a wireless-adb dead end. The USB path — which worked first try — should have been the default rather than the fallback.
+
+---
+
+### 2026-07-27 (later) — S5 empty-group fixtures: closing the last verification gap (App track, session 34c)
+
+**Goal of session:** Close the one in-scope gap session 34b left open — S5's per-group empty state never rendered, because the default fixture populates all three groups. Add a dev-selectable fixture path that empties a group so the treatment can be seen on-device. Explicitly **not** an S5 rebuild.
+
+**Branch check (R19):** PR **#42 still OPEN** on `feat/dtc-list-s5`; `origin/main` unchanged at `cec8f75`. So this was added to the existing branch, keeping the S5 work as one reviewable unit rather than opening a second PR.
+
+**First finding: there was no UX gap, only an unreachable path.** The brief allowed for the empty-group treatment being missing (in which case: STOP and ASK before inventing copy). Reading the S5 `SectionList` settled it — `renderSectionHeader` is **unconditional**, `renderSectionFooter` renders `<GroupEmpty>` at `section.data.length === 0`, and the copy already exists in `en.json` under `vehicles.dtcs.groupEmpty.*`. That is case (c): **a designed empty state that simply had no fixture able to reach it.** No ASK needed, no new copy, no layout change.
+
+**Second finding: no fixture-variant mechanism existed to mirror — so this was an ASK.** The established dev pattern is `/dev/<name>` routes, `__DEV__`-gated and deliberately **not linked from any screen** ("no typed Href, so no router.d.ts regen"). But `DiagnosticCardHarness` doesn't *toggle* fixtures — it just picks fixed indices out of `mockDiagnostics` — and `mocks.ts` has no `__DEV__`, env or variant machinery at all. Three plausible mechanisms, no precedent, so it went to the founder:
+
+| Option | Trade-off |
+|---|---|
+| **Dev fixture vehicle IDs** *(chosen)* | One file; renders the **real** S5 screen; no new route (no `router.d.ts` regen); switch variants by navigating. Cost: introduces synthetic dev vehicle IDs |
+| `/dev/dtc-list` harness route | Matches the `/dev/*` convention — but S5's `SectionList` lives inside the screen, so it would need extracting first (edits S5's structure, against the scope guard) and would then verify **a copy, not the screen** |
+| Env var (`EXPO_PUBLIC_DTC_FIXTURE`) | Mirrors `EXPO_PUBLIC_DATA_SOURCE`, but is global and needs a Metro restart per variant |
+
+**Done:**
+- **`DEV_DTC_FIXTURE_VEHICLE_IDS`** in `mocks.ts` — three `__DEV__`-only synthetic vehicle IDs that **filter** the existing fixtures: `noPending` (Active + History; the live shape), `activeOnly` (all-but-one-empty), `historyOnly` (leaves ACTIVE empty — the healthy car). Reached by deep link, e.g. `caeorta://vehicles/99999999-9999-4999-8999-999999999001/dtcs`.
+- **Default fixture untouched.** `MOCK_VEHICLE_ID` still returns all seven rows across three groups — that case is the verified reference and stays the default. Production falls through to the unknown-vehicle `[]` path.
+- **`vitest.config.ts` now defines `__DEV__`.** Metro injects it; vitest does not, and `mocks.ts` is imported by the suite, so it would have thrown at import time.
+- **Tests (+5, 152 → 157)** covering the *selection* only — which groups survive per variant, that the default is unchanged, that every variant is a **strict subset** of the default (rows filtered, never invented), and that an unknown vehicle still returns `[]`. `groupDtcs` is deliberately not re-tested; it has its own suite.
+
+**On-device: all three empty strings verified** (same phone, USB, deep link):
+
+| Variant | Observed |
+|---|---|
+| `noPending` | PENDING keeps its header + "Nothing pending — no codes waiting to confirm."; Active and History populated |
+| `activeOnly` | PENDING and HISTORY both empty, stacking cleanly with correct spacing |
+| `historyOnly` | ACTIVE → "No active codes." — the last unseen string |
+
+**This empirically validates the session-34 always-render decision.** The `noPending` variant is what a live flip produces today, and the group demonstrably **stands there visibly empty** rather than vanishing into a two-section layout §6 doesn't specify. That was the argument for the decision; it is now observed rather than reasoned.
+
+**Scope guard held.** The change touches `mocks.ts`, its test, and `vitest.config.ts` — nothing else. `groupDtcs`, `deriveDtcBadgeSeverity`, `DTC_GROUPING_ORDER` and the S5 screen are all untouched, and the variants only filter rows the default already produces.
+
+**Gate:** `pnpm -r typecheck` green; `pnpm -r run --if-present test` green (types 51, mobile **157**); `pnpm --filter @caeorta/mobile lint` clean. `apps/admin` still carries its three pre-existing lint errors from Platform commit `22acf4c` (CF-05); `git diff origin/main -- apps/admin` is empty on this branch, so nothing was added to it.
+
+**Typecheck earned its keep again.** `vitest run` passed with a missing `DtcGrouping` type import in the test file — vitest doesn't typecheck, `tsc` caught it. Same lesson as session 33's seam-gap catch: the test suite passing is not evidence the types are sound.
+
+**Open items rolled forward:**
+- **CF-29 unchanged in substance** — the empty-state copy is verified, but it is still a stopgap for a group with no live source. The **founder decision** (Platform adds the signal, or the group is cut and §6 amended) is what resolves it. Do not flip `DATA_SOURCE.dtcs`.
+- **CF-31 / CF-32 / CF-33 / CF-28 / CF-30 / R24** all unchanged.
+- **Figma parity for S5 still unchecked** — board `node 53:195` never opened; the screen was built from the written spec + tokens. Worth a diff before merge.
+- **`expo-updates` 56.0.19 vs `expo` 56.0.8 skew** — still blocks any x86_64/emulator build. Its own PR.
+- **Day 4:** S6 detail, replacing the stub.
+
+**Notes / lessons:**
+- **"Unverified" and "unimplemented" are different findings, and the brief was right to make me check which.** The empty state was fully built and had copy; it just had no data path that reached it. A fixture closed it — had I assumed a UX gap, I'd have invented copy that already existed.
+- **Choosing the mechanism that verifies the real screen mattered more than matching the established pattern.** The `/dev/*` harness convention was the closer precedent, but following it here would have meant extracting S5's list to render a copy — more churn, weaker evidence.
 
 ---
 
