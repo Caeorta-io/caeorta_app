@@ -56,6 +56,9 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 
 | Date | Decision | Driver | Where it shows up |
 |---|---|---|---|
+| 2026-07-26 (Day 3) | **S5 renders all three section headers even when a group is empty, rather than hiding empty sections.** The conventional list pattern hides an empty section, and for a clean car that is quieter. It was rejected because of what it does to **CF-29**: `'pending'` has no live source, so the moment `DATA_SOURCE.dtcs` flips, hide-when-empty makes the Pending group **disappear without trace** and the screen silently renders the two-section layout design §6 does not specify — the exact failure CF-29's gate exists to prevent, and invisible in review. Always-render turns that regression into a permanently empty section: a standing question mark on the screen. The cost is one quiet line of copy per empty group on a healthy car; the benefit is that an unbacked design element cannot vanish unnoticed. | Founder call at the session-34 ASK gate (§6 specifies no empty treatment). Chosen for regression visibility over list tidiness. | `apps/mobile/src/app/(app)/vehicles/[id]/dtcs/index.tsx` (`renderSectionFooter`); `vehicles.dtcs.groupEmpty.*` in `en.json`; `docs/11` CF-29 update; `docs/09` R24 mitigations; this row + session 34 diary |
+| 2026-07-26 (Day 3) | **`deriveDtcBadgeSeverity` falls back to an off-ladder `'unknown'` badge, NOT to the quietest on-ladder `'info'` that `deriveDiagnosticCardState` uses.** The two look like the same rule and deliberately are not. A diagnostic's `severity` is authored by the AI agent, so an unrecognised value there is vocabulary drift *within a known system* and rendering it quietly as `info` is honest. A DTC's `severity_raw` is plain `text` with no CHECK — whatever the ECU happened to write — so mapping an unreadable string to `info` would **assert a tier the app does not have**. §8's calibrated honesty says show that we don't know. The failure mode is understatement (a real fault shows as unrated) rather than a false "this is fine" on the ladder, and never a crash. Also decided here: the target union matches the ladder Platform **already** CHECK-constrains on `dtc_lookup.severity_hint` (`'info','warning','critical'`) rather than inventing a fourth project vocabulary. | Design §4.3 (unknown sits off the heat ramp) + §8 voice; the brief's explicit "do NOT invent a canonical vocabulary" constraint. Nothing was invented — the map covers exactly the fixture values. | `apps/mobile/src/lib/dtc.ts` (`deriveDtcBadgeSeverity`, `TODO(dtc-severity-vocab)`); `apps/mobile/src/lib/__tests__/dtc.test.ts`; `docs/11` CF-32; `docs/09` R24 #4; this row + session 34 diary |
+| 2026-07-26 (Day 3) | **§11's "never colour alone" is satisfied ACROSS the S5 row, not inside the badge — the badge carries the raw code, the severity's text label sits on the meta line.** Design §6 asks for a "severity-tinted **code** badge" while §11 requires colour + icon + **text label**. Putting the severity word inside the badge would have displaced the code (the thing a user cross-references against a scanner or a forum); putting both inside made a cluttered pill. The split keeps all three §11 signals present on every row — colour + a distinct per-tier glyph in the badge, the tier's word in the meta line — with one `accessibilityLabel` collapsing them for screen readers. The consequence is recorded in `DtcCodeBadge`'s header: **the badge alone is not §11-compliant** and must not be reused without a severity label beside it. | Reading §6 and §11 together rather than picking one; the brief specified both a code-as-secondary and a text label. | `apps/mobile/src/components/dtc/DtcCodeBadge.tsx` (header + `accessibilityLabel`); `DtcRow` in `vehicles/[id]/dtcs/index.tsx`; `vehicles.dtcs.badgeA11y` / `rowMeta` in `en.json`; this row + session 34 diary |
 | 2026-07-26 (later) | **The DTC mock seam mirrors the REAL `dtcs.freeze_frame_metrics` column (a flat `key → number` bag) instead of inventing an App-side `{value,unit,label}` shape; Metric-Tile shaping is an app-side derivation.** The Day-2 brief was written assuming no freeze-frame column existed and instructed the App to mock one as a provisional `{value,unit,label}` triple flagged `TODO(freeze-frame)`. Verifying `main` first showed Platform had already landed the column (migration `20260615000001`, commit `a024a43`) **and** wired ingestion — `device_sync_chunk` writes a telemetry `metrics` blob verbatim. Mocking an invented shape would have contradicted a real column and stacked a second reconciliation debt on top of CF-07. So: `freezeFrameMetricsSchema` mirrors the true storage shape, `toDtc` boundary-parses the opaque `Json` (the same converter the live path will use), and `toFreezeFrameTiles` does the §5.5 shaping app-side. CF-28 was correspondingly rescoped from "schema gap" to "capture-fidelity + key-vocabulary gap" — the ingestion captures the *last telemetry row of the chunk*, not the sample at fault time, despite the column comment claiming otherwise. | Founder call at the Day-2 STOP gate ("Mirror the real column") once the stale premise was surfaced. Nothing to unwind at live-flip; the only open question stays the CF-07 key names. | `packages/types/src/dtc.ts`; `apps/mobile/src/lib/dtc.ts` (`toDtc`, `toFreezeFrameTiles`); `apps/mobile/src/lib/data/mocks.ts` (`mockDtcs`); `docs/11` CF-28; `docs/09` R23/R24; this row + session 33 diary |
 | 2026-07-26 (later) | **The new Week-5 DTC risk is numbered R24, and R23 is backfilled into `docs/09` as already-resolved.** R23 had been assigned by the **Platform track** in session 12 for "dtcs table missing freeze_frame_metrics column" and recorded **only in `docs/workdiary.md`** — never written into the risk register, which still ended at R22. The number therefore looked free. Reusing it would have broken the workdiary's cross-reference and overwritten a real (now-closed) risk. R23 is written in as resolved, with an explicit residual pointer to CF-28 so "R23 resolved" is not misread as "freeze-frame data is trustworthy". | Founder call at the Day-2 STOP gate ("New risk = R24, backfill R23") once the collision was surfaced. Keeps the register and the workdiary consistent and leaves no silent gap at R23. | `docs/09_Risks_And_Mitigations.md` (R23 resolved + R24 new); `docs/11` CF-28/29/30 cross-refs; this row + session 33 diary |
 | 2026-07-26 (later) | **`deriveDriveHealth` was audited and deliberately NOT changed — the brief's hypothesised `insufficient_data` gap does not exist there.** The Day-2 brief expected `driveHealth` to key on `severity` only and therefore fail to give contract-shaped rows (`category='insufficient_data'`, `severity='info'`) the insufficient-data treatment, and pre-authorised an ASK before touching locked test behaviour. The audit found no gap: `deriveDriveHealth` elevates only on `SEVERITY_RANK` `critical`/`warning`, and `insufficient_data` is absent from that map — so the app's sentinel shape (rank `undefined`) and the contract shape (rank 2, `info`) **both** fall through to `clean`, which is the intended §4.3 "never elevates health" behaviour. No code changed, no locked test touched, no ASK needed. The genuine exposure is elsewhere and narrower: contract-invalid `severity` values in `mocks.ts`, plus any surface keyed on `severity` alone — of which drive-detail's `SEVERITY_DOT` (would have painted a contract-shaped row as a blue *info* dot) is **closed by this PR's card swap**, while `sortDiagnosticsByPriority`'s differing order across the two shapes remains open. | Audit result, not a preference — surfacing the finding honestly was worth more than performing the fix the brief anticipated. CF-30 was rewritten from the supplied draft to describe the real gap. | `apps/mobile/src/lib/driveHealth.ts` (**unchanged**); `apps/mobile/src/app/(app)/vehicles/[id]/drives/[driveId].tsx` (`SEVERITY_DOT` removed); `docs/11` CF-30; `docs/09` R24; this row + session 33 diary |
@@ -1482,6 +1485,170 @@ Unchanged and confirmed: **no pending/status column** on `dtcs` (binary `is_acti
 - **Risk numbers were being assigned outside `docs/09`.** Platform used R23 in the workdiary only, so `docs/09` still ended at R22 and the number looked free. Backfilled it as resolved so the register matches the workdiary. Worth both tracks writing risk numbers into `docs/09` at the moment of assignment.
 - `pnpm-workspace.yaml`'s `@shopify/react-native-skia` placeholder (flagged in session 32 as a local-setup gotcha and reverted then) is now **resolved to `true` and committed** — `package.json`'s `onlyBuiltDependencies` already listed the package, so the two lists were simply out of sync and every install re-injected the stub. One less repeat gotcha for CF-23's writeup.
 - **Recovery note:** used `git stash -u` mid-session to test whether an admin lint failure pre-existed; the pop restored untracked files but left tracked edits in the stash. Recovered via `git checkout stash@{0} -- <files>`. Simpler answer for "is this failure mine?" is `git diff origin/main -- <path>` — no stashing needed.
+
+---
+
+### 2026-07-26 (Day 3) — Week 5 Day 3: DTC list screen S5 + severity/grouping derivations (App track, session 34)
+
+**Goal of session:** Build design §6 `S5 · DTC list` on the PR #41 seam — DTCs sectioned Active / Pending / History, severity-tinted code badges, plain-language titles. Mock-first. Plus the two canonical derivations it needs (`deriveDtcBadgeSeverity`, `groupDtcs`), the entry point, and an S6 stub so the row tap isn't a dead end. S6 detail itself is Day 4 and explicitly out of scope.
+
+**Verified main first (R19) — and this time every premise HELD.** `git fetch`; PR #41 confirmed **merged** as `cec8f75` (squash, 2026-07-26 03:09). Branched `feat/dtc-list-s5` **off updated `origin/main`**, not stacked on the #41 branch. All four brief checks passed:
+
+| Checked | Result |
+|---|---|
+| PR #41 merged; seam shipped as reported | ✅ `DATA_SOURCE.dtcs` capability, `useDtcs`/`useDtc`, 7 grouped fixtures with `freeze_frame_metrics`, `dtcTitles.ts` — no drift from the after-report |
+| `dtcs` still has no pending/status column | ✅ binary `is_active` + `cleared_at` (migration `20260602130000`); **CF-29's premise unchanged**, overlay stays mock-only |
+| `severity_raw` still free text | ✅ `text`, no CHECK, no enum |
+| Route path / layout | ✅ unambiguous — `drives/index` + `drives/[driveId]` is an exact precedent, so `dtcs/index` + `dtcs/[dtcId]`. No ASK needed |
+
+Worth recording after session 33's four stale premises: **a brief written one day earlier was accurate in full.** The R19 check is cheap and was still worth running — but the failure mode is Platform shipping between sessions, not brief age per se.
+
+**One useful finding the brief didn't anticipate.** A canonical three-tier DTC severity vocabulary **already exists in the repo**: `dtc_lookup.severity_hint` is CHECK-constrained to `('info','warning','critical')` (Platform migration `20260615000002`) — the same ladder as §4.3 and `diagnostic_outputs.severity`. It is *per-code reference data*, not the per-row ECU text, so it cannot bound `severity_raw` and the "no vocabulary" gap is real. But it meant the badge derivation could target an **existing** ladder instead of inventing a fourth one, which is a better outcome than the brief's fallback plan. Recorded as CF-32, with joining `dtc_lookup` into the seam noted as the obvious null-`severity_raw` fallback once it's wired.
+
+**Three ASK-gate items, all genuinely unspecified in §6.** §6's entire S5 line is *"grouped Active/Pending/History, severity-tinted code badges + plain-language titles"* — no ordering, no empty treatment. And §7's link graph has a row **out of** the DTC list but **none into it**. Founder chose all three recommendations: severity-then-recency ordering; always render three headers; "View fault codes" link on vehicle detail mirroring the drives link.
+
+**Done — derivations (`lib/dtc.ts`, both pure, no React imports, unit-tested):**
+- **`deriveDtcBadgeSeverity(severity_raw)`** → bounded `'critical' | 'warning' | 'info' | 'unknown'`. Normalises casing/whitespace so the fixtures' deliberate drift (`'WARN'`, `'INFO'`) resolves; **everything unrecognised — including `null`, blank, and a non-string from an unvalidated live row — becomes the off-ladder `'unknown'` badge.** Never throws, never mis-tints. The `'unknown'`-not-`'info'` fallback is a deliberate divergence from `deriveDiagnosticCardState`; see the decisions row.
+- **`groupDtcs(dtcs)`** → the single Active/Pending/History split point. Typed `Record<DtcGrouping, Dtc[]>`, which is the whole trick: **narrowing `DTC_GROUPINGS` in `@caeorta/types` makes this function a compile error, not a silently dead branch.** In-group order is badge severity then `last_seen_at` DESC; unrankable sorts last, an unparseable timestamp is treated as oldest, an off-union grouping degrades into the *visible* `active` group rather than vanishing. Header documents the CF-29 collapse as two edits — and **zero screen edits**, because S5 maps `DTC_GROUPING_ORDER` to build its sections.
+
+**Done — S5 screen + navigation:**
+- `vehicles/[id]/dtcs/index.tsx` — `SectionList` (not the drives list's flat-FlatList-with-interleaved-headers, because these sections are a fixed set that must render when empty). All three headers always shown; an empty group gets a quiet one-line state via `renderSectionFooter`, so the section's `data` stays a clean `Dtc[]` with no sentinel row. Zero codes *at all* is its own clean-car empty state. Error is surfaced explicitly with retry — per the `useDtcs` doc, "failed to load" and "you have no codes" must never look alike. Token-styled on drive-detail's `Frame`.
+- `DtcCodeBadge` — tint + border + per-tier glyph + the raw code in Geist Mono; `'unknown'` gets the dashed neutral treatment `insufficient_data` uses on a Diagnostic Card. §11 compliance is split across the row deliberately (decisions row); the badge's header says in terms that **it is not §11-compliant on its own**.
+- Rows: badge, `dtcTitle()` headline (never raw P0xxx — CF-31), meta line "`{severity}` · last seen `{relative}`", chevron. Tap → S6 with `dtcId`.
+- `dtcs/[dtcId].tsx` — **stub**, renders only the resolved code. Enough to prove route param → hook → seam end-to-end on-device; none of §6's S6 inventory (no large badge + status pill, no what-it-means, no likely-causes, no freeze-frame Metric Tiles, no related card, no auto-clear note). Header says not to grow it incrementally.
+- Entry point: "View fault codes" on vehicle detail, **stock Tailwind** to match its un-migrated neighbours (CF-15) rather than the token palette of the screen it opens.
+- All strings through `en.json` under `vehicles.dtcs.*`.
+
+**Verified render order against the real fixtures** (throwaway test, deleted):
+
+```
+ACTIVE  → P0234(critical)  P0299(WARN)  P0128(warning)
+PENDING → P0301(warning)   P0171(null)
+HISTORY → P0420(info)      P0113(INFO)
+```
+
+The P0171 case is the one worth looking at: it is the **most recent** pending code but sorts last, because a null `severity_raw` is unrankable. That is the intended rule, and it's exactly the kind of thing to sanity-check on-device rather than trust from a unit test.
+
+**Files / commits:** feature commit `feat(mobile): dtc list screen (S5) + severity/grouping derivations` + this separate `docs:` commit. Branch `feat/dtc-list-s5` off `origin/main` (`cec8f75`); **PR tagged @22SHY, not self-merged.**
+
+**Gate:** `pnpm -r typecheck` green; `pnpm -r run --if-present test` green — **mobile 138 → 152** (+14). `pnpm --filter @caeorta/mobile lint` clean. `apps/admin` lint **still red on `main`** from `22acf4c` (the same 3 errors: two `no-explicit-any`, one `no-html-link-for-pages`) — this branch touches no admin file, verified with `git diff origin/main -- apps/admin` (empty), per the session-33 lesson about not stashing to answer that question.
+
+**Tooling note — expo-router typed routes.** `apps/mobile/.expo/types/router.d.ts` is **gitignored and generated**, and it was stale (it didn't even carry PR #40's `/dev/diagnostic-card`, which never showed because nothing `router.push`es to a dev harness). Adding two routes made `-r typecheck` fail with "not assignable to ... 36 more" — a confusing error that looks like a bad path string. The fix is to regenerate by booting the Expo CLI once (`CI=1 npx expo start` from `apps/mobile`, wait for the file to gain the new route, stop it). **Worth adding to CF-23's local-setup writeup**: any PR that adds a route needs this before typecheck will pass, and the error message doesn't hint at it.
+
+**Decisions taken:** three (logged) — always-render empty sections (CF-29 regression visibility); `'unknown'` not `'info'` as the badge fallback; §11 satisfied across the row rather than inside the badge.
+
+**Open items rolled forward:**
+- ~~**On-device verification — STILL PENDING, now three deep.**~~ **DONE 2026-07-27 — see the addendum below.** All three Week-5 surfaces were verified on a physical device in one session, exactly as this item proposed. Nothing failed. **One residual:** the per-group empty states never rendered, because all three fixture groups are populated — see the addendum.
+- **CF-29 — open, and now with a shipped screen depending on the mock overlay.** Updated in `docs/11` with what was built to cap the cost: one split point, compile-error-on-narrow typing, and the always-visible empty section. Resolution still needs the **founder decision** (Platform adds the signal, or the group is cut and §6 amended). Do not flip `DATA_SOURCE.dtcs` before it lands.
+- **CF-32 — new.** `severity_raw` has no vocabulary; needs the hardware/firmware track to say what the device actually writes. May resolve as "there is no closed set", in which case the `unknown` fallback is the documented steady state rather than a gap.
+- **CF-33 — new.** Design §7 has no route *into* S5; the entry-point placement is an App-track call the doc doesn't record. Designer-owned, same species as CF-24.
+- **CF-31** unchanged but now load-bearing — every S5 headline runs through `dtcTitle()`. Still blocked on the **content decision** (who authors the plain-language copy).
+- **CF-28 / CF-30 / R24** all open; each gates a live flip.
+- **Day 4:** S6 detail on this seam (freeze-frame Metric Tiles via the existing `toFreezeFrameTiles`, related Diagnostic Card, auto-clear note), replacing the stub. **Day 5:** in-app DTC notification.
+
+**Notes / lessons:**
+- **A brief's ASK gates are worth taking literally when the design doc is genuinely silent.** §6's S5 line is one sentence; ordering, empty treatment and the entry point were all real gaps rather than things to infer. Three questions cost one round-trip and produced decisions worth logging — versus guessing three times and discovering it at design review.
+- **Type the containment, don't just comment it.** Session 33 narrowed `deriveDtcGrouping`'s return so *widening* is a compile event. The mirror trick here is `Record<DtcGrouping, Dtc[]>`, which makes *narrowing* one too. Between them, both directions of the CF-29 resolution are now compiler-enforced rather than depending on someone reading a TODO.
+- **"Never colour alone" needed reading §6 and §11 together, not choosing between them.** The obvious implementations each satisfied one and quietly broke the other. The resolution also produced a real constraint on reuse (the badge is not compliant standalone), which is written into the component rather than left as tribal knowledge.
+- **An unbacked design element should fail loudly, not tidily.** Hiding an empty section is the better-looking default and the worse engineering one while CF-29 is open.
+
+---
+
+### 2026-07-27 — Addendum to session 34: Week-5 on-device verification run (App track, session 34b)
+
+**Goal:** Clear the compounding "built ≠ verified" backlog — CF-13's Day-1 `/dev/diagnostic-card` harness (PR #40), session 33's drive-detail Diagnostic Card swap (PR #41), and Day-3's S5 DTC list (PR #42) — in one dev-build session on real hardware, rather than stacking a fourth.
+
+**Result: all three verified. Nothing failed. No code changed.**
+
+| Surface | Verified |
+|---|---|
+| **S5 · DTC list** (PR #42) | Three section headers in `DTC_GROUPING_ORDER`; severity-then-recency ordering; colour + glyph + code badges; plain-language titles; dashed off-ladder `unrated` badge; row tap → S6 |
+| **S6 stub** | Resolved **P0171** from the `dtcId` route param — proves route param → `useDtc` → mock seam end-to-end |
+| **Entry point** | "View fault codes" renders under "View all drives" on vehicle detail and navigates (the CF-33 placement call) |
+| **Drive detail** (PR #41) | `insufficient_data` card renders **off-ladder** — dashed border + dashed icon ring, no severity accent bar; health pill reads **Clean** |
+| **Card harness** (PR #40) | 8 variants render; WHAT IT SAW tiles, cyan confidence bar, thumbs, mark-as-seen |
+
+**The ordering rule is visibly doing real work**, which a screenshot proves better than a unit test: **P0234** (critical) sits **first** in Active despite being the *oldest* code, and **P0171** sits **last** in Pending despite being the *most recent* — because a null `severity_raw` is unrankable and ranks last by design (CF-32). Both are the intended rules, observed rather than asserted.
+
+**Also confirmed on-device: the session-33 CF-30 audit conclusion.** `insufficient_data` does not elevate drive health — the pill reads Clean next to an insufficient-data card. That had been an audit + unit-test claim; it is now an observed fact.
+
+**Residual gap — the per-group empty states were NOT exercised.** All three fixture groups are populated, so `vehicles.dtcs.groupEmpty.*` never rendered. That branch is the one a premature CF-29 live flip would expose (Pending standing empty), so it is precisely the path worth seeing. **→ CLOSED the same day in session 34c below.**
+
+**Environment — this took far longer than the verification itself, and all of it belongs in CF-23's local-setup writeup:**
+
+1. **The existing dev-client APK is arm64-only.** `apps/mobile/android/.../app-debug.apk` (5 Jul) contains **only `arm64-v8a`** — 31 native libs, no x86_64 — because `expo run:android` builds only the *connected device's* ABI, and that build had the phone attached. `gradle.properties` listing all four architectures is misleading: it is overridden per-run. **Checking `package.json` for native-module changes is NOT sufficient to judge whether an APK is reusable — the ABI matters independently**, and that mistake cost an emulator detour.
+2. **An arm64 APK cannot run on an x86_64 emulator even with ARM translation.** The image *does* have it (`abilist = x86_64,arm64-v8a`, `libndk_translation.so`, `ro.enable.native.bridge.exec=1`) and Android correctly set `primaryCpuAbi=arm64-v8a` — but the APK sets `extractNativeLibs=false`, so `lib/arm64/` was **empty** and SoLoader had to read from inside the APK. It looked in `base.apk!/lib/x86_64` — the *device's* ABI, not the *app's* — and died with `SoLoaderDSONotFoundError: couldn't find DSO to load: libreactnative.so`. **SoLoader + ndk-translation + uncompressed libs do not cooperate.**
+3. **Building an x86_64 APK fails in `expo-updates`.** `ninja: error: manifest 'build.ninja' still dirty after 100 tries` (400 "Re-running CMake" lines), for **all four ABIs** — `-PreactNativeArchitectures=x86_64` is ignored by that module. The `.cxx` dir was created fresh by the failing build, so it is not stale state. Likely a **version skew**: the app pins `expo ~56.0.8` but `expo-updates` resolved to **56.0.19**, almost certainly pulled by the reinstall after session 33's `pnpm-workspace.yaml` fix — which explains why 5 Jul built fine and this did not. **Left unfixed: it is a dependency-version change, out of scope for verifying a screen, and belongs in its own PR.**
+4. **`avdmanager create avd` NPEs on this SDK** — it dies while enumerating targets, right after listing `android-30` (a known bug with newer platform revisions). Worked around by **writing the AVD config directly**: `~/.android/avd/<name>.ini` + `<name>.avd/config.ini`. The emulator reads those without avdmanager's involvement. Also note `~/.android/avd` did not exist and had to be created.
+5. **`sdkmanager`'s downloader stalled; `curl` did not** — the same class of failure as the pnpm fetcher note already in local memory. Fixed by curling the two zips directly, verifying SHA1 against the remote manifests, extracting manually, and **synthesising each `package.xml`** (cloned header + license from `platforms/android-36`, swapped `<localPackage>`). `sdkmanager --list_installed` then recognised both, which validated the approach.
+6. **Wireless adb (`adb pair`/`connect`) connected fine but the bundle would not load** — Metro logged `ERR_STREAM_UNABLE_TO_PIPE` and the app sat on a blank white screen. **Switching to USB fixed it immediately**, first try. Wireless adb also auto-connected a *second* mDNS entry for the same phone, which broke every un-`-s`-qualified adb command with "more than one device/emulator". **For dev-client work on this machine, use USB.**
+7. **mDNS discovery is blocked** because the Wi-Fi profile is classified **Public** — `adb mdns services` found nothing, so pairing had to be driven by hand-entered IP:port + code. Outbound `adb pair` is unaffected by the Public profile; only discovery is.
+8. **Typed routes, again** (already noted in the main entry): `.expo/types/router.d.ts` is gitignored and regenerated only by booting the Expo CLI. Any PR adding a route hits a confusing "not assignable to … 36 more" typecheck error until then.
+
+**Method note:** navigation was driven by **deep link** (`caeorta://vehicles/<id>/dtcs`, `caeorta://dev/diagnostic-card`) rather than coordinate taps, which is reliable and reproducible; the app scheme is `caeorta`. The dev launcher was bypassed with `caeorta://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081` plus `adb reverse tcp:8081 tcp:8081`, which sidesteps the "Failed to download remote updates" launcher state entirely.
+
+**Open items rolled forward:**
+- **CF-29 / CF-31 / CF-32 / CF-33 / CF-28 / CF-30 / R24** — all unchanged by this run. Verification does not resolve any of them; they are schema/vocabulary/content gaps, not rendering bugs.
+- **S5 empty-group states** — the one unexercised branch (above).
+- **`expo-updates` 56.0.19 vs `expo` 56.0.8 skew** — blocks any x86_64/emulator build. Its own PR; `npx expo install --check` reports 13 packages needing alignment.
+- **Figma parity for S5 not checked.** The screen was built from the *written* design system (§6/§4.3/§11) plus tokens, not from the Figma frame — §6 names board `node 53:195` and it was never opened. The build is defensible against the doc but is **not** verified against the designer's frame. Worth a diff before merge; layout-only if it differs, since the derivations are independent.
+- **Day 4:** S6 detail, replacing the stub.
+
+**Notes / lessons:**
+- **"No dependency changes" ≠ "this APK will run."** ABI is an independent axis, and it silently differs per build depending on what was plugged in at the time. Check `lib/` inside the APK, not just `package.json`.
+- **A screenshot verified something the unit tests could not.** The tests assert ordering; the device showed *why it matters* — the critical code jumping the queue and the unrated one sinking despite recency are legible at a glance in a way an assertion list is not.
+- **The environment fight dwarfed the verification.** Roughly five minutes of actual screen-checking sat behind an emulator install, a failed native build, and a wireless-adb dead end. The USB path — which worked first try — should have been the default rather than the fallback.
+
+---
+
+### 2026-07-27 (later) — S5 empty-group fixtures: closing the last verification gap (App track, session 34c)
+
+**Goal of session:** Close the one in-scope gap session 34b left open — S5's per-group empty state never rendered, because the default fixture populates all three groups. Add a dev-selectable fixture path that empties a group so the treatment can be seen on-device. Explicitly **not** an S5 rebuild.
+
+**Branch check (R19):** PR **#42 still OPEN** on `feat/dtc-list-s5`; `origin/main` unchanged at `cec8f75`. So this was added to the existing branch, keeping the S5 work as one reviewable unit rather than opening a second PR.
+
+**First finding: there was no UX gap, only an unreachable path.** The brief allowed for the empty-group treatment being missing (in which case: STOP and ASK before inventing copy). Reading the S5 `SectionList` settled it — `renderSectionHeader` is **unconditional**, `renderSectionFooter` renders `<GroupEmpty>` at `section.data.length === 0`, and the copy already exists in `en.json` under `vehicles.dtcs.groupEmpty.*`. That is case (c): **a designed empty state that simply had no fixture able to reach it.** No ASK needed, no new copy, no layout change.
+
+**Second finding: no fixture-variant mechanism existed to mirror — so this was an ASK.** The established dev pattern is `/dev/<name>` routes, `__DEV__`-gated and deliberately **not linked from any screen** ("no typed Href, so no router.d.ts regen"). But `DiagnosticCardHarness` doesn't *toggle* fixtures — it just picks fixed indices out of `mockDiagnostics` — and `mocks.ts` has no `__DEV__`, env or variant machinery at all. Three plausible mechanisms, no precedent, so it went to the founder:
+
+| Option | Trade-off |
+|---|---|
+| **Dev fixture vehicle IDs** *(chosen)* | One file; renders the **real** S5 screen; no new route (no `router.d.ts` regen); switch variants by navigating. Cost: introduces synthetic dev vehicle IDs |
+| `/dev/dtc-list` harness route | Matches the `/dev/*` convention — but S5's `SectionList` lives inside the screen, so it would need extracting first (edits S5's structure, against the scope guard) and would then verify **a copy, not the screen** |
+| Env var (`EXPO_PUBLIC_DTC_FIXTURE`) | Mirrors `EXPO_PUBLIC_DATA_SOURCE`, but is global and needs a Metro restart per variant |
+
+**Done:**
+- **`DEV_DTC_FIXTURE_VEHICLE_IDS`** in `mocks.ts` — three `__DEV__`-only synthetic vehicle IDs that **filter** the existing fixtures: `noPending` (Active + History; the live shape), `activeOnly` (all-but-one-empty), `historyOnly` (leaves ACTIVE empty — the healthy car). Reached by deep link, e.g. `caeorta://vehicles/99999999-9999-4999-8999-999999999001/dtcs`.
+- **Default fixture untouched.** `MOCK_VEHICLE_ID` still returns all seven rows across three groups — that case is the verified reference and stays the default. Production falls through to the unknown-vehicle `[]` path.
+- **`vitest.config.ts` now defines `__DEV__`.** Metro injects it; vitest does not, and `mocks.ts` is imported by the suite, so it would have thrown at import time.
+- **Tests (+5, 152 → 157)** covering the *selection* only — which groups survive per variant, that the default is unchanged, that every variant is a **strict subset** of the default (rows filtered, never invented), and that an unknown vehicle still returns `[]`. `groupDtcs` is deliberately not re-tested; it has its own suite.
+
+**On-device: all three empty strings verified** (same phone, USB, deep link):
+
+| Variant | Observed |
+|---|---|
+| `noPending` | PENDING keeps its header + "Nothing pending — no codes waiting to confirm."; Active and History populated |
+| `activeOnly` | PENDING and HISTORY both empty, stacking cleanly with correct spacing |
+| `historyOnly` | ACTIVE → "No active codes." — the last unseen string |
+
+**This empirically validates the session-34 always-render decision.** The `noPending` variant is what a live flip produces today, and the group demonstrably **stands there visibly empty** rather than vanishing into a two-section layout §6 doesn't specify. That was the argument for the decision; it is now observed rather than reasoned.
+
+**Scope guard held.** The change touches `mocks.ts`, its test, and `vitest.config.ts` — nothing else. `groupDtcs`, `deriveDtcBadgeSeverity`, `DTC_GROUPING_ORDER` and the S5 screen are all untouched, and the variants only filter rows the default already produces.
+
+**Gate:** `pnpm -r typecheck` green; `pnpm -r run --if-present test` green (types 51, mobile **157**); `pnpm --filter @caeorta/mobile lint` clean. `apps/admin` still carries its three pre-existing lint errors from Platform commit `22acf4c` (CF-05); `git diff origin/main -- apps/admin` is empty on this branch, so nothing was added to it.
+
+**Typecheck earned its keep again.** `vitest run` passed with a missing `DtcGrouping` type import in the test file — vitest doesn't typecheck, `tsc` caught it. Same lesson as session 33's seam-gap catch: the test suite passing is not evidence the types are sound.
+
+**Open items rolled forward:**
+- **CF-29 unchanged in substance** — the empty-state copy is verified, but it is still a stopgap for a group with no live source. The **founder decision** (Platform adds the signal, or the group is cut and §6 amended) is what resolves it. Do not flip `DATA_SOURCE.dtcs`.
+- **CF-31 / CF-32 / CF-33 / CF-28 / CF-30 / R24** all unchanged.
+- **Figma parity for S5 still unchecked** — board `node 53:195` never opened; the screen was built from the written spec + tokens. Worth a diff before merge.
+- **`expo-updates` 56.0.19 vs `expo` 56.0.8 skew** — still blocks any x86_64/emulator build. Its own PR.
+- **Day 4:** S6 detail, replacing the stub.
+
+**Notes / lessons:**
+- **"Unverified" and "unimplemented" are different findings, and the brief was right to make me check which.** The empty state was fully built and had copy; it just had no data path that reached it. A fixture closed it — had I assumed a UX gap, I'd have invented copy that already existed.
+- **Choosing the mechanism that verifies the real screen mattered more than matching the established pattern.** The `/dev/*` harness convention was the closer precedent, but following it here would have meant extracting S5's list to render a copy — more churn, weaker evidence.
 
 ---
 

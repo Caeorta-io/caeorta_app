@@ -301,9 +301,41 @@ original six:
 - **Owner:** Founder decision (keep or cut the group) → then Platform track (schema) +
   hardware team (whether the device can even report pending) + App track (delete the
   overlay).
+- **Update 2026-07-26 (session 34, PR #42) — a SCREEN now depends on the overlay, and
+  the cost of collapsing was deliberately capped.** S5 ships rendering all three
+  sections, so the mock overlay is no longer seam-only; it is visible product. Two
+  containment measures were built specifically for this entry:
+  1. **One split point.** `groupDtcs` (`apps/mobile/src/lib/dtc.ts`) is the ONLY place
+     the three-way split is decided, typed as `Record<DtcGrouping, Dtc[]>` — so
+     narrowing `DTC_GROUPINGS` in `@caeorta/types` turns the `pending: []` line into a
+     **compile error**, not a silently dead branch. Resolution (b) is therefore a
+     two-edit change: the types union + deleting `MOCK_PENDING_DTC_IDS` and the
+     `toMockDtc` overlay branch. **The S5 screen needs no edit at all** — it builds its
+     sections by mapping `DTC_GROUPING_ORDER`, so a two-member union renders two
+     sections on its own. A unit test asserts an empty Pending bucket still exists for
+     the live-shaped input.
+  2. **The regression stays visible.** All three section headers render even when
+     empty (founder call, session 34). If `DATA_SOURCE.dtcs` were flipped live before
+     this entry resolves, Pending would stand permanently empty — a visible question
+     mark — rather than vanishing into the two-section layout §6 doesn't specify.
+  This does not weaken the gate: **still do not flip `DATA_SOURCE.dtcs` to live** until
+  the founder decision lands.
+  **Verification (2026-07-27, sessions 34b + 34c): COMPLETE, including the live shape.**
+  The three-group render was confirmed on a physical device in 34b. The empty-group branch
+  — initially unexercised, since all three mock groups are populated — was closed in 34c by
+  adding `__DEV__`-only fixture variants (`DEV_DTC_FIXTURE_VEHICLE_IDS` in `mocks.ts`) that
+  filter the existing fixtures. **The `noPending` variant renders exactly what a live flip
+  would produce today** — Active and History populated, Pending carrying its header plus
+  "Nothing pending — no codes waiting to confirm." — and was observed on-device. All three
+  `groupEmpty` strings have now rendered.
+  This **validates the session-34 always-render decision empirically**: the group does not
+  silently vanish, it stands visibly empty. It does **not** weaken the gate — the copy is
+  still a stopgap for a group with no live source, and the founder decision is still what
+  resolves this entry.
 - **Cross-references:** R24 (#1); design §6 `S5`; `packages/types/src/dtc.ts`
-  `TODO(dtc-pending)`; `MOCK_PENDING_DTC_IDS` in `mocks.ts`; the `fetchDtcs` live-adapter
-  note in `source.ts`; workdiary session 33.
+  `TODO(dtc-pending)`; `MOCK_PENDING_DTC_IDS` in `mocks.ts`; `groupDtcs` in
+  `apps/mobile/src/lib/dtc.ts`; the `fetchDtcs` live-adapter note in `source.ts`;
+  workdiary sessions 33, 34.
 
 ### CF-30 — `insufficient_data` modeled as a severity vs. the contract's category
 
@@ -379,13 +411,54 @@ original six:
     both have a legitimate use for. Keep both registers; don't trade one for the other.
 - **Owner:** Founder / designer (the plain-language copy — the blocking input) + Platform
   track (the `dtc_lookup` column, if (a)) + App track (the stopgap and the eventual swap).
+- **Update 2026-07-26 (session 34, PR #42):** `dtcTitle()` is now **load-bearing on a
+  shipped screen** — every S5 row headline comes from it. The map's coverage is still
+  pinned to the fixtures by test, so the stopgap cannot silently fall behind, and an
+  uncovered code degrades to the ECU `description` and then to the raw code rather than
+  blanking. Unchanged otherwise: the blocking input is still the **content decision**
+  (who authors the plain-language copy).
 - **Cross-references:** R24 (#3); CF-07 (the adjacent provisional-vocabulary carry);
   design §6 `S5`/`S6` + §8 voice; `apps/mobile/src/lib/dtcTitles.ts` (the flip-point, with
-  the same two options recorded in-file); `supabase/seed_dtc_lookup.sql`; PR #41; workdiary
-  session 33.
+  the same two options recorded in-file); `supabase/seed_dtc_lookup.sql`; PR #41; the S5
+  row headline in `vehicles/[id]/dtcs/index.tsx` (PR #42); workdiary sessions 33, 34.
 - **Gate:** blocks any live-flip of DTC **titles** specifically. Distinct from CF-29 (which
   gates the whole `DATA_SOURCE.dtcs` flip) — titles could in principle flip independently
   once the copy exists.
+
+### CF-32 — DTC `severity_raw` has no vocabulary — `TODO(dtc-severity-vocab)` (R24 #4)
+
+- **Category:** Provisional-value-reconciliation
+- **Origin:** Week 5 Day 3, session 34 (2026-07-26) — building the S5 badge derivation.
+- **Current status:** Open. `dtcs.severity_raw` is plain `text` with **no CHECK
+  constraint and no documented vocabulary** (verified on `origin/main`, migration
+  `20260602130000`); `docs/05` describes it only as "as reported by ECU". S5 tints each
+  code badge from it, so the app needs a bounded tier — supplied by
+  `deriveDtcBadgeSeverity` (`apps/mobile/src/lib/dtc.ts`), the canonical derivation.
+  **Nothing was invented.** The map covers exactly the values the mock fixtures carry
+  (`critical` / `warning` / `warn` / `info`, case- and whitespace-normalised) and the
+  target union matches the ladder Platform **already** CHECK-constrains on
+  `dtc_lookup.severity_hint` — `('info','warning','critical')`, migration
+  `20260615000002` — rather than adding a fourth vocabulary to the project. Anything
+  unrecognised (including `null`, blank, and a non-string from an unvalidated live row)
+  renders the off-ladder neutral **`unknown`** badge; unit tests lock the no-throw and
+  no-mis-tint behaviour. **Failure mode is understatement, never overstatement or a
+  crash:** a real ECU string this map omits shows as unrated rather than as its true
+  tier — quiet and wrong, not alarming and wrong.
+- **What's needed to resolve:** The hardware/firmware track confirms what the device
+  actually writes into `severity_raw` (it may be free OEM text with no closed set at
+  all, in which case say so and the `unknown` fallback becomes the documented steady
+  state, not a gap). Two follow-ons then become available, both currently unwired:
+  (a) `dtc_lookup.severity_hint` is a per-code canonical tier and is the obvious
+  fallback for a row whose `severity_raw` is null — it needs the lookup table joined
+  into the DTC seam first; (b) if a closed ECU set exists, extend the map and consider a
+  CHECK on the column. Gate on any live flip of `DATA_SOURCE.dtcs`.
+- **Owner:** Hardware/firmware team (what the device writes) + Platform track
+  (`dtc_lookup` join / any CHECK) + App track (extend the map, remove the TODO).
+- **Cross-references:** R24 (#4); CF-07 / R22 (the adjacent provisional-vocabulary
+  carry); CF-30 (the severity-vs-category vocabulary question on the *agent* side —
+  related but a different column and a different owner); design §4.3 + §6 `S5`;
+  `TODO(dtc-severity-vocab)` in `apps/mobile/src/lib/dtc.ts`; PR #42; workdiary
+  session 34.
 
 ### CF-08 — Coolant "hot" threshold — `TODO(coolant-hot-threshold)` = provisional 105 °C (R22 #2)
 
@@ -501,15 +574,18 @@ original six:
   severity-dot stand-in and the screen-local `SEVERITY_DOT` map — so the
   drive-detail half of this carry is closed (and closed a live-flip mis-render on
   the way; see CF-30).
-  **What remains:** (a) the **vehicle-detail `DiagnosticsPreview`** still renders
-  the stock-Tailwind stand-in — it sits on an un-migrated Week-1–3 screen, so
-  lifting it across the token boundary is entangled with CF-15 rather than being a
-  clean swap; (b) neither surface is **on-device verified** yet — the swap is
-  typecheck/test-green only.
+  **What remains:** the **vehicle-detail `DiagnosticsPreview`** still renders the
+  stock-Tailwind stand-in — it sits on an un-migrated Week-1–3 screen, so lifting it
+  across the token boundary is entangled with CF-15 rather than being a clean swap.
+  **On-device verification is now DONE (2026-07-27, session 34b)** — this supersedes
+  the earlier "typecheck/test-green only" status. On a physical device the `/dev/diagnostic-card`
+  harness rendered all 8 variants, and drive-detail's `insufficient_data` card rendered
+  **off-ladder** (dashed border + dashed icon ring, no severity accent bar) with the
+  drive-health pill reading **Clean** beside it — which also confirms CF-30's session-33
+  audit finding as an observed fact rather than a test assertion.
 - **What's needed to resolve:** Swap `DiagnosticsPreview` to the atom (naturally
   done with CF-15's Week-8 token migration of that screen, or earlier if the
-  diagnostics feed lands first), and run drive-detail on-device to confirm the
-  cards render and expand. Note: session 30's finding that each Victory Native
+  diagnostics feed lands first). Note: session 30's finding that each Victory Native
   `CartesianChart` auto-scales its own x-domain applies to any future chart inside
   this card (the shipped card uses a styled `View` confidence bar, not a chart).
 - **Owner:** App track.
@@ -690,15 +766,47 @@ original six:
   pass `CI=1`, reconnect via a manual `localhost:8081` dev-server URL), and the
   `pnpm-workspace.yaml` layout question. Confirmed by reading `docs/04` — none of
   this is present there today.
+  **Eight more findings from the 2026-07-27 on-device run (session 34b)**, all
+  currently undocumented and each of which cost real time:
+  1. **A dev-client APK is only reusable on the ABI it was built for.** `expo run:android`
+     builds **only the connected device's** ABI, so the committed debug APK is arm64-only
+     despite `gradle.properties` listing four architectures. Checking `package.json` for
+     native-module changes does **not** tell you whether an APK will run — inspect `lib/`
+     inside the APK.
+  2. **An arm64 APK will not run on an x86_64 emulator even with ARM translation present.**
+     `extractNativeLibs=false` means the libs are never unpacked, and SoLoader then looks
+     inside the APK using the *device's* ABI rather than the app's → `SoLoaderDSONotFoundError`.
+  3. **`expo-updates` 56.0.19 cannot build here:** `ninja: error: manifest 'build.ninja'
+     still dirty after 100 tries`, all four ABIs, ignoring `-PreactNativeArchitectures`.
+     Suspected `expo` 56.0.8 vs `expo-updates` 56.0.19 skew from the session-33 reinstall.
+     **Blocks any emulator/x86_64 build.**
+  4. **`avdmanager create avd` NPEs** while enumerating targets. Workaround: write
+     `~/.android/avd/<name>.ini` + `<name>.avd/config.ini` by hand; the emulator reads them
+     directly. `~/.android/avd` may not exist.
+  5. **`sdkmanager`'s downloader stalls where `curl` works** — same class as the pnpm-fetcher
+     note. Workaround: curl the zips, verify SHA1 against the remote manifest, extract, and
+     synthesise each `package.xml` by cloning the header/license from an sdkmanager-installed
+     package and swapping `<localPackage>`.
+  6. **Use USB, not wireless adb, for dev-client work.** Wireless paired and connected fine
+     but the bundle never loaded (`ERR_STREAM_UNABLE_TO_PIPE`, blank white screen); USB
+     worked first try. Wireless also auto-connects a duplicate mDNS entry for the same phone,
+     breaking every adb command that doesn't pass `-s`.
+  7. **mDNS discovery is blocked while the Wi-Fi profile is "Public"** — `adb mdns services`
+     returns nothing, so pairing needs hand-entered IP:port + code. Outbound `adb pair` still
+     works; only discovery is affected.
+  8. **Deep links beat coordinate taps for driving the app:** scheme is `caeorta`, and
+     `caeorta://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081` + `adb reverse
+     tcp:8081 tcp:8081` bypasses the "Failed to download remote updates" launcher entirely.
 - **What's needed to resolve:** Two queued follow-ups (both founder-owned, since
   `docs/04` is founder-edited): (1) the Metro/NDK/Skia local-setup writeup —
-  **a full follow-up prompt for this is already drafted and ready to run**; (2)
+  **a full follow-up prompt for this is already drafted and ready to run**, and it
+  should now absorb the eight findings above plus the typed-routes regeneration step; (2)
   the `pnpm-workspace.yaml` layout investigation — **a separate queued follow-up
   with its own drafted prompt.**
 - **Owner:** Founder (`docs/04` is founder-owned).
 - **Cross-references:** Claude Code local memories `android-native-build-toolchain-this-machine`,
   `metro-devclient-reconnect`, `pnpm-workspace.yaml`-related notes; workdiary
-  session 30 (Metro diagnostic).
+  session 30 (Metro diagnostic), session 34 (typed routes), session 34b (the eight above).
 
 ### CF-24 — Design doc §6 S4 has no map-row slot
 
@@ -714,6 +822,30 @@ original six:
 - **Owner:** Designer.
 - **Cross-references:** design §6 (S4); `docs/08` Week-4 close (map placeholder);
   workdiary sessions 29, 30.
+
+### CF-33 — Design §7's link graph has no route INTO the DTC list (S5)
+
+- **Category:** Documentation-gap
+- **Origin:** Week 5 Day 3, session 34 (2026-07-26) — building S5.
+- **Current status:** Confirmed gap, same species as CF-24. `docs/design/00_design_system.md`
+  §7 ("Navigation & link graph", whose stated rule is **"No dead ends. Every tappable
+  link/chevron resolves to a real screen"**) carries a row **out of** the DTC list
+  (`DTC list | tap code | → DTC detail (S6)`) but **no row into it** — nothing in §6 or
+  §7 says where a user reaches S5 from. §6's Home/Vehicle-Detail inventory lists the
+  last-drive card, Live mode and the Recent Diagnostics preview + "See all"; fault codes
+  appear nowhere. The app therefore made a placement call (founder, session 34): a
+  **"View fault codes" link on vehicle detail**, directly mirroring the existing
+  "View all drives" link, which was itself an App-track addition to the same screen.
+  Not a blocker — S5 is reachable and the link is one line to move — but the *designed*
+  entry point is unrecorded, so the built nav and the doc's link graph disagree.
+- **What's needed to resolve:** The designer adds a row to §7 (`Vehicle detail | View
+  fault codes | → DTC list (S5)`) and a fault-codes entry to §6's Home/Vehicle-Detail
+  inventory — or specifies a different placement, in which case the App moves the link.
+  Designer-owned doc; not editable from this track.
+- **Owner:** Designer (§7 + §6 inventory) + App track (move the link if placement changes).
+- **Cross-references:** CF-24 (the parallel §6 S4 map-row gap); design §6 + §7;
+  the entry-point link in `apps/mobile/src/app/(app)/vehicles/[id]/index.tsx`; PR #42;
+  workdiary session 34.
 
 ### CF-25 — `docs/05` stale seed.sql "safe to re-run" claim  *(resolved in this PR)*
 

@@ -20,7 +20,7 @@
  *   opaque `Json`, so a key mismatch would NOT be caught by the compiler.
  * ─────────────────────────────────────────────────────────────────────────────
  */
-import type { CreateVehicleInput, Dtc } from '@caeorta/types';
+import type { CreateVehicleInput, Dtc, DtcGrouping } from '@caeorta/types';
 import type { Tables } from '@caeorta/supabase';
 
 import { toDtc } from '../dtc';
@@ -691,16 +691,77 @@ export function drivesPage(
 }
 
 /**
- * A vehicle's DTCs as the app consumes them — each row stamped with its `grouping`
- * (see {@link dtcGrouping}). Ordered newest-first by `last_seen_at`, which is the
- * order the live query returns; the S5 screen does the Active/Pending/History
- * sectioning itself from the stamped field.
+ * DEV-ONLY DTC fixture variants — synthetic vehicle IDs that return a deliberately
+ * INCOMPLETE set of groups, so S5's per-group empty state (`renderSectionFooter` →
+ * `GroupEmpty`) can actually be reached on-device.
+ *
+ * WHY THIS EXISTS: the default fixture populates all three groups, so the empty-group
+ * branch never renders — it was the one in-scope path the session-34b device run could
+ * not verify. Rather than weaken the default fixture (the populated three-group case is
+ * verified and stays the reference), these give the empty branch its own reachable path.
+ *
+ * `noPending` is the important one: it is the shape the LIVE path produces today.
+ * `deriveDtcGrouping` can only ever return 'active' | 'history' (CF-29 — `dtcs` has no
+ * pending column), so on any real vehicle the Pending group is empty *permanently*.
+ * Navigating to this variant is the closest thing to previewing a live flip without
+ * flipping `DATA_SOURCE.dtcs`, and it is exactly what CF-29's gate is protecting.
+ *
+ * HOW TO USE (dev build only): deep-link the S5 route with one of these in place of the
+ * vehicle id — e.g.
+ *   `caeorta://vehicles/99999999-9999-4999-8999-999999999001/dtcs`
+ * The REAL S5 screen renders; nothing is stubbed or duplicated. Gated on `__DEV__`, so a
+ * production build falls through to the unknown-vehicle `[]` path.
+ *
+ * NOT a new grouping rule: these only FILTER the existing fixtures. `groupDtcs`,
+ * `deriveDtcBadgeSeverity` and `DTC_GROUPING_ORDER` are untouched, and each variant's
+ * rows are the same rows the default fixture yields.
  */
-export function dtcsForVehicle(vehicleId: string): Dtc[] {
-  if (vehicleId !== MOCK_VEHICLE_ID) return [];
+export const DEV_DTC_FIXTURE_VEHICLE_IDS = {
+  /** Active + History populated, **Pending empty** — the live shape (CF-29). */
+  noPending: '99999999-9999-4999-8999-999999999001',
+  /** Only Active populated — checks the all-but-one-empty layout. */
+  activeOnly: '99999999-9999-4999-8999-999999999002',
+  /** Only History populated — the "everything resolved" clean-car-with-a-past case. */
+  historyOnly: '99999999-9999-4999-8999-999999999003',
+} as const;
+
+/** Variant id → which groups survive. Keys mirror {@link DEV_DTC_FIXTURE_VEHICLE_IDS}. */
+const DEV_DTC_FIXTURE_GROUPS: Record<string, readonly DtcGrouping[]> = {
+  [DEV_DTC_FIXTURE_VEHICLE_IDS.noPending]: ['active', 'history'],
+  [DEV_DTC_FIXTURE_VEHICLE_IDS.activeOnly]: ['active'],
+  [DEV_DTC_FIXTURE_VEHICLE_IDS.historyOnly]: ['history'],
+};
+
+/** All mock DTCs, stamped and newest-first — the shared basis for every variant. */
+function allMockDtcs(): Dtc[] {
   return [...mockDtcs]
     .sort((a, b) => b.last_seen_at.localeCompare(a.last_seen_at))
     .map(toMockDtc);
+}
+
+/**
+ * A vehicle's DTCs as the app consumes them — each row stamped with its `grouping`
+ * (see {@link toMockDtc}). Ordered newest-first by `last_seen_at`, which is the
+ * order the live query returns; the S5 screen does the Active/Pending/History
+ * sectioning itself from the stamped field.
+ *
+ * {@link MOCK_VEHICLE_ID} returns the full seven-row fixture (all three groups populated
+ * — the DEFAULT, deliberately unchanged). In a dev build the
+ * {@link DEV_DTC_FIXTURE_VEHICLE_IDS} variants return a filtered subset so the empty-group
+ * state is reachable. Any other id returns `[]`, which S5 renders as its whole-screen
+ * "no fault codes" state rather than three empty sections.
+ */
+export function dtcsForVehicle(vehicleId: string): Dtc[] {
+  if (vehicleId === MOCK_VEHICLE_ID) return allMockDtcs();
+
+  if (__DEV__) {
+    const keptGroups = DEV_DTC_FIXTURE_GROUPS[vehicleId];
+    if (keptGroups !== undefined) {
+      return allMockDtcs().filter((dtc) => keptGroups.includes(dtc.grouping));
+    }
+  }
+
+  return [];
 }
 
 /** A single DTC by id, or null if unknown. Mirrors `.eq('id', dtcId).maybeSingle()`. */

@@ -10,6 +10,12 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig({
   resolve: { tsconfigPaths: true },
+  // `__DEV__` is a React Native global that Metro injects; under vitest it would be an
+  // undefined identifier and throw at import time. `mocks.ts` reads it to gate the
+  // dev-only DTC fixture variants, so define it here. Tests therefore always see the
+  // DEV branch — which is what we want to exercise; the production branch is a bundler
+  // substitution, not app logic worth asserting.
+  define: { __DEV__: true },
   test: {
     globals: true,
     environment: 'happy-dom',
