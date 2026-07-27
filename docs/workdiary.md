@@ -1538,7 +1538,7 @@ The P0171 case is the one worth looking at: it is the **most recent** pending co
 **Decisions taken:** three (logged) — always-render empty sections (CF-29 regression visibility); `'unknown'` not `'info'` as the badge fallback; §11 satisfied across the row rather than inside the badge.
 
 **Open items rolled forward:**
-- **On-device verification — STILL PENDING, now three deep.** Nothing in Week 5 has been run on a device: CF-13's Day-1 `/dev/diagnostic-card` harness, session 33's drive-detail card swap, and now S5. For S5 specifically: confirm the three sections render with headers, empty groups show their one-liner, badge tints and glyphs read correctly (especially `'unknown'`'s dashed treatment on P0171), titles are plain-language not P0xxx, and a row tap reaches the S6 stub with the right code. **This backlog is compounding — worth a single dev-build session that clears all three rather than another stack-on.**
+- ~~**On-device verification — STILL PENDING, now three deep.**~~ **DONE 2026-07-27 — see the addendum below.** All three Week-5 surfaces were verified on a physical device in one session, exactly as this item proposed. Nothing failed. **One residual:** the per-group empty states never rendered, because all three fixture groups are populated — see the addendum.
 - **CF-29 — open, and now with a shipped screen depending on the mock overlay.** Updated in `docs/11` with what was built to cap the cost: one split point, compile-error-on-narrow typing, and the always-visible empty section. Resolution still needs the **founder decision** (Platform adds the signal, or the group is cut and §6 amended). Do not flip `DATA_SOURCE.dtcs` before it lands.
 - **CF-32 — new.** `severity_raw` has no vocabulary; needs the hardware/firmware track to say what the device actually writes. May resolve as "there is no closed set", in which case the `unknown` fallback is the documented steady state rather than a gap.
 - **CF-33 — new.** Design §7 has no route *into* S5; the entry-point placement is an App-track call the doc doesn't record. Designer-owned, same species as CF-24.
@@ -1551,6 +1551,53 @@ The P0171 case is the one worth looking at: it is the **most recent** pending co
 - **Type the containment, don't just comment it.** Session 33 narrowed `deriveDtcGrouping`'s return so *widening* is a compile event. The mirror trick here is `Record<DtcGrouping, Dtc[]>`, which makes *narrowing* one too. Between them, both directions of the CF-29 resolution are now compiler-enforced rather than depending on someone reading a TODO.
 - **"Never colour alone" needed reading §6 and §11 together, not choosing between them.** The obvious implementations each satisfied one and quietly broke the other. The resolution also produced a real constraint on reuse (the badge is not compliant standalone), which is written into the component rather than left as tribal knowledge.
 - **An unbacked design element should fail loudly, not tidily.** Hiding an empty section is the better-looking default and the worse engineering one while CF-29 is open.
+
+---
+
+### 2026-07-27 — Addendum to session 34: Week-5 on-device verification run (App track, session 34b)
+
+**Goal:** Clear the compounding "built ≠ verified" backlog — CF-13's Day-1 `/dev/diagnostic-card` harness (PR #40), session 33's drive-detail Diagnostic Card swap (PR #41), and Day-3's S5 DTC list (PR #42) — in one dev-build session on real hardware, rather than stacking a fourth.
+
+**Result: all three verified. Nothing failed. No code changed.**
+
+| Surface | Verified |
+|---|---|
+| **S5 · DTC list** (PR #42) | Three section headers in `DTC_GROUPING_ORDER`; severity-then-recency ordering; colour + glyph + code badges; plain-language titles; dashed off-ladder `unrated` badge; row tap → S6 |
+| **S6 stub** | Resolved **P0171** from the `dtcId` route param — proves route param → `useDtc` → mock seam end-to-end |
+| **Entry point** | "View fault codes" renders under "View all drives" on vehicle detail and navigates (the CF-33 placement call) |
+| **Drive detail** (PR #41) | `insufficient_data` card renders **off-ladder** — dashed border + dashed icon ring, no severity accent bar; health pill reads **Clean** |
+| **Card harness** (PR #40) | 8 variants render; WHAT IT SAW tiles, cyan confidence bar, thumbs, mark-as-seen |
+
+**The ordering rule is visibly doing real work**, which a screenshot proves better than a unit test: **P0234** (critical) sits **first** in Active despite being the *oldest* code, and **P0171** sits **last** in Pending despite being the *most recent* — because a null `severity_raw` is unrankable and ranks last by design (CF-32). Both are the intended rules, observed rather than asserted.
+
+**Also confirmed on-device: the session-33 CF-30 audit conclusion.** `insufficient_data` does not elevate drive health — the pill reads Clean next to an insufficient-data card. That had been an audit + unit-test claim; it is now an observed fact.
+
+**Residual gap — the per-group empty states were NOT exercised.** All three fixture groups are populated, so `vehicles.dtcs.groupEmpty.*` never rendered. That branch is the one a premature CF-29 live flip would expose (Pending standing empty), so it is precisely the path worth seeing. Cheapest fix when someone is next on a device: temporarily empty `MOCK_PENDING_DTC_IDS` and reload. Not worth a fixture change on its own.
+
+**Environment — this took far longer than the verification itself, and all of it belongs in CF-23's local-setup writeup:**
+
+1. **The existing dev-client APK is arm64-only.** `apps/mobile/android/.../app-debug.apk` (5 Jul) contains **only `arm64-v8a`** — 31 native libs, no x86_64 — because `expo run:android` builds only the *connected device's* ABI, and that build had the phone attached. `gradle.properties` listing all four architectures is misleading: it is overridden per-run. **Checking `package.json` for native-module changes is NOT sufficient to judge whether an APK is reusable — the ABI matters independently**, and that mistake cost an emulator detour.
+2. **An arm64 APK cannot run on an x86_64 emulator even with ARM translation.** The image *does* have it (`abilist = x86_64,arm64-v8a`, `libndk_translation.so`, `ro.enable.native.bridge.exec=1`) and Android correctly set `primaryCpuAbi=arm64-v8a` — but the APK sets `extractNativeLibs=false`, so `lib/arm64/` was **empty** and SoLoader had to read from inside the APK. It looked in `base.apk!/lib/x86_64` — the *device's* ABI, not the *app's* — and died with `SoLoaderDSONotFoundError: couldn't find DSO to load: libreactnative.so`. **SoLoader + ndk-translation + uncompressed libs do not cooperate.**
+3. **Building an x86_64 APK fails in `expo-updates`.** `ninja: error: manifest 'build.ninja' still dirty after 100 tries` (400 "Re-running CMake" lines), for **all four ABIs** — `-PreactNativeArchitectures=x86_64` is ignored by that module. The `.cxx` dir was created fresh by the failing build, so it is not stale state. Likely a **version skew**: the app pins `expo ~56.0.8` but `expo-updates` resolved to **56.0.19**, almost certainly pulled by the reinstall after session 33's `pnpm-workspace.yaml` fix — which explains why 5 Jul built fine and this did not. **Left unfixed: it is a dependency-version change, out of scope for verifying a screen, and belongs in its own PR.**
+4. **`avdmanager create avd` NPEs on this SDK** — it dies while enumerating targets, right after listing `android-30` (a known bug with newer platform revisions). Worked around by **writing the AVD config directly**: `~/.android/avd/<name>.ini` + `<name>.avd/config.ini`. The emulator reads those without avdmanager's involvement. Also note `~/.android/avd` did not exist and had to be created.
+5. **`sdkmanager`'s downloader stalled; `curl` did not** — the same class of failure as the pnpm fetcher note already in local memory. Fixed by curling the two zips directly, verifying SHA1 against the remote manifests, extracting manually, and **synthesising each `package.xml`** (cloned header + license from `platforms/android-36`, swapped `<localPackage>`). `sdkmanager --list_installed` then recognised both, which validated the approach.
+6. **Wireless adb (`adb pair`/`connect`) connected fine but the bundle would not load** — Metro logged `ERR_STREAM_UNABLE_TO_PIPE` and the app sat on a blank white screen. **Switching to USB fixed it immediately**, first try. Wireless adb also auto-connected a *second* mDNS entry for the same phone, which broke every un-`-s`-qualified adb command with "more than one device/emulator". **For dev-client work on this machine, use USB.**
+7. **mDNS discovery is blocked** because the Wi-Fi profile is classified **Public** — `adb mdns services` found nothing, so pairing had to be driven by hand-entered IP:port + code. Outbound `adb pair` is unaffected by the Public profile; only discovery is.
+8. **Typed routes, again** (already noted in the main entry): `.expo/types/router.d.ts` is gitignored and regenerated only by booting the Expo CLI. Any PR adding a route hits a confusing "not assignable to … 36 more" typecheck error until then.
+
+**Method note:** navigation was driven by **deep link** (`caeorta://vehicles/<id>/dtcs`, `caeorta://dev/diagnostic-card`) rather than coordinate taps, which is reliable and reproducible; the app scheme is `caeorta`. The dev launcher was bypassed with `caeorta://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081` plus `adb reverse tcp:8081 tcp:8081`, which sidesteps the "Failed to download remote updates" launcher state entirely.
+
+**Open items rolled forward:**
+- **CF-29 / CF-31 / CF-32 / CF-33 / CF-28 / CF-30 / R24** — all unchanged by this run. Verification does not resolve any of them; they are schema/vocabulary/content gaps, not rendering bugs.
+- **S5 empty-group states** — the one unexercised branch (above).
+- **`expo-updates` 56.0.19 vs `expo` 56.0.8 skew** — blocks any x86_64/emulator build. Its own PR; `npx expo install --check` reports 13 packages needing alignment.
+- **Figma parity for S5 not checked.** The screen was built from the *written* design system (§6/§4.3/§11) plus tokens, not from the Figma frame — §6 names board `node 53:195` and it was never opened. The build is defensible against the doc but is **not** verified against the designer's frame. Worth a diff before merge; layout-only if it differs, since the derivations are independent.
+- **Day 4:** S6 detail, replacing the stub.
+
+**Notes / lessons:**
+- **"No dependency changes" ≠ "this APK will run."** ABI is an independent axis, and it silently differs per build depending on what was plugged in at the time. Check `lib/` inside the APK, not just `package.json`.
+- **A screenshot verified something the unit tests could not.** The tests assert ordering; the device showed *why it matters* — the critical code jumping the queue and the unrated one sinking despite recency are legible at a glance in a way an assertion list is not.
+- **The environment fight dwarfed the verification.** Roughly five minutes of actual screen-checking sat behind an emulator install, a failed native build, and a wireless-adb dead end. The USB path — which worked first try — should have been the default rather than the fallback.
 
 ---
 

@@ -320,6 +320,11 @@ original six:
      mark — rather than vanishing into the two-section layout §6 doesn't specify.
   This does not weaken the gate: **still do not flip `DATA_SOURCE.dtcs` to live** until
   the founder decision lands.
+  **Verification caveat (2026-07-27, session 34b):** S5 was confirmed on a physical device
+  and the three-group render is correct — but **the empty-group branch was NOT exercised**,
+  because all three mock groups are populated. That branch is exactly what a premature live
+  flip would surface, so it remains the one unobserved path. Cheapest check when next on a
+  device: temporarily empty `MOCK_PENDING_DTC_IDS` and reload.
 - **Cross-references:** R24 (#1); design §6 `S5`; `packages/types/src/dtc.ts`
   `TODO(dtc-pending)`; `MOCK_PENDING_DTC_IDS` in `mocks.ts`; `groupDtcs` in
   `apps/mobile/src/lib/dtc.ts`; the `fetchDtcs` live-adapter note in `source.ts`;
@@ -562,15 +567,18 @@ original six:
   severity-dot stand-in and the screen-local `SEVERITY_DOT` map — so the
   drive-detail half of this carry is closed (and closed a live-flip mis-render on
   the way; see CF-30).
-  **What remains:** (a) the **vehicle-detail `DiagnosticsPreview`** still renders
-  the stock-Tailwind stand-in — it sits on an un-migrated Week-1–3 screen, so
-  lifting it across the token boundary is entangled with CF-15 rather than being a
-  clean swap; (b) neither surface is **on-device verified** yet — the swap is
-  typecheck/test-green only.
+  **What remains:** the **vehicle-detail `DiagnosticsPreview`** still renders the
+  stock-Tailwind stand-in — it sits on an un-migrated Week-1–3 screen, so lifting it
+  across the token boundary is entangled with CF-15 rather than being a clean swap.
+  **On-device verification is now DONE (2026-07-27, session 34b)** — this supersedes
+  the earlier "typecheck/test-green only" status. On a physical device the `/dev/diagnostic-card`
+  harness rendered all 8 variants, and drive-detail's `insufficient_data` card rendered
+  **off-ladder** (dashed border + dashed icon ring, no severity accent bar) with the
+  drive-health pill reading **Clean** beside it — which also confirms CF-30's session-33
+  audit finding as an observed fact rather than a test assertion.
 - **What's needed to resolve:** Swap `DiagnosticsPreview` to the atom (naturally
   done with CF-15's Week-8 token migration of that screen, or earlier if the
-  diagnostics feed lands first), and run drive-detail on-device to confirm the
-  cards render and expand. Note: session 30's finding that each Victory Native
+  diagnostics feed lands first). Note: session 30's finding that each Victory Native
   `CartesianChart` auto-scales its own x-domain applies to any future chart inside
   this card (the shipped card uses a styled `View` confidence bar, not a chart).
 - **Owner:** App track.
@@ -751,15 +759,47 @@ original six:
   pass `CI=1`, reconnect via a manual `localhost:8081` dev-server URL), and the
   `pnpm-workspace.yaml` layout question. Confirmed by reading `docs/04` — none of
   this is present there today.
+  **Eight more findings from the 2026-07-27 on-device run (session 34b)**, all
+  currently undocumented and each of which cost real time:
+  1. **A dev-client APK is only reusable on the ABI it was built for.** `expo run:android`
+     builds **only the connected device's** ABI, so the committed debug APK is arm64-only
+     despite `gradle.properties` listing four architectures. Checking `package.json` for
+     native-module changes does **not** tell you whether an APK will run — inspect `lib/`
+     inside the APK.
+  2. **An arm64 APK will not run on an x86_64 emulator even with ARM translation present.**
+     `extractNativeLibs=false` means the libs are never unpacked, and SoLoader then looks
+     inside the APK using the *device's* ABI rather than the app's → `SoLoaderDSONotFoundError`.
+  3. **`expo-updates` 56.0.19 cannot build here:** `ninja: error: manifest 'build.ninja'
+     still dirty after 100 tries`, all four ABIs, ignoring `-PreactNativeArchitectures`.
+     Suspected `expo` 56.0.8 vs `expo-updates` 56.0.19 skew from the session-33 reinstall.
+     **Blocks any emulator/x86_64 build.**
+  4. **`avdmanager create avd` NPEs** while enumerating targets. Workaround: write
+     `~/.android/avd/<name>.ini` + `<name>.avd/config.ini` by hand; the emulator reads them
+     directly. `~/.android/avd` may not exist.
+  5. **`sdkmanager`'s downloader stalls where `curl` works** — same class as the pnpm-fetcher
+     note. Workaround: curl the zips, verify SHA1 against the remote manifest, extract, and
+     synthesise each `package.xml` by cloning the header/license from an sdkmanager-installed
+     package and swapping `<localPackage>`.
+  6. **Use USB, not wireless adb, for dev-client work.** Wireless paired and connected fine
+     but the bundle never loaded (`ERR_STREAM_UNABLE_TO_PIPE`, blank white screen); USB
+     worked first try. Wireless also auto-connects a duplicate mDNS entry for the same phone,
+     breaking every adb command that doesn't pass `-s`.
+  7. **mDNS discovery is blocked while the Wi-Fi profile is "Public"** — `adb mdns services`
+     returns nothing, so pairing needs hand-entered IP:port + code. Outbound `adb pair` still
+     works; only discovery is affected.
+  8. **Deep links beat coordinate taps for driving the app:** scheme is `caeorta`, and
+     `caeorta://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081` + `adb reverse
+     tcp:8081 tcp:8081` bypasses the "Failed to download remote updates" launcher entirely.
 - **What's needed to resolve:** Two queued follow-ups (both founder-owned, since
   `docs/04` is founder-edited): (1) the Metro/NDK/Skia local-setup writeup —
-  **a full follow-up prompt for this is already drafted and ready to run**; (2)
+  **a full follow-up prompt for this is already drafted and ready to run**, and it
+  should now absorb the eight findings above plus the typed-routes regeneration step; (2)
   the `pnpm-workspace.yaml` layout investigation — **a separate queued follow-up
   with its own drafted prompt.**
 - **Owner:** Founder (`docs/04` is founder-owned).
 - **Cross-references:** Claude Code local memories `android-native-build-toolchain-this-machine`,
   `metro-devclient-reconnect`, `pnpm-workspace.yaml`-related notes; workdiary
-  session 30 (Metro diagnostic).
+  session 30 (Metro diagnostic), session 34 (typed routes), session 34b (the eight above).
 
 ### CF-24 — Design doc §6 S4 has no map-row slot
 
