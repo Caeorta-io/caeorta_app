@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DTC_GROUPINGS, type Dtc } from '@caeorta/types';
+import { DTC_GROUPINGS, type Dtc, type DtcGrouping } from '@caeorta/types';
 
 import {
   deriveDtcBadgeSeverity,
@@ -8,7 +8,12 @@ import {
   toFreezeFrameTiles,
 } from '../dtc';
 import { dtcTitle, hasPlainLanguageTitle } from '../dtcTitles';
-import { dtcsForVehicle, mockDtcs, MOCK_VEHICLE_ID } from '../data/mocks';
+import {
+  DEV_DTC_FIXTURE_VEHICLE_IDS,
+  dtcsForVehicle,
+  mockDtcs,
+  MOCK_VEHICLE_ID,
+} from '../data/mocks';
 
 describe('deriveDtcBadgeSeverity', () => {
   it('maps the known severity_raw values onto the §4.3 ladder', () => {
@@ -230,6 +235,48 @@ describe('toFreezeFrameTiles', () => {
     // rpm is a whole number; coolant/boost carry one decimal (see METRIC_DISPLAY).
     const tiles = toFreezeFrameTiles({ rpm: 5820.7, boost_pressure_kpa: 121.44 });
     expect(tiles.map((t) => t.value)).toEqual(['5821', '121.4']);
+  });
+});
+
+describe('dev DTC fixture variants', () => {
+  // These exist so S5's per-group EMPTY state is reachable on-device — the one in-scope
+  // path the session-34b device run could not exercise. What's asserted here is the
+  // SELECTION (which groups survive), not `groupDtcs`, which has its own suite above.
+
+  /** Distinct groupings present in a variant's rows. */
+  function groupsIn(vehicleId: string): DtcGrouping[] {
+    return [...new Set(dtcsForVehicle(vehicleId).map((d) => d.grouping))].sort();
+  }
+
+  it('leaves the DEFAULT fixture untouched — all three groups still populated', () => {
+    // The populated case is the verified reference; a variant must never alter it.
+    expect(groupsIn(MOCK_VEHICLE_ID)).toEqual(['active', 'history', 'pending']);
+    expect(dtcsForVehicle(MOCK_VEHICLE_ID)).toHaveLength(mockDtcs.length);
+  });
+
+  it('noPending drops ONLY the pending group — the live shape under CF-29', () => {
+    const groups = groupsIn(DEV_DTC_FIXTURE_VEHICLE_IDS.noPending);
+    expect(groups).toEqual(['active', 'history']);
+    expect(groups).not.toContain('pending');
+  });
+
+  it('activeOnly and historyOnly leave exactly one group populated', () => {
+    expect(groupsIn(DEV_DTC_FIXTURE_VEHICLE_IDS.activeOnly)).toEqual(['active']);
+    expect(groupsIn(DEV_DTC_FIXTURE_VEHICLE_IDS.historyOnly)).toEqual(['history']);
+  });
+
+  it('every variant is a strict SUBSET of the default fixture — rows are filtered, not invented', () => {
+    const defaultIds = new Set(dtcsForVehicle(MOCK_VEHICLE_ID).map((d) => d.id));
+    for (const vehicleId of Object.values(DEV_DTC_FIXTURE_VEHICLE_IDS)) {
+      const rows = dtcsForVehicle(vehicleId);
+      expect(rows.length).toBeGreaterThan(0); // a variant that empties everything is the unknown-vehicle path, not a variant
+      expect(rows.length).toBeLessThan(defaultIds.size);
+      for (const row of rows) expect(defaultIds.has(row.id)).toBe(true);
+    }
+  });
+
+  it('an unknown vehicle still returns [] (whole-screen empty, not three empty groups)', () => {
+    expect(dtcsForVehicle('00000000-0000-4000-8000-000000000000')).toEqual([]);
   });
 });
 
