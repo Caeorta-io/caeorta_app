@@ -41,7 +41,8 @@ export type DataCapability =
   | 'currentState'
   | 'currentStateSubscription'
   | 'createVehicle'
-  | 'dtcs';
+  | 'dtcs'
+  | 'dtcDiagnostic';
 
 /**
  * Optional global default via env: `EXPO_PUBLIC_DATA_SOURCE=live` flips every
@@ -79,6 +80,9 @@ export const DATA_SOURCE: Record<DataCapability, DataSourceMode> = {
   // behind it, so a live flip today would silently collapse the list to two groups.
   // See the adapter note on `fetchDtcs` and CF-29.
   dtcs: ENV_DEFAULT,
+  // Separate from `dtcs`: this reads `diagnostic_outputs`, not `dtcs`, so it flips with
+  // the agent-output capabilities rather than with the DTC table. See `fetchDiagnosticForDtc`.
+  dtcDiagnostic: ENV_DEFAULT,
 };
 
 function notImplemented(capability: DataCapability): never {
@@ -256,6 +260,25 @@ export async function fetchDtcs(vehicleId: string): Promise<Dtc[]> {
 export async function fetchDtc(dtcId: string): Promise<Dtc | null> {
   if (DATA_SOURCE.dtcs === 'live') return notImplemented('dtcs');
   return mocks.dtcById(dtcId);
+}
+
+/**
+ * The diagnostic the agent linked to a DTC — S6's "related Diagnostic Card" (§6) and the
+ * §7 route on to Diagnostic detail (S2). Null when nothing references the code, which is
+ * the common case and an empty state, NOT an error.
+ *
+ * Live: `…contains('referenced_dtc_ids', [dtcId]).order('generated_at', desc)` — a
+ * containment query on the `uuid[]` column, then the SAME `findDiagnosticForDtc`
+ * resolution the mock uses, so a code cited by several outputs picks the same one on both
+ * paths. Note this reads `diagnostic_outputs`, so it is gated by the agent-output carries
+ * (CF-30's severity-vs-category vocabulary), not by the DTC ones — hence its own
+ * capability key rather than riding on `dtcs`.
+ */
+export async function fetchDiagnosticForDtc(
+  dtcId: string,
+): Promise<Tables<'diagnostic_outputs'> | null> {
+  if (DATA_SOURCE.dtcDiagnostic === 'live') return notImplemented('dtcDiagnostic');
+  return mocks.diagnosticForDtc(dtcId);
 }
 
 /** Simulated mock-mode latency for the write path, so the form's busy state is visible. */

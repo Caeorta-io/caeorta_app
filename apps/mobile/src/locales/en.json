@@ -202,17 +202,6 @@
       "diagnostics": "Recent diagnostics",
       "noDiagnostics": "No diagnostics yet.",
       "viewAll": "View all",
-      "severity": {
-        "critical": "Critical",
-        "warning": "Warning",
-        "info": "Info",
-        "insufficient_data": "Insufficient data"
-      },
-      "urgency": {
-        "now": "Now",
-        "soon": "Soon",
-        "monitor": "Monitor"
-      },
       "goLive": "Go live",
       "notFoundTitle": "Vehicle not found",
       "notFoundBody": "We couldn't find that vehicle. It may have been removed.",
@@ -250,7 +239,47 @@
       "detail": {
         "eyebrow": "Fault code",
         "notFound": "Not found",
-        "stubBody": "The full detail for this code — what it means, likely causes and the conditions when it set — lands in the next build."
+        "notFoundTitle": "We couldn't find that code",
+        "notFoundBody": "This fault code isn't on your vehicle any more. It may have been cleared since you opened the list.",
+        "error": {
+          "title": "Couldn't load this code",
+          "body": "Something went wrong loading this fault code. Check your connection and try again."
+        },
+        "status": {
+          "active": "Active",
+          "pending": "Pending",
+          "history": "Cleared"
+        },
+        "statusA11y": "Status: {{status}}",
+        "severityMeta": "{{severity}} severity",
+        "seen": {
+          "first": "First seen {{when}}",
+          "last": "Last seen {{when}}",
+          "cleared": "Cleared {{when}}"
+        },
+        "meaning": {
+          "heading": "What it means",
+          "pending": "We don't have a plain-language explanation for this code yet — one written for a modified engine, not a generic OBD-II readout. It's coming.",
+          "ecuHeading": "What the ECU reported"
+        },
+        "causes": {
+          "heading": "Likely causes",
+          "pending": "We haven't published likely causes for this code yet. A generic list would be worse than none on a tuned setup, so we'd rather wait than guess."
+        },
+        "freezeFrame": {
+          "heading": "Conditions when it set",
+          "empty": "No freeze-frame data for this code.",
+          "caveat": "These are the readings around the time the code set, not necessarily the exact moment."
+        },
+        "related": {
+          "heading": "Related diagnostic",
+          "none": "No diagnostic has been linked to this code."
+        },
+        "autoClear": {
+          "heading": "Clearing this code",
+          "active": "Most codes clear themselves. If the fault stops happening, the ECU drops the code on its own after a number of clean drive cycles — you don't need to do anything.",
+          "cleared": "This code is no longer set. It stays here as history so you can spot it if it comes back."
+        }
       }
     },
     "drives": {
@@ -273,9 +302,15 @@
         },
         "charts": {
           "title": "Telemetry",
-          "speed": { "label": "Speed" },
-          "boost": { "label": "Boost" },
-          "coolant": { "label": "Coolant" },
+          "speed": {
+            "label": "Speed"
+          },
+          "boost": {
+            "label": "Boost"
+          },
+          "coolant": {
+            "label": "Coolant"
+          },
           "empty": "No data for this metric on this drive.",
           "error": {
             "unauthorized": "Your session expired — sign in again to see telemetry.",

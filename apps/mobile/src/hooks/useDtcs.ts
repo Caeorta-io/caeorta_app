@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Dtc } from '@caeorta/types';
+import type { Tables } from '@caeorta/supabase';
 
-import { fetchDtc, fetchDtcs } from '@/lib/data/source';
+import { fetchDiagnosticForDtc, fetchDtc, fetchDtcs } from '@/lib/data/source';
 
 import { queryKeys } from './queryKeys';
 
@@ -32,6 +33,24 @@ export function useDtc(vehicleId: string, dtcId: string) {
   return useQuery<Dtc | null>({
     queryKey: queryKeys.dtc(vehicleId, dtcId),
     queryFn: () => fetchDtc(dtcId),
+    enabled: vehicleId.length > 0 && dtcId.length > 0,
+  });
+}
+
+/**
+ * The diagnostic the agent linked to this DTC — S6's related Diagnostic Card (§6).
+ * Resolves to `null` when nothing references the code, which is the ordinary case, not an
+ * error.
+ *
+ * FAILS SOFT at the call site, unlike {@link useDtc}: the related card is a supplementary
+ * section on a screen whose primary content is the code itself, so an error renders as
+ * "no related diagnostic" rather than blocking S6 — the same policy `useDriveDiagnostics`
+ * uses on drive-detail, and the opposite of `useDtcs` on S5 where the list IS the screen.
+ */
+export function useDiagnosticForDtc(vehicleId: string, dtcId: string) {
+  return useQuery<Tables<'diagnostic_outputs'> | null>({
+    queryKey: queryKeys.dtcDiagnostic(vehicleId, dtcId),
+    queryFn: () => fetchDiagnosticForDtc(dtcId),
     enabled: vehicleId.length > 0 && dtcId.length > 0,
   });
 }

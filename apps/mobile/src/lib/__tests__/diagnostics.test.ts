@@ -3,10 +3,17 @@ import type { Tables } from '@caeorta/supabase';
 
 import {
   deriveDiagnosticCardState,
+  findDiagnosticForDtc,
   sortDiagnosticsByPriority,
   usesCriticalAcknowledgeLabel,
 } from '../diagnostics';
-import { mockDiagnostics, mockOtherDriveDiagnostics } from '../data/mocks';
+import {
+  allMockDiagnostics,
+  mockDiagnostics,
+  mockDtcs,
+  mockOtherDriveDiagnostics,
+  MOCK_LINKED_DTC_ID,
+} from '../data/mocks';
 
 // Build a diagnostic by overriding a real fixture, so every required column is
 // present without restating the whole row.
@@ -144,5 +151,64 @@ describe('usesCriticalAcknowledgeLabel', () => {
     expect(usesCriticalAcknowledgeLabel('warning')).toBe(false);
     expect(usesCriticalAcknowledgeLabel('info')).toBe(false);
     expect(usesCriticalAcknowledgeLabel('insufficient_data')).toBe(false);
+  });
+});
+
+describe('findDiagnosticForDtc (S6 related card)', () => {
+  /** Field-level override of the same real fixture {@link make} builds from. */
+  const diagnostic = (fields: Partial<Diagnostic>): Diagnostic => ({ ...base, ...fields });
+
+  it('resolves the one linked fixture', () => {
+    const found = findDiagnosticForDtc(allMockDiagnostics, MOCK_LINKED_DTC_ID);
+    expect(found).not.toBeNull();
+    expect(found?.referenced_dtc_ids).toContain(MOCK_LINKED_DTC_ID);
+  });
+
+  it('returns null for a real DTC that nothing references', () => {
+    // The ordinary case: only one fixture carries a link, so every other code has none.
+    const unlinked = mockDtcs.filter((d) => d.id !== MOCK_LINKED_DTC_ID);
+    expect(unlinked.length).toBeGreaterThan(0);
+    for (const dtc of unlinked) {
+      expect(findDiagnosticForDtc(allMockDiagnostics, dtc.id)).toBeNull();
+    }
+  });
+
+  it('keeps the link set to exactly one — the fixture contract S6 verification rests on', () => {
+    const linked = allMockDiagnostics.filter((d) => d.referenced_dtc_ids.length > 0);
+    expect(linked).toHaveLength(1);
+    expect(linked[0]?.referenced_dtc_ids).toEqual([MOCK_LINKED_DTC_ID]);
+  });
+
+  it('picks the highest-priority row when several diagnostics cite the same code', () => {
+    // §6 shows ONE card, so a multi-citation must resolve deterministically: severity
+    // first, then recency — the same order sortDiagnosticsByPriority applies everywhere.
+    const dtcId = 'shared-code';
+    const info = diagnostic({ id: 'a', severity: 'info', referenced_dtc_ids: [dtcId] });
+    const critical = diagnostic({ id: 'b', severity: 'critical', referenced_dtc_ids: [dtcId] });
+    expect(findDiagnosticForDtc([info, critical], dtcId)?.id).toBe('b');
+    expect(findDiagnosticForDtc([critical, info], dtcId)?.id).toBe('b');
+  });
+
+  it('never throws on empty, blank or malformed input', () => {
+    const malformed = [
+      diagnostic({ id: 'no-array', referenced_dtc_ids: null as unknown as string[] }),
+      diagnostic({ id: 'undef', referenced_dtc_ids: undefined as unknown as string[] }),
+      diagnostic({ id: 'not-array', referenced_dtc_ids: 'nope' as unknown as string[] }),
+    ];
+    for (const dtcId of ['', '   ', 'unknown-id', MOCK_LINKED_DTC_ID]) {
+      expect(() => findDiagnosticForDtc(malformed, dtcId)).not.toThrow();
+      expect(findDiagnosticForDtc(malformed, dtcId)).toBeNull();
+    }
+    expect(findDiagnosticForDtc([], MOCK_LINKED_DTC_ID)).toBeNull();
+    // A blank id must never match, even against rows that do carry links.
+    expect(findDiagnosticForDtc(allMockDiagnostics, '')).toBeNull();
+    expect(findDiagnosticForDtc(allMockDiagnostics, '  ')).toBeNull();
+  });
+
+  it('does not mutate the input array', () => {
+    const input = [...allMockDiagnostics];
+    const before = input.map((d) => d.id);
+    findDiagnosticForDtc(input, MOCK_LINKED_DTC_ID);
+    expect(input.map((d) => d.id)).toEqual(before);
   });
 });

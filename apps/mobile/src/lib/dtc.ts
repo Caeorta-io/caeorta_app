@@ -188,6 +188,31 @@ export function groupDtcs(dtcs: readonly Dtc[]): DtcGroups {
   return groups;
 }
 
+/**
+ * The single group ONE DTC belongs to — S6's status pill (design §6: "large code badge +
+ * status pill").
+ *
+ * Implemented BY {@link groupDtcs} rather than by reading `dtc.grouping` directly, and
+ * that is the whole point: the status pill and the S5 sections must never be able to
+ * disagree about which group a code is in. Routing through the canonical splitter means
+ * the pill inherits its rules for free — including the degrade-to-visible fallback, so a
+ * row carrying an off-union `grouping` (reachable only from an unvalidated live row) reads
+ * "Active" on S6 exactly as it lands in the Active section on S5, instead of rendering a
+ * missing i18n key. If CF-29 collapses the union to two members, this follows without an
+ * edit.
+ *
+ * Pure; never throws. The single-element array is deliberate — see the note above before
+ * "simplifying" it to `dtc.grouping`.
+ */
+export function deriveDtcStatus(dtc: Dtc): DtcGrouping {
+  const groups = groupDtcs([dtc]);
+  const entry = (Object.keys(groups) as DtcGrouping[]).find((key) => groups[key].length > 0);
+  // `groupDtcs` always places every input row in exactly one bucket, so `entry` is defined
+  // for any real DTC. The fallback exists only to keep this total without a non-null
+  // assertion, and matches `groupDtcs`'s own degrade-to-visible policy.
+  return entry ?? 'active';
+}
+
 /** Badge severity, then `last_seen_at` DESC. See {@link groupDtcs} for the rationale. */
 function compareDtcsForList(a: Dtc, b: Dtc): number {
   const bySeverity =
