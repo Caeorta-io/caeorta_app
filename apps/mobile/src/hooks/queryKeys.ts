@@ -26,4 +26,8 @@ export const queryKeys = {
   // that code's detail, and a per-vehicle sweep should catch both.
   dtcs: (vehicleId: string) => ['vehicles', vehicleId, 'dtcs'] as const,
   dtc: (vehicleId: string, dtcId: string) => ['vehicles', vehicleId, 'dtcs', dtcId] as const,
+  // Nested under the code's own key so it is swept by both a per-vehicle and a per-code
+  // invalidation — the related card is part of that code's detail view.
+  dtcDiagnostic: (vehicleId: string, dtcId: string) =>
+    ['vehicles', vehicleId, 'dtcs', dtcId, 'diagnostic'] as const,
 } as const;

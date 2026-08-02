@@ -53,6 +53,45 @@ export function sortDiagnosticsByPriority(
   });
 }
 
+// ─── DTC → related diagnostic (design §6 S6, §7) ─────────────────────────────
+
+/**
+ * The diagnostic the agent linked to a given DTC, or `null` when nothing references it.
+ * Backs design §6 `S6`'s "related Diagnostic Card" and §7's
+ * `DTC detail | related | → Diagnostic detail (S2)` row.
+ *
+ * `diagnostic_outputs.referenced_dtc_ids` is a `uuid[]` column (docs/05): the agent may
+ * cite several codes in one output, and several outputs may cite the same code. S6 shows
+ * ONE card (§6 says "a related Diagnostic Card", singular), so this resolves the single
+ * best match rather than a list: highest severity first, then most recent — the same
+ * priority order {@link sortDiagnosticsByPriority} uses, so "the related diagnostic" means
+ * the same thing here as "the top diagnostic" does everywhere else in the app.
+ *
+ * NEVER THROWS, and never mismatches:
+ *   • an empty/whitespace `dtcId` matches nothing (guards a route param that hasn't
+ *     resolved yet — `useLocalSearchParams` can hand back an empty string on first render);
+ *   • a row whose `referenced_dtc_ids` is absent or not an array is skipped rather than
+ *     crashing the screen. The generated type says `string[]`, but a live PostgREST row is
+ *     unvalidated at this boundary — the same defensive stance `deriveDtcBadgeSeverity`
+ *     takes on `severity_raw`.
+ *
+ * Pure: returns a row from the input or `null`, and does not mutate the input.
+ */
+export function findDiagnosticForDtc(
+  diagnostics: readonly Tables<'diagnostic_outputs'>[],
+  dtcId: string,
+): Tables<'diagnostic_outputs'> | null {
+  if (typeof dtcId !== 'string' || dtcId.trim().length === 0) return null;
+
+  const linked = diagnostics.filter((d) => {
+    const ids: unknown = d.referenced_dtc_ids;
+    return Array.isArray(ids) && ids.includes(dtcId);
+  });
+
+  // `sortDiagnosticsByPriority` copies before sorting, so the caller's array is untouched.
+  return sortDiagnosticsByPriority(linked)[0] ?? null;
+}
+
 // ─── Diagnostic Card visual state (design §5.1 / §4.3) ───────────────────────
 
 /**

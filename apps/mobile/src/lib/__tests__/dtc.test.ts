@@ -3,6 +3,7 @@ import { DTC_GROUPINGS, type Dtc, type DtcGrouping } from '@caeorta/types';
 
 import {
   deriveDtcBadgeSeverity,
+  deriveDtcStatus,
   groupDtcs,
   parseFreezeFrameMetrics,
   toFreezeFrameTiles,
@@ -10,8 +11,10 @@ import {
 import { dtcTitle, hasPlainLanguageTitle } from '../dtcTitles';
 import {
   DEV_DTC_FIXTURE_VEHICLE_IDS,
+  dtcById,
   dtcsForVehicle,
   mockDtcs,
+  MOCK_LINKED_DTC_ID,
   MOCK_VEHICLE_ID,
 } from '../data/mocks';
 
@@ -310,5 +313,93 @@ describe('DTC title coverage', () => {
     // fails here rather than shipping raw jargon (or a bare code) into the S5 list.
     const uncovered = mockDtcs.map((d) => d.code).filter((code) => !hasPlainLanguageTitle(code));
     expect(uncovered).toEqual([]);
+  });
+});
+
+describe('deriveDtcStatus (S6 status pill)', () => {
+  // A minimal Dtc; only the fields the grouping rules read actually matter.
+  const dtcWith = (fields: Partial<Dtc>): Dtc =>
+    ({
+      id: 'x',
+      vehicle_id: 'v',
+      sync_session_id: null,
+      code: 'P0234',
+      description: null,
+      severity_raw: null,
+      first_seen_at: '2026-06-22T07:00:00.000Z',
+      last_seen_at: '2026-06-22T07:00:00.000Z',
+      is_active: true,
+      cleared_at: null,
+      cleared_by_user_id: null,
+      freeze_frame_metrics: null,
+      grouping: 'active',
+      ...fields,
+    }) as Dtc;
+
+  it('agrees with groupDtcs for every mock DTC — the pill can never contradict S5', () => {
+    // THE reuse assertion. For each fixture, the pill's answer must be the bucket the
+    // canonical splitter puts that row in when the whole list is grouped. A screen-local
+    // re-derivation would have to reproduce groupDtcs exactly to pass this.
+    const all = dtcsForVehicle(MOCK_VEHICLE_ID);
+    const groups = groupDtcs(all);
+
+    for (const dtc of all) {
+      const bucket = (Object.keys(groups) as DtcGrouping[]).find((key) =>
+        groups[key].some((d) => d.id === dtc.id),
+      );
+      expect(deriveDtcStatus(dtc)).toBe(bucket);
+    }
+  });
+
+  it('covers all three groups across the fixtures', () => {
+    // Guards the assertion above from passing vacuously on a one-group fixture set.
+    const seen = new Set(dtcsForVehicle(MOCK_VEHICLE_ID).map(deriveDtcStatus));
+    expect([...seen].sort()).toEqual([...DTC_GROUPINGS].sort());
+  });
+
+  it('inherits groupDtcs degrade-to-visible rule for an off-union grouping', () => {
+    // The proof it routes THROUGH groupDtcs rather than reading `dtc.grouping` raw: a
+    // grouping outside the union (only reachable from an unvalidated live row) must read
+    // 'active', exactly as groupDtcs buckets it. Returning `dtc.grouping` directly would
+    // yield 'nonsense' here and render a missing i18n key on S6.
+    const offUnion = dtcWith({ grouping: 'nonsense' as DtcGrouping });
+    expect(deriveDtcStatus(offUnion)).toBe('active');
+    expect(groupDtcs([offUnion]).active).toHaveLength(1);
+  });
+
+  it('never throws, and always returns a member of the union', () => {
+    const cases: Dtc[] = [
+      dtcWith({}),
+      dtcWith({ is_active: false, cleared_at: '2026-06-15T03:00:00.000Z', grouping: 'history' }),
+      dtcWith({ grouping: 'pending' }),
+      dtcWith({ grouping: undefined as unknown as DtcGrouping }),
+      dtcWith({ last_seen_at: 'not-a-date' }),
+    ];
+    for (const dtc of cases) {
+      expect(() => deriveDtcStatus(dtc)).not.toThrow();
+      expect(DTC_GROUPINGS).toContain(deriveDtcStatus(dtc));
+    }
+  });
+});
+
+describe('S6 freeze-frame panel — both branches are reachable from the fixtures', () => {
+  // NOT a re-test of `toFreezeFrameTiles` (covered above). This pins the SCREEN's
+  // `tiles.length === 0` conditional to the fixture set: both the tile grid and the
+  // honest-ambiguous placeholder must be reachable on-device, or one branch ships unseen.
+  const tileCounts = () =>
+    dtcsForVehicle(MOCK_VEHICLE_ID).map((d) => toFreezeFrameTiles(d.freeze_frame_metrics).length);
+
+  it('at least one DTC yields tiles', () => {
+    expect(tileCounts().some((n) => n > 0)).toBe(true);
+  });
+
+  it('at least one DTC yields none, so the placeholder path renders', () => {
+    expect(tileCounts().some((n) => n === 0)).toBe(true);
+  });
+
+  it('the linked DTC (the S6 verification target) carries a freeze frame', () => {
+    const linked = dtcById(MOCK_LINKED_DTC_ID);
+    expect(linked).not.toBeNull();
+    expect(toFreezeFrameTiles(linked?.freeze_frame_metrics).length).toBeGreaterThan(0);
   });
 });

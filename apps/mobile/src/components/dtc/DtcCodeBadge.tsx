@@ -78,14 +78,34 @@ const SEVERITY_TEXT_CLASS: Record<DtcBadgeSeverity, string> = {
   unknown: 'text-severity-insufficient',
 };
 
+/**
+ * Badge scale. `default` is the S5 row badge; `large` is S6's "large code badge" (§6) —
+ * the same component, the same severity rule and the same §11 signals, stepped up one
+ * type size (Data/Base → Data/Large, §4.4) with proportionally larger padding and glyph.
+ * A separate size rather than a separate component, so the two screens cannot drift.
+ */
+export type DtcCodeBadgeSize = 'default' | 'large';
+
+const SIZE_CLASS: Record<DtcCodeBadgeSize, string> = {
+  default: 'gap-1.5 px-2 py-1 rounded-ds-sm',
+  large: 'gap-2 px-3 py-2 rounded-ds-md',
+};
+
+const SIZE_ICON: Record<DtcCodeBadgeSize, number> = { default: 14, large: 22 };
+
+/** `data` / `data-lg` are the Geist Mono tabular styles (§4.4) — a code is a machine string. */
+const SIZE_TEXT_VARIANT = { default: 'data', large: 'data-lg' } as const;
+
 export interface DtcCodeBadgeProps {
   /** Raw OBD-II code as reported by the ECU, e.g. 'P0299'. */
   code: string;
   /** Free-text ECU severity. Run through {@link deriveDtcBadgeSeverity} internally. */
   severityRaw: string | null;
+  /** Visual scale. Defaults to the S5 row size; S6 passes `'large'`. */
+  size?: DtcCodeBadgeSize;
 }
 
-export function DtcCodeBadge({ code, severityRaw }: DtcCodeBadgeProps) {
+export function DtcCodeBadge({ code, severityRaw, size = 'default' }: DtcCodeBadgeProps) {
   const { t } = useTranslation();
   const severity = deriveDtcBadgeSeverity(severityRaw);
 
@@ -96,11 +116,10 @@ export function DtcCodeBadge({ code, severityRaw }: DtcCodeBadgeProps) {
         severity: t(`vehicles.dtcs.severity.${severity}`),
         code,
       })}
-      className={`flex-row items-center gap-1.5 self-start rounded-ds-sm px-2 py-1 ${SEVERITY_CONTAINER_CLASS[severity]}`}
+      className={`flex-row items-center self-start ${SIZE_CLASS[size]} ${SEVERITY_CONTAINER_CLASS[severity]}`}
     >
-      <Icon icon={SEVERITY_ICON[severity]} size={14} color={SEVERITY_COLOR[severity]} />
-      {/* `data` is the Geist Mono tabular style (§4.4) — a code is a machine string. */}
-      <Text variant="data" className={SEVERITY_TEXT_CLASS[severity]}>
+      <Icon icon={SEVERITY_ICON[severity]} size={SIZE_ICON[size]} color={SEVERITY_COLOR[severity]} />
+      <Text variant={SIZE_TEXT_VARIANT[size]} className={SEVERITY_TEXT_CLASS[severity]}>
         {code}
       </Text>
     </View>

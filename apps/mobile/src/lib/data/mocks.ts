@@ -23,6 +23,7 @@
 import type { CreateVehicleInput, Dtc, DtcGrouping } from '@caeorta/types';
 import type { Tables } from '@caeorta/supabase';
 
+import { findDiagnosticForDtc } from '../diagnostics';
 import { toDtc } from '../dtc';
 
 /**
@@ -49,6 +50,24 @@ export const MOCK_VEHICLE_ID = '11111111-1111-4111-8111-111111111111';
 export const MOCK_DEVICE_ID = '22222222-2222-4222-8222-222222222222';
 export const MOCK_DRIVE_ID = '44444444-4444-4444-8444-444444444444';
 export const MOCK_SYNC_SESSION_ID = '55555555-5555-4555-8555-555555555555';
+
+/**
+ * THE one diagnostic→DTC link in the fixture set (design §6 `S6`'s "related Diagnostic
+ * Card", and §7's `DTC detail | related | → Diagnostic detail (S2)` row).
+ *
+ * Deliberately ONE link, not a broad population. It exists so the S6 related-card
+ * section is reachable and verifiable on-device; every other fixture keeps
+ * `referenced_dtc_ids: []` so the no-related-diagnostic path stays the common case and
+ * is equally verifiable (tap any other code).
+ *
+ * The PAIRING is content-driven, not arbitrary: the linked diagnostic (…661) is the
+ * critical turbo output whose explanation describes boost exceeding its ceiling under
+ * load, and this code is P0234 — 'Turbocharger/Supercharger Overboost Condition'. They
+ * describe the same event, so the card reads truthfully beside the code. The other
+ * fixtures were rejected for exactly that reason: the `info` output says "no diagnostic
+ * trouble codes were reported", which would contradict itself next to a DTC.
+ */
+export const MOCK_LINKED_DTC_ID = '88888888-8888-4888-8888-888888888801';
 
 /** One paired vehicle owned by the mock user. */
 export const mockVehicle = {
@@ -281,7 +300,9 @@ export const mockDiagnostics = [
       'the next spirited drive.',
     recommended_action: 'Stop hard acceleration and have the wastegate/boost control inspected.',
     referenced_drive_id: MOCK_DRIVE_ID,
-    referenced_dtc_ids: [],
+    // The ONLY populated link in the fixture set — see {@link MOCK_LINKED_DTC_ID} for
+    // why this diagnostic and this code are the coherent pairing.
+    referenced_dtc_ids: [MOCK_LINKED_DTC_ID],
     referenced_telemetry_ids: [],
     generated_at: '2026-06-22T07:50:10.000Z',
   },
@@ -768,6 +789,19 @@ export function dtcsForVehicle(vehicleId: string): Dtc[] {
 export function dtcById(dtcId: string): Dtc | null {
   const row = mockDtcs.find((d) => d.id === dtcId);
   return row === undefined ? null : toMockDtc(row);
+}
+
+/**
+ * The diagnostic linked to a DTC (S6's related card), or null. Searches the FULL set —
+ * {@link allMockDiagnostics}, not the newest-three preview slice — because a code can be
+ * cited by an older output. Resolution is the pure {@link findDiagnosticForDtc}; this
+ * selector only supplies the rows, so mock and live share one rule.
+ *
+ * Only {@link MOCK_LINKED_DTC_ID} resolves today; every other code returns null, which S6
+ * renders as "no related diagnostic" rather than an error.
+ */
+export function diagnosticForDtc(dtcId: string): Tables<'diagnostic_outputs'> | null {
+  return findDiagnosticForDtc(allMockDiagnostics, dtcId);
 }
 
 export function recentDiagnosticsForVehicle(
