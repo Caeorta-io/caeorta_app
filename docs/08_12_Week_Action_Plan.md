@@ -377,6 +377,91 @@ The Week-4 carries, in summary:
 - App handles DTCs as first-class objects
 - Diagnostic card component is the reusable atom for the rest of the build
 
+### Week close — App track (sessions 32–36)
+
+- **Week 5 App track complete** against all four checklist items, mock-data-first
+  throughout (`DATA_SOURCE.dtcs` is still `'mock'` and deliberately stays there — see the
+  carries). Shipped: the **eight-variant Diagnostic Card atom** + `/dev/diagnostic-card`
+  harness (session 32, PR #40), the **DTC data seam** + drive-detail card swap (session
+  33, PR #41), **S5 · DTC list** with the severity/grouping derivations (session 34, PR
+  #42), **S6 · DTC detail** + the `DiagnosticsPreview` card swap (session 35, PR #43), and
+  the **in-app new-DTC notification** + this week-close pass (session 36, PR #44).
+  On-device verification ran mid-week rather than at the end (sessions 34b/34c): all 8 card
+  variants, the three-group S5 render, and the empty-Pending branch were observed on a
+  physical device.
+
+- **Both DoD lines are met, with one honest qualification.** "DTCs as first-class objects"
+  is real: they have a typed seam, a boundary parse, canonical derivations
+  (`deriveDtcBadgeSeverity`, `groupDtcs`, `deriveDtcStatus`, `toFreezeFrameTiles`), two
+  screens, and now a notification surface. "The Diagnostic Card is the reusable atom" is
+  **fully** true as of PR #43 — every simplified stand-in is retired, so
+  `deriveDiagnosticCardState` is the only severity→visual rule on any diagnostic surface
+  (CF-13, closed). The qualification: **three of the four screens' worth of work is
+  built-but-not-yet-observed on device** — S6, the preview swap and the notification banner
+  postdate the session-34b run and are queued as one batched dev-build check.
+
+- **How the week diverged from its original sketch (honest record).** Two of the four
+  checklist items shipped as something other than what the line implies, both because the
+  delivered design says so. (1) **"DTC detail … 'Mark cleared' action"** — S6 ships with
+  **no clear button**. Design §6 specifies an "auto-clear note" instead, and the OBD-II
+  reality is that codes clear themselves after clean drive cycles; a button that cannot
+  actually clear an ECU code would be a lie in the UI. The screen explains the auto-clear
+  behaviour instead. (2) **"In-app notification when new DTCs detected after sync"** — the
+  design specifies **no such surface anywhere** (see CF-37), so its placement, its "new"
+  definition and its preference model were all App-track calls taken at a session-36 ASK
+  gate. It is **in-app only**: §4.3's "warning → push notification" is Week-7 work and
+  nothing push-related (`expo-notifications`, tokens, permission prompts) entered the
+  codebase. Also unbuilt by design: **S7/S8**, the settings and notification-preference
+  screens — `docs/08` schedules them in Week 7, so the notification gate reads a typed
+  in-memory preference model built to §6's S8 shape rather than a screen.
+
+- **What building the week surfaced that the plan did not anticipate.** Week 5 was where
+  the DTC data model's gaps became visible, because screens started depending on them:
+  `dtcs` has no pending/confirmed column (CF-29), no seen/ack column (CF-36), no severity
+  vocabulary (CF-32), no plain-language title or body source (CF-31, CF-35), and the
+  freeze-frame capture point does not match its own column comment (CF-28). None of these
+  blocked the build — each is contained App-side with the containment documented — but
+  together they are why `DATA_SOURCE.dtcs` must not flip live yet.
+
+**Carried forward.** Full detail (owner, unblock, current status) lives in
+**`docs/11_Carry_Forwards.md`**, the canonical registry. The Week-5 App carries, in
+summary:
+
+- **DTC schema state gaps** — no pending/confirmed column, and no seen/ack column. Both
+  gate correctness rather than the build; resolve together as one migration. See
+  `docs/11_Carry_Forwards.md` § CF-29 and § CF-36.
+- **DTC severity vocabulary** — `severity_raw` has no CHECK and no agreed set; now
+  load-bearing for both the badge tint and the notification gate. See
+  `docs/11_Carry_Forwards.md` § CF-32.
+- **DTC content sources** — plain-language titles and the S6 explanation/likely-causes
+  body have no source the app can reach; both are content decisions with the same
+  decision-maker. See `docs/11_Carry_Forwards.md` § CF-31 and § CF-35.
+- **Freeze-frame capture fidelity + key vocabulary** — the capture point contradicts the
+  column comment, and the metric keys are still provisional. See
+  `docs/11_Carry_Forwards.md` § CF-28 (and § CF-07 for the shared key set).
+- **Notification-preference model conflict** — the design, the schema and the App now
+  describe "which severities notify me" three non-equivalent ways; must be reconciled
+  **before Week 7 builds S8**. See `docs/11_Carry_Forwards.md` § CF-38.
+- **Design-doc gaps (designer-owned)** — no in-app new-DTC surface is specified, no route
+  into S5 is recorded, and the DTC Figma board has never been opened, so S5/S6/the banner
+  are all built-from-spec with parity unchecked. See `docs/11_Carry_Forwards.md` § CF-37,
+  § CF-33 and § CF-34.
+- **On-device verification of the week's last three deliverables** — S6, the
+  `DiagnosticsPreview` swap and the notification banner, as one batched dev-build run. See
+  `docs/11_Carry_Forwards.md` § CF-13 (residual #1) and § CF-34.
+- **`apps/admin` lint red on `main`** (Platform-owned, from `22acf4c`) — unchanged all
+  week; App-track PRs cannot make the repo-wide gate green. See
+  `docs/11_Carry_Forwards.md` § CF-05.
+
+**Handoff into Week 6.** Three things Week 6 should know before it starts: (a) **CF-38
+must be decided before S8 is built** in Week 7, and Week 6's severity-based UI
+(`warning → prominent banner on vehicle detail`) is the same surface the DTC banner
+already borrowed — build them as one component, not two; (b) Week 6's Diagnostic detail
+screen (S2) is where `T3 · Critical takeover` naturally lands, which is also what CF-37
+needs before the critical tier can leave the banner; and (c) **CF-03 is still open** — the
+AI Agent Contract's six questions remain unacknowledged and the contract unshared, which
+is exactly the friction Week 6's own preamble warns about.
+
 ---
 
 ## Week 6 — AI agent integration

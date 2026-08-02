@@ -236,6 +236,20 @@
       },
       "badgeA11y": "{{severity}} severity, code {{code}}",
       "rowMeta": "{{severity}} · last seen {{lastSeen}}",
+      "notification": {
+        "eyebrow": {
+          "critical": "Needs attention",
+          "warning": "Worth a look",
+          "info": "New code",
+          "unknown": "New code"
+        },
+        "titleOne": "Your car reported a new fault code",
+        "titleMany": "Your car reported {{n}} new fault codes",
+        "more": "+{{n}} more",
+        "ctaOne": "See what it means",
+        "ctaMany": "See all fault codes",
+        "dismissA11y": "Dismiss — I've got it"
+      },
       "detail": {
         "eyebrow": "Fault code",
         "notFound": "Not found",

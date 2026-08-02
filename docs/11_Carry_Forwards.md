@@ -80,6 +80,17 @@ original six:
 > `dtcs` was re-confirmed to carry `freeze_frame_metrics` and still no pending/status
 > column, so **CF-29**'s premise holds unchanged. Entries not named here were not
 > re-checked this pass.
+>
+> **Partial re-verification 2026-08-02** (session 36, Week-5 close, off `origin/main`
+> `63ed007`). Three entries added, all from building the in-app new-DTC notification:
+> **CF-36** (DTC seen/ack state has no schema backing — the App-local acknowledged-set),
+> **CF-37** (the design specifies no in-app new-DTC surface at all), and **CF-38** (the
+> project now carries *three* non-equivalent notification-preference models). **CF-32**
+> was updated — the badge-severity derivation gained a second consumer, and its
+> `unknown` fallback now has a behavioural consequence beyond tinting. Re-confirmed
+> unchanged: `DATA_SOURCE.dtcs` is still `'mock'`, `dtcs` still has no status/seen column
+> (**CF-29** premise holds), and the three `apps/admin` lint errors from `22acf4c` are
+> still red on `main` (**CF-05** caveat). Entries not named here were not re-checked.
 
 ---
 
@@ -203,6 +214,60 @@ original six:
 - **Owner:** Platform track (Sulaiman).
 - **Cross-references:** `docs/08` Week-4 plan + close table; workdiary sessions
   29, 30 (recorded absent), Platform session 12 (built), 33 (re-verified present).
+
+### CF-38 — Three non-equivalent notification-preference models
+
+- **Category:** Cross-track dependency / flag
+- **Origin:** Week 5 Day 5, session 36 (2026-08-02) — found while building the in-app
+  new-DTC notification's preference gate.
+- **Current status:** Open, and **a modelling conflict, not a missing piece**. Three
+  descriptions of "which severities notify me" now exist, and two of them cannot express
+  the third:
+  1. **Design §6 `S8 · Notification prefs`** — *per-severity toggles*: "**Critical =
+     Always**, Warning on, Info off, Insufficient off". Four independent switches,
+     including the off-ladder `insufficient` tier.
+  2. **`user_preferences.notification_severity_threshold`** (migration `20260602130000`)
+     — a **single ordered threshold**, `text NOT NULL DEFAULT 'warning' CHECK (… IN
+     ('info','warning','critical'))`, consumed by Platform's `send_diagnostic_notification`
+     Edge Function (Platform session 11) as `severityRank[diagnostic.severity] <
+     severityRank[threshold] → skip`.
+  3. **The App's `DtcNotificationPrefs`** (`lib/dtcNotifications.ts`, session 36) — built
+     to (1), because that is what the design specifies.
+  **A threshold can only express monotone sets** — `{critical}`, `{warning, critical}`,
+  `{info, warning, critical}`. The design's *defaults* happen to be expressible
+  (`threshold = 'warning'`), which is why this has stayed invisible; the design's *model*
+  is not. "Critical on, Warning off, Info on" is a legal S8 state and has no threshold
+  representation. Separately, **`insufficient` has no place in the CHECK at all** — the
+  column's three values are the §4.3 ladder, and the off-ladder tier the design gives its
+  own toggle simply cannot be stored.
+  Two things keep this from being urgent today. The App-side prefs are **in-memory and
+  not yet bound to `user_preferences`** (there is no S8 screen — see CF-37's Week-7 note),
+  so nothing is currently written to a column it doesn't fit. And the two paths are
+  currently disjoint: Platform's function gates **push for `diagnostic_outputs`**, the
+  App's gate is **in-app for `dtcs`**. They converge in Week 7, when the S8 screen has to
+  bind to storage and push arrives.
+- **What's needed to resolve:** A cross-track decision **before Week 7 builds S8**, since
+  the screen is what forces the binding. Three shapes:
+  - **(a) Promote the schema to the design's model** — replace the single threshold with
+    per-severity booleans (or a jsonb prefs blob) on `user_preferences`, including a slot
+    for `insufficient`. Matches §6; needs a migration and an update to
+    `send_diagnostic_notification`'s skip logic.
+  - **(b) Cut S8 down to a threshold** — amend design §6 `S8` to a single "notify me about
+    X and above" control. Cheapest, loses the per-severity model and the Insufficient
+    toggle, and needs designer sign-off.
+  - **(c) Keep both and map** — App keeps per-severity, persists the closest threshold.
+    **Rejected as a recommendation:** it silently discards non-monotone states, which is
+    the failure mode where a user turns something off and it stays on.
+  Whichever lands, `docs/05` § `user_preferences` and design §6 `S8` must end up
+  describing the same model.
+- **Owner:** Founder + designer (which model §6 keeps) → Platform track (the column, if
+  (a)) + App track (bind S8 to it in Week 7).
+- **Cross-references:** CF-36 (the other missing state the same surface needs);
+  `TODO(s8-prefs)` in `apps/mobile/src/lib/dtcNotifications.ts` and
+  `lib/dtcNotificationStore.ts`; `docs/05` § `user_preferences`; `docs/08` Week 7
+  ("Notification preferences screen: per-severity toggle, quiet hours, per-vehicle
+  settings"); design §6 `S8` + §4.3; `supabase/functions/send_diagnostic_notification`;
+  PR #44; workdiary session 36.
 
 ### CF-06 — `supabase/seed.sql` is cross-track-owned (clobber-risk flag)
 
@@ -365,6 +430,61 @@ original six:
   `TODO(dtc-pending)`; `MOCK_PENDING_DTC_IDS` in `mocks.ts`; `groupDtcs` in
   `apps/mobile/src/lib/dtc.ts`; the `fetchDtcs` live-adapter note in `source.ts`;
   workdiary sessions 33, 34.
+
+### CF-36 — DTC seen/ack state has no schema backing — the acknowledged-set is App-local
+
+- **Category:** Provisional-value-reconciliation
+- **Origin:** Week 5 Day 5, session 36 (2026-08-02) — building the in-app new-DTC
+  notification.
+- **Current status:** Open. **The direct sibling of CF-29**: another piece of DTC state
+  the design's behaviour depends on that the `dtcs` table cannot express. Verified against
+  `origin/main`: `dtcs` carries `id` / `vehicle_id` / `sync_session_id` / `code` /
+  `description` / `severity_raw` / `first_seen_at` / `last_seen_at` / `is_active` /
+  `cleared_at` / `cleared_by_user_id` / `freeze_frame_metrics` — **no seen, ack, dismissed
+  or status column of any kind.** The adjacent table already has exactly the right shape:
+  `diagnostic_outputs.status text NOT NULL DEFAULT 'new' CHECK (status IN
+  ('new','seen','dismissed','actioned'))` (migration `20260602130000`). DTCs simply never
+  got the equivalent.
+  This matters because **"new" was defined as UNACKNOWLEDGED, not recent** (founder call,
+  session 36). The rejected alternative — a recency window on `first_seen_at` — needs no
+  state, but re-notifies on every app open until the window lapses, and `first_seen_at`
+  records when the *ECU* first reported the code, not when the *user* first saw it.
+  App-side containment, all of it deliberately small:
+  - The acknowledged-set is a list of DTC ids persisted in `expo-secure-store`
+    (`useDtcSeenStore`, `lib/dtcNotificationStore.ts`), chosen over AsyncStorage **only**
+    because it is already a dependency backing the Supabase session adapter — adding
+    `@react-native-async-storage/async-storage` would mean a new native module and a new
+    dev build for a list of uuids. It is not secret data and is not treated as such.
+  - The pure half (`parseSeenDtcIds` / `mergeSeenDtcIds` / `serializeSeenDtcIds`, in
+    `lib/dtcNotifications.ts`) is storage-agnostic and unit-tested, so moving to a
+    different store — or to a server column — touches the I/O shell only.
+  - It is **capped at 40 ids, oldest evicted first** (`MAX_SEEN_DTC_IDS`), because
+    SecureStore warns above ~2048 bytes per value (the same constraint already noted on
+    the session adapter in `lib/supabase.ts`). A test pins the serialized full set under
+    that threshold.
+  **Three consequences that cannot be fixed App-side**, and are the reason this is a
+  carry rather than a design: the set is **per-device** (a second device re-notifies for
+  codes already dismissed); it does **not survive reinstall** or cleared app storage; and
+  the cap can **evict** — a code acknowledged long ago could re-notify if it is still
+  active after 40 further acknowledgements on that device. The last is remote (vehicles
+  carry single-digit active codes) and is documented rather than hidden because it is the
+  one way this surface can nag.
+- **What's needed to resolve:** Platform adds the `dtcs` equivalent of
+  `diagnostic_outputs.status` — most cheaply a `status text` with the same four-value
+  CHECK, or a narrower `seen_at timestamptz` if the dismissed/actioned states aren't
+  wanted for codes. Then `isNewDtc` reads the column instead of the local set, the
+  SecureStore store and its cap are deleted, and the three consequences above disappear.
+  **Sequence it with CF-29** — both are missing `dtcs` state columns, both were found from
+  the same screens, and adding one column that carries pending/confirmed *and* seen state
+  is one migration rather than two. Gate: this does **not** block a live flip of
+  `DATA_SOURCE.dtcs` (the local set works against live rows); it blocks calling the
+  notification surface multi-device-correct.
+- **Owner:** Platform track (the column) + App track (swap the local set out).
+- **Cross-references:** **CF-29** (the sibling missing-state carry — resolve together);
+  CF-38 (the preference model the same surface reads); `TODO(dtc-seen-state)` in
+  `apps/mobile/src/lib/dtcNotificationStore.ts`; `isNewDtc` +
+  `MAX_SEEN_DTC_IDS` in `apps/mobile/src/lib/dtcNotifications.ts`; `docs/05`
+  `diagnostic_outputs.status` (the shape to copy); PR #44; workdiary session 36.
 
 ### CF-30 — `insufficient_data` modeled as a severity vs. the contract's category
 
@@ -534,11 +654,32 @@ original six:
   CHECK on the column. Gate on any live flip of `DATA_SOURCE.dtcs`.
 - **Owner:** Hardware/firmware team (what the device writes) + Platform track
   (`dtc_lookup` join / any CHECK) + App track (extend the map, remove the TODO).
+- **Update 2026-08-02 (session 36, PR #44) — the derivation gained a SECOND consumer, and
+  the `unknown` fallback is no longer only cosmetic.** `deriveDtcBadgeSeverity` now also
+  drives the **notification preference gate** (`shouldNotifyForDtc`,
+  `lib/dtcNotifications.ts`): the tier that tints a code's badge is by construction the
+  tier that decides whether it interrupts the user. That reuse was deliberate and is the
+  containment — a second severity map for notifications would have let a code render as
+  Warning and gate as Info. `DtcNotificationPrefs` is a **mapped type over this union**,
+  so extending the tier ladder is a compile error at the defaults rather than a silently
+  ungated tier.
+  **What changes about this entry's exposure:** the failure mode is still understatement,
+  but understatement now has teeth. Previously an unrecognised `severity_raw` meant a
+  neutral badge — quiet and wrong, but visible on S5. Now it *also* means **no
+  notification**, because `unknown` defaults off in the S8 model (CF-38). A real
+  ECU-critical fault whose severity string this map omits would appear on S5 as unrated
+  **and never surface a banner**. That does not change what resolves this entry — the
+  hardware track confirming the vocabulary — but it raises the cost of leaving it open,
+  and it is a second reason not to flip `DATA_SOURCE.dtcs` live first. Contained today
+  only because the mock fixtures' severity values are, by construction, exactly the map's
+  keys.
 - **Cross-references:** R24 (#4); CF-07 / R22 (the adjacent provisional-vocabulary
   carry); CF-30 (the severity-vs-category vocabulary question on the *agent* side —
-  related but a different column and a different owner); design §4.3 + §6 `S5`;
-  `TODO(dtc-severity-vocab)` in `apps/mobile/src/lib/dtc.ts`; PR #42; workdiary
-  session 34.
+  related but a different column and a different owner); **CF-38** (the preference model
+  whose `unknown`-off default gives this entry its notification consequence); design
+  §4.3 + §6 `S5`; `TODO(dtc-severity-vocab)` in `apps/mobile/src/lib/dtc.ts`;
+  `shouldNotifyForDtc` in `apps/mobile/src/lib/dtcNotifications.ts`; PRs #42, #44;
+  workdiary sessions 34, 36.
 
 ### CF-08 — Coolant "hot" threshold — `TODO(coolant-hot-threshold)` = provisional 105 °C (R22 #2)
 
@@ -948,6 +1089,52 @@ original six:
 - **Cross-references:** CF-24 (the parallel §6 S4 map-row gap); design §6 + §7;
   the entry-point link in `apps/mobile/src/app/(app)/vehicles/[id]/index.tsx`; PR #42;
   workdiary session 34.
+
+### CF-37 — The design specifies no in-app new-DTC surface
+
+- **Category:** Documentation-gap
+- **Origin:** Week 5 Day 5, session 36 (2026-08-02) — building the Week-5 item "In-app
+  notification when new DTCs detected after sync".
+- **Current status:** Confirmed gap, and the **largest** of the CF-24 / CF-33 family,
+  because here the doc doesn't merely omit a link — it has no entry for the surface at
+  all. Audited across `docs/design/00_design_system.md`:
+  - **§4.3** gives the severity ladder its behaviour, and only two answers exist:
+    **warning** → "Triggers a push notification" (Week-7 work, out of Week-5 scope), and
+    **critical** → "full-screen takeover on next app open, persists until acknowledged".
+  - That takeover is specified as **`T3 · Critical takeover`** (§6 App States,
+    `node 59:222`) — but it is written **diagnostic-shaped**: "11 psi vs 25 floor panel",
+    "what this likely means", and a "See the full reading" action that resolves to
+    Diagnostic detail (S2). Nothing about it is DTC-shaped.
+  - **§6** has no DTC banner or new-code affordance in any board, and **§7**'s link graph
+    has no row for one (it already lacked a route *into* S5 — CF-33).
+  So for a **warning-tier DTC**, the design's only answer is push, which this week
+  explicitly could not build; and for a critical one, the answer is a screen designed
+  around a different object.
+  **The App-track call (founder, session 36):** ship a dismissible **banner on vehicle
+  detail** rather than approximate T3 with DTC content ahead of T3's own build. The shape
+  is not invented — `docs/08` Week 6 already documents exactly it for the diagnostics
+  equivalent ("`warning` → prominent banner on vehicle detail"), so this borrows a
+  precedent the plan already contains. **One surface serves both notifying tiers**, which
+  also keeps S8's Warning toggle from being a dead control. Tapping routes to S6 when
+  exactly one code is new and to S5 when several are — the only screen that can show them
+  together (§7's "no dead ends").
+  Not a blocker: the surface works, is tested, and is one component to move.
+- **What's needed to resolve:** The designer decides which of these the product wants and
+  records it in §6/§7 — (a) ratify the vehicle-detail banner, adding a §6 inventory line
+  and a §7 row (`Vehicle detail | new-code banner | → DTC list (S5) / DTC detail (S6)`);
+  (b) extend `T3 · Critical takeover` to cover DTCs, in which case its content model needs
+  a DTC variant and the App swaps the banner for it on the critical tier; or (c) specify
+  something else, which the App builds instead. **Related but separate:** §4.3's
+  "warning → push" only becomes real in Week 7, and CF-38 covers the preference model
+  both surfaces read.
+- **Owner:** Designer (§6/§7 — designer-owned doc, not editable from this track) + App
+  track (move or replace the banner if the answer isn't (a)).
+- **Cross-references:** **CF-33** and **CF-24** (the same species, smaller); CF-38 (the
+  preference model); CF-34 (the DTC Figma board is still unopened, so a designed surface
+  could exist there unseen — check it at the same time); design §4.3 + §6 `T3` + §7;
+  `docs/08` Week 5 (the line item) and Week 6 (the borrowed banner precedent);
+  `apps/mobile/src/components/dtc/NewDtcBanner.tsx` (header records the same options);
+  PR #44; workdiary session 36.
 
 ### CF-34 — S5 (and S6) were built from the written spec, not the Figma board — parity unchecked
 

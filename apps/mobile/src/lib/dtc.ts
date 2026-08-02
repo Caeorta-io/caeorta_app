@@ -213,8 +213,17 @@ export function deriveDtcStatus(dtc: Dtc): DtcGrouping {
   return entry ?? 'active';
 }
 
-/** Badge severity, then `last_seen_at` DESC. See {@link groupDtcs} for the rationale. */
-function compareDtcsForList(a: Dtc, b: Dtc): number {
+/**
+ * THE list ordering rule for DTCs: badge severity (critical → warning → info → unknown),
+ * then `last_seen_at` newest-first. See {@link groupDtcs} for the rationale.
+ *
+ * Exported because a second surface now needs it — the new-DTC banner
+ * (`dtcNotifications.ts` `selectNewDtcNotifications`) orders its selection with this
+ * same comparator, so "most urgent first" in the banner and the in-group order on S5
+ * cannot drift apart. The banner applies it ACROSS groupings rather than within one;
+ * that is the caller's choice of input, not a different rule.
+ */
+export function compareDtcsForList(a: Dtc, b: Dtc): number {
   const bySeverity =
     BADGE_SEVERITY_RANK[deriveDtcBadgeSeverity(a.severity_raw)] -
     BADGE_SEVERITY_RANK[deriveDtcBadgeSeverity(b.severity_raw)];

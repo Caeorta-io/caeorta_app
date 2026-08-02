@@ -95,6 +95,57 @@ Extracted from the Week 3 vehicle-dashboard sessions (list, add-vehicle, detail,
 - All unrecognised thrown errors map to `{ code: 'network' }` (the safe catch-all the UI can always render).
 - Validate input at the boundary with Zod; no `any` without an inline comment justifying it.
 
+### Derived-tier reuse — one severity rule, every consumer
+
+Introduced Week 5 (session 36) when a second consumer of DTC severity appeared. The rule
+generalises `deriveConnectionState` and `deriveDiagnosticCardState` to any *behavioural*
+consumer, not just a visual one.
+
+- **A derived tier gets ONE canonical function, and every consumer calls it — visual and
+  behavioural alike.** `deriveDtcBadgeSeverity` (`lib/dtc.ts`) maps the free-text
+  `severity_raw` to `'critical' | 'warning' | 'info' | 'unknown'`. It tints the S5/S6
+  badge **and** gates the notification preference check (`shouldNotifyForDtc`,
+  `lib/dtcNotifications.ts`). Never write a second map for the behavioural consumer, even
+  when it looks like it wants different buckets — the bug that produces is a code
+  displayed as one tier and acted on as another, and it is invisible in review.
+- **Tie the consumer's own type to the tier union structurally, not by hand.** A
+  preference record should be a *mapped type over the tier union*
+  (`{ [T in DtcBadgeSeverity]: boolean }`), not a hand-written record that happens to
+  list the same keys. Then extending the ladder is a compile error at the defaults
+  instead of a silently unhandled tier. Same discipline as `DtcGroups` against
+  `DtcGrouping`.
+- **Encode "always" in the type, not in a convention.** Design §6's "Critical = Always"
+  is carried by typing that key as the literal `true`, so no prefs object can be
+  constructed that silences it and no future settings screen can bind a toggle to it.
+- **Both failure directions on a gate must be the quiet one.** An unreadable input tier,
+  a preference blob missing a key, and a non-boolean preference value all resolve to
+  "don't act" (`prefs[tier] === true`, not a truthiness check). For anything that
+  interrupts the user, being wrong should mean silence.
+- **Share the ordering comparator too, don't re-sort.** The banner orders its selection
+  with the same exported `compareDtcsForList` the S5 list uses, so "most urgent first"
+  cannot drift between two surfaces showing the same codes.
+
+### Client state: pure slices vs. slices that do native I/O
+
+- `lib/store.ts` holds **pure in-memory** Zustand slices only. Anything that performs
+  native I/O (`expo-secure-store`, filesystem, etc.) gets its **own module beside its
+  feature** — e.g. `lib/dtcNotificationStore.ts`. Rationale is the same as the data seam's:
+  every graph that touches auth imports `store.ts`, and a native import there drags a
+  native module into the plain-Node vitest graph.
+- **Split the pure logic out of the persisting store.** Parse / merge / serialize helpers
+  live in the feature's pure module (`lib/dtcNotifications.ts`) and are unit-tested there;
+  the store module is a thin I/O shell over them. The dependency arrow points one way —
+  the store imports the pure helpers, never the reverse — which also means swapping the
+  storage backend touches the shell only.
+- **A persisted set read on mount needs a `hydrated` flag, and the UI must gate on it.**
+  Rendering before hydration flashes the pre-hydration default (an already-dismissed
+  banner reappearing for a frame). Hydration must also mark itself done on failure, or a
+  broken keystore hides the surface permanently.
+- **Write-through is optimistic and its failure is swallowed.** Update memory first so the
+  interaction is instant; a failed persist means the action holds for the session and
+  reverts next launch. Never block a tap on I/O and never surface a storage error for an
+  acknowledgement.
+
 ### Realtime subscription pattern
 
 - The **screen** manages subscribe/unsubscribe with `useEffect`, not TanStack Query. TanStack Query is for fetching; a one-shot query (`useCurrentState`) supplies the initial seed, and Realtime pushes overwrite it from there. Screen-local subscription state lives in `useState`/`useRef`, not Zustand.
