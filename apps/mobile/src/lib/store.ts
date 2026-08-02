@@ -2,9 +2,15 @@ import { create } from 'zustand';
 import type { Session, User } from '@caeorta/supabase';
 
 /**
- * Client-side auth state. This is the only Zustand slice in v1 — keep it that
- * way until a second concern genuinely needs global client state. Server state
- * (queries, caches) belongs in TanStack Query, not here.
+ * Client-side auth state. Server state (queries, caches) belongs in TanStack Query,
+ * not here.
+ *
+ * This was the ONLY Zustand slice until session 36, when the new-DTC notification
+ * surface needed two more (S8 preferences + the acknowledged-DTC set). Those live in
+ * `lib/dtcNotificationStore.ts` rather than here, because one of them carries a native
+ * `expo-secure-store` import and this file must stay free of native modules — every
+ * graph that touches auth pulls it in. Keep that split: pure in-memory slices may join
+ * this file; anything doing native I/O gets its own module beside its feature.
  */
 interface AuthState {
   /** The current Supabase session, or null when signed out. */

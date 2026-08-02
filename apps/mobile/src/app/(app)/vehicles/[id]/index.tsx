@@ -4,12 +4,14 @@ import { useTranslation } from 'react-i18next';
 
 import { ConnectionState } from '@/components/ConnectionState';
 import { DiagnosticsPreview } from '@/components/DiagnosticsPreview';
+import { NewDtcBanner } from '@/components/dtc/NewDtcBanner';
 import { LastDriveCard, NoLastDriveState } from '@/components/LastDriveCard';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import {
   useCurrentState,
   useDriveDiagnostics,
+  useDtcs,
   useLastDrive,
   useRecentDiagnostics,
   useVehicle,
@@ -44,6 +46,11 @@ export default function VehicleDetailScreen() {
   // null here — the live Realtime channel is opened on the (Day-5) live screen, not
   // this view. Revisit batching only if a live Supabase swap makes it costly.
   const currentStateQuery = useCurrentState(id);
+  // Feeds the new-DTC banner below. Shares `queryKeys.dtcs(id)` with the S5 list, so
+  // TanStack serves the cached rows when the user comes back from it rather than
+  // refetching. Fails soft: the banner is an interruption, and an interruption that
+  // can't load its own content should stay silent, not surface an error.
+  const dtcsQuery = useDtcs(id);
 
   if (vehicleQuery.isPending) {
     return (
@@ -99,6 +106,7 @@ export default function VehicleDetailScreen() {
     : (lastDriveDiagnosticsQuery.data ?? []);
   const lastDriveHealth = deriveDriveHealth(lastDriveDiagnostics);
   const diagnostics = diagnosticsQuery.isError ? [] : (diagnosticsQuery.data ?? []);
+  const dtcs = dtcsQuery.isError ? [] : (dtcsQuery.data ?? []);
   const currentStateUpdatedAt = currentStateQuery.data?.updated_at ?? null;
 
   const subtitle = [vehicle.make, vehicle.model, vehicle.year]
@@ -120,6 +128,13 @@ export default function VehicleDetailScreen() {
             <ConnectionState channelStatus={null} currentStateUpdatedAt={currentStateUpdatedAt} />
           </View>
         </View>
+
+        {/* New-DTC in-app notification (Week-5 item). Sits directly under the header,
+            above the last-drive summary: it is the one thing on this screen that is
+            asking for attention rather than reporting state, and it self-hides when
+            there is nothing new. No skeleton — a placeholder for a notification that
+            usually isn't there would itself read as news. */}
+        <NewDtcBanner dtcs={dtcs} vehicleId={vehicle.id} />
 
         {lastDriveQuery.isPending ? (
           <LastDriveCardSkeleton />
