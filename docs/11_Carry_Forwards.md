@@ -72,6 +72,14 @@ original six:
 > their status lines updated; **CF-28**, **CF-29** and **CF-30** were added. Every
 > other entry still carries its 2026-07-05 verification and may be stale — re-verify
 > before relying on one.
+>
+> **Partial re-verification 2026-08-02** (session 35, off `origin/main` `f0af131`).
+> **CF-13 is CLOSED** (the last Diagnostic Card stand-in retired). **CF-28** gained the
+> S6 empty-panel note, and **CF-34** (S5/S6 built-from-spec, Figma parity unchecked) and
+> **CF-35** (S6's "what it means" / likely-causes have no content source) were added.
+> `dtcs` was re-confirmed to carry `freeze_frame_metrics` and still no pending/status
+> column, so **CF-29**'s premise holds unchanged. Entries not named here were not
+> re-checked this pass.
 
 ---
 
@@ -269,10 +277,31 @@ original six:
   key set. Both gate any live flip of `DATA_SOURCE.dtcs`.
 - **Owner:** Platform track (`device_sync_chunk` capture semantics) + hardware/AI-agent
   team (canonical keys, via CF-07) + App track (reconcile + UI copy).
+- **Update 2026-08-02 (session 35, PR #43) — a SCREEN now renders this, and its empty state
+  is deliberately ambiguous.** S6 ships the freeze-frame panel, always rendered (matching
+  S5's discipline). **Zero tiles has two causes the panel cannot tell apart:**
+  (a) the DTC genuinely has no freeze frame — `device_sync_chunk` had no telemetry row
+  buffered in that chunk and wrote `null` (2 of the 7 fixtures are this case); or
+  (b) a frame WAS captured, but under metric keys the provisional vocabulary doesn't
+  recognise, so `toFreezeFrameTiles` returns `[]` — **silently empty, not an error**, which
+  is this entry's gap #2 made visible.
+  The copy therefore states only the observable fact — "No freeze-frame data for this code."
+  — and **asserts no cause**. Distinguishing (a) from (b) needs the canonical key set, so it
+  is a CF-07 reconciliation concern; guessing at it in the panel would be worse than the
+  ambiguity. **When CF-07 lands, revisit this copy** — with a known key set, (b) becomes
+  detectable (a non-null blob that yields no tiles) and the panel could honestly say
+  "captured, but not readable" instead.
+  Gap #1 (capture point) also surfaced in the UI: the panel's caveat line reads "around the
+  time the code set, not necessarily the exact moment" rather than claiming fault-time
+  precision the ingestion path doesn't deliver. **That copy is the honest-fallback half of
+  this entry's resolution, taken pre-emptively** — it does not close the entry, and the
+  column comment still claims something the code does not do.
 - **Cross-references:** R24 (#2); R23 (resolved predecessor — the column itself); CF-07 /
   R22 (the shared key vocabulary); design §6 `S6` + §5.5; `lib/dtc.ts`
-  `TODO(metric-keys)`; the `fetchDtcs` live-adapter note in `source.ts`; workdiary
-  session 33.
+  `TODO(metric-keys)`; the freeze-frame panel + `TODO(metric-keys)` note in
+  `apps/mobile/src/app/(app)/vehicles/[id]/dtcs/[dtcId].tsx`;
+  `vehicles.dtcs.detail.freezeFrame.*` in `en.json`; the `fetchDtcs` live-adapter note in
+  `source.ts`; workdiary sessions 33, 35.
 
 ### CF-29 — Pending DTC state has no schema backing (R24 #1)
 
@@ -425,6 +454,57 @@ original six:
   gates the whole `DATA_SOURCE.dtcs` flip) — titles could in principle flip independently
   once the copy exists.
 
+### CF-35 — S6's "what it means" + likely-causes have no content source (R24 #5)
+
+- **Category:** Provisional-value-reconciliation
+- **Origin:** Week 5 Day 4, session 35 (2026-08-02) — building S6.
+- **Current status:** Open. **A content dependency, not a schema or build gap**, and the
+  sibling of CF-31: that entry covers the DTC *title* register, this one covers the *body*.
+  Design §6 specifies two prose sections on S6 — a "what it means" written for a **tuned /
+  modified engine** (explicitly not generic OBD-II boilerplate) and a likely-causes list.
+  **Neither has a source the app can reach.** Audited on `origin/main`:
+  - **`dtcs.description`** — whatever the ECU reported, verbatim SAE J2012 wording, and
+    `null` on 2 of the 7 mock fixtures. A correct *technical* description; precisely the
+    register §6 rejects for an explanation. S6 renders it, clearly labelled as the ECU's own
+    wording, but it is not an explanation.
+  - **`lib/dtcTitles.ts`** — a plain-language TITLE map only. There is no body layer
+    (CF-31).
+  - **`dtc_lookup.common_causes`** — Platform's seeded table DOES carry a causes column, and
+    it is even partly tune-aware (P0234 → "Wastegate stuck, boost controller fault, **tune
+    overboost**"; P0171 → "…, **aftermarket intake**"). But it is a single comma-joined
+    text blob in the generic-OBD-II register, and it is **not wired into the DTC seam at
+    all** — the lookup join is unbuilt (see CF-32's flip note). It is the nearest available
+    source, not a current one.
+  **What the App did instead of filling the gap:** both sections render **always**, carrying
+  copy that states the gap ("We don't have a plain-language explanation for this code yet —
+  one written for a modified engine, not a generic OBD-II readout"). Per-code prose was
+  **not** authored, because writing it would mean inventing engineering claims about a
+  modified engine — §8's calibrated honesty rules that out, and it is the one failure mode a
+  tuned-car owner would catch instantly. The sections stay visible so the gap stays visible;
+  when the content lands, only the `en.json` values change and no component moves.
+- **What's needed to resolve:** A **content decision first**, exactly as with CF-31, and it
+  is the same decision-maker — so **resolve the two together**. Three shapes, in rough order
+  of preference:
+  - **(a) Author the body copy App-side** beside `dtcTitles.ts` (a `dtcContent.ts` covering
+    the fixture codes), matching whichever resolution CF-31 takes. Keeps the tuned register
+    §6 asks for; costs founder/designer writing time per code.
+  - **(b) Wire `dtc_lookup` into the seam** and render `common_causes` as likely-causes.
+    Cheap, real, and would close *half* of this entry — but the register is generic OBD-II,
+    so "what it means" would still need (a). Also pre-empts CF-32's lookup join, so
+    sequence it with that entry.
+  - **(c) Platform adds a tuned-register column** to `dtc_lookup`. Only worth it if the copy
+    is being authored anyway, in which case (a) is the cheaper place to put it until the
+    volume justifies a column.
+  **Gate:** blocks nothing today — S6 ships honest about the gap. It does gate calling S6
+  "complete against §6".
+- **Owner:** Founder / designer (the copy — the blocking input) + App track (render it) +
+  Platform track (only under (b)/(c)).
+- **Cross-references:** R24 (#5); **CF-31** (the title register — same decision-maker,
+  resolve together); CF-32 (the `dtc_lookup` join that option (b) needs); design §6 `S6` +
+  §8 voice; `TODO(dtc-body)` in
+  `apps/mobile/src/app/(app)/vehicles/[id]/dtcs/[dtcId].tsx`;
+  `vehicles.dtcs.detail.meaning.*` / `.causes.*` in `en.json`; PR #43; workdiary session 35.
+
 ### CF-32 — DTC `severity_raw` has no vocabulary — `TODO(dtc-severity-vocab)` (R24 #4)
 
 - **Category:** Provisional-value-reconciliation
@@ -562,11 +642,30 @@ original six:
 
 ## App-build dependency
 
-### CF-13 — Full eight-variant Diagnostic Card (design §5.1)
+### CF-13 — Full eight-variant Diagnostic Card (design §5.1)  *(CLOSED 2026-08-02)*
 
 - **Category:** App-build dependency
 - **Origin:** Week 4, sessions 27–29 (drive-detail uses a simplified stand-in).
-- **Current status:** **Mostly closed.** The atom itself was **built in Week 5 Day 1**
+- **Current status:** **CLOSED (2026-08-02, session 35, PR #43).** The last remaining piece
+  — the vehicle-detail `DiagnosticsPreview` stand-in — was swapped to the atom, so **all
+  three stand-ins are now retired**: drive-detail (session 33, PR #41), the S6 related card
+  (built directly on the atom, session 35), and the preview (session 35). The screen-local
+  `SEVERITY_DOT` map is deleted with it, which means the severity→visual rule now lives in
+  exactly one place, `deriveDiagnosticCardState`, on every surface that renders a
+  diagnostic. That also closed the **second** CF-30 mis-render: a contract-shaped
+  `insufficient_data` row (`category='insufficient_data'`, `severity='info'`) rendered here
+  as a blue *info* dot and now gets the off-ladder dashed treatment §4.3 requires — the same
+  fix the drive-detail swap made, on the last surface that still had the bug.
+  **Two residuals, neither reopening this entry:**
+  1. **On-device look pending** for the preview swap and the S6 related card (session 35 is
+     built-not-verified). The atom itself is verified — all 8 variants were observed on a
+     physical device in session 34b — so this is a placement check, not a component check.
+  2. **Known visual, by design:** the card is token-styled for the dark canvas and
+     vehicle-detail is still on the stock light palette, so dark cards sit on a white
+     screen until Week 8. That is **CF-15's** debt, not this entry's — accepted by the
+     founder at the session-35 ASK gate in preference to either restyling a CF-15 screen
+     ahead of schedule or leaving a third stand-in in the codebase.
+- **Superseded status (kept for the trail):** The atom itself was **built in Week 5 Day 1**
   (PR #40, session 32): all four visual states × collapsed/expanded = the eight
   documented variants, with the severity→state rule centralised in
   `deriveDiagnosticCardState` and a `__DEV__` harness at `/dev/diagnostic-card`.
@@ -583,15 +682,18 @@ original six:
   **off-ladder** (dashed border + dashed icon ring, no severity accent bar) with the
   drive-health pill reading **Clean** beside it — which also confirms CF-30's session-33
   audit finding as an observed fact rather than a test assertion.
-- **What's needed to resolve:** Swap `DiagnosticsPreview` to the atom (naturally
-  done with CF-15's Week-8 token migration of that screen, or earlier if the
-  diagnostics feed lands first). Note: session 30's finding that each Victory Native
-  `CartesianChart` auto-scales its own x-domain applies to any future chart inside
-  this card (the shipped card uses a styled `View` confidence bar, not a chart).
-- **Owner:** App track.
+- **What's needed to resolve:** Nothing — done. (The superseded plan was to swap
+  `DiagnosticsPreview` "naturally, with CF-15's Week-8 token migration"; it was instead
+  swapped early in session 35, accepting the palette mismatch above, so that no simplified
+  diagnostic rendering survives anywhere in the app.) Note for later: session 30's finding
+  that each Victory Native `CartesianChart` auto-scales its own x-domain applies to any
+  future chart inside this card (the shipped card uses a styled `View` confidence bar, not
+  a chart).
+- **Owner:** App track. *(Closed.)*
 - **Cross-references:** `docs/08` Week-4 close table + Week-5 plan; design §5.1;
-  CF-15 (un-migrated screens), CF-30 (the mis-render the swap closed); PR #40;
-  workdiary sessions 27, 28, 29, 30, 32, 33.
+  CF-15 (un-migrated screens — carries the residual palette mismatch), CF-30 (both
+  mis-renders the swaps closed); PRs #40, #41, #43;
+  workdiary sessions 27, 28, 29, 30, 32, 33, 34b, 35.
 
 ---
 
@@ -846,6 +948,40 @@ original six:
 - **Cross-references:** CF-24 (the parallel §6 S4 map-row gap); design §6 + §7;
   the entry-point link in `apps/mobile/src/app/(app)/vehicles/[id]/index.tsx`; PR #42;
   workdiary session 34.
+
+### CF-34 — S5 (and S6) were built from the written spec, not the Figma board — parity unchecked
+
+- **Category:** Documentation-gap
+- **Origin:** Week 5 Day 3, session 34 (2026-07-26); carried through 34b/34c and reaffirmed
+  at Day 4, session 35 (2026-08-02), which built S6 the same way.
+- **Current status:** Open, and **not a defect — a missing check.** The DTC board
+  `node 53:195` has never been opened. S5 (PR #42) and S6 (PR #43) were both built from
+  `docs/design/00_design_system.md` §6's one-line inventories plus the token layer, which is
+  the documented source of truth this repo works from and was sufficient to build against.
+  What is unverified is whether the *rendered screens* match the designer's *drawn* screens:
+  §6 gives S5 "grouped Active/Pending/History, severity-tinted code badges + plain-language
+  titles" and S6 "large code badge + status pill, what it means, likely-causes, freeze-frame
+  conditions (Metric Tile instances), related Diagnostic Card, auto-clear note" — an
+  inventory of parts, not a layout. Every arrangement decision (section spacing, badge
+  placement relative to the title, the meta line, where the status pill sits, tile grid
+  columns, section order below the header) was therefore an App-track call. Some of those
+  calls are recorded as deliberate — the §11 badge/label split, the always-render empty
+  groups, the neutral status pill — but they were reasoned from the written rules, not
+  compared against a drawing.
+  **This is the third designer-parity item and they should be handled as one batch** with
+  **CF-24** (§6's S4 inventory has no map-row slot) and **CF-33** (§7's link graph has no
+  route *into* S5). CF-24 and CF-33 are gaps in the doc; this one is a gap in the
+  *verification*. All three want the same 30 minutes of the designer's attention.
+- **What's needed to resolve:** Open `node 53:195` and diff the built S5/S6 against the
+  drawn ones; record any divergence as either an App-track fix or a designer-side amendment.
+  Do this **together with CF-24 and CF-33** so the designer is asked once. Worth doing before
+  Week 8's polish pass, since a layout divergence found then is more expensive than one found
+  now.
+- **Owner:** App track (run the diff) + designer (adjudicate divergences; the doc is
+  designer-owned).
+- **Cross-references:** CF-24 + CF-33 (the batch); design §6 (`S5`/`S6` inventories) + §7;
+  `apps/mobile/src/app/(app)/vehicles/[id]/dtcs/index.tsx` and `[dtcId].tsx`; PRs #42, #43;
+  workdiary sessions 34, 34c (raised as "Figma parity for S5 still unchecked"), 35.
 
 ### CF-25 — `docs/05` stale seed.sql "safe to re-run" claim  *(resolved in this PR)*
 
