@@ -1,5 +1,27 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 import { notFound } from "next/navigation";
+import Link from "next/link";
+import type { Tables } from "@caeorta/supabase";
+
+// Row shapes are Pick<>ed from the generated table types to match each `.select()`
+// column list exactly — so narrowing a select without narrowing the type (or vice
+// versa) is a compile error rather than an `any` that silently drifts.
+type DriveRow = Pick<
+  Tables<"drives">,
+  "id" | "started_at" | "ended_at" | "duration_seconds" | "peak_metrics" | "has_anomaly"
+>;
+
+type DtcRow = Pick<
+  Tables<"dtcs">,
+  | "id"
+  | "code"
+  | "description"
+  | "severity_raw"
+  | "is_active"
+  | "first_seen_at"
+  | "last_seen_at"
+  | "cleared_at"
+>;
 
 function fmt(date: string | null) {
   if (!date) return "—";
@@ -11,6 +33,17 @@ function fmtDuration(seconds: number | null) {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
+}
+
+// `drives.peak_metrics` is an opaque `Json` jsonb bag, so a key has to be read
+// defensively — a missing or non-numeric key renders "—" rather than throwing or
+// printing `[object Object]`. Keys come from the provisional metric vocabulary
+// (TODO(metric-keys) / CF-07); the AI Agent Contract v0.2 §3 proposes adopting
+// this set as canonical.
+function peakMetric(metrics: Tables<"drives">["peak_metrics"], key: string) {
+  if (!metrics || typeof metrics !== "object" || Array.isArray(metrics)) return "—";
+  const value = (metrics as Record<string, unknown>)[key];
+  return typeof value === "number" ? value : "—";
 }
 
 function SevBadge({ sev }: { sev: string }) {
@@ -36,8 +69,8 @@ async function getData(id: string) {
   if (deviceRes.error || !deviceRes.data) return null;
 
   const vehicle = vehicleRes.data;
-  let drives: any[] = [];
-  let dtcs: any[] = [];
+  let drives: DriveRow[] = [];
+  let dtcs: DtcRow[] = [];
 
   if (vehicle) {
     const [drivesRes, dtcsRes] = await Promise.all([
@@ -69,7 +102,7 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
   return (
     <main className="p-8 max-w-6xl mx-auto">
       <div className="mb-6">
-        <a href="/" className="text-sm text-gray-400 hover:text-gray-600">Back to devices</a>
+        <Link href="/" className="text-sm text-gray-400 hover:text-gray-600">Back to devices</Link>
       </div>
       <div className="mb-8">
         <h1 className="text-2xl font-semibold">Device detail</h1>
@@ -122,8 +155,8 @@ export default async function DeviceDetailPage({ params }: { params: Promise<{ i
                 <tr key={d.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-xs text-gray-500">{fmt(d.started_at)}</td>
                   <td className="px-4 py-3 text-xs">{fmtDuration(d.duration_seconds)}</td>
-                  <td className="px-4 py-3 text-xs font-mono">{d.peak_metrics?.rpm ?? "—"}</td>
-                  <td className="px-4 py-3 text-xs font-mono">{d.peak_metrics?.boost_pressure ?? "—"}</td>
+                  <td className="px-4 py-3 text-xs font-mono">{peakMetric(d.peak_metrics, "rpm")}</td>
+                  <td className="px-4 py-3 text-xs font-mono">{peakMetric(d.peak_metrics, "boost_pressure_kpa")}</td>
                   <td className="px-4 py-3">
                     {d.has_anomaly ? <span className="text-xs text-red-600 font-medium">Yes</span> : <span className="text-xs text-gray-400">—</span>}
                   </td>
