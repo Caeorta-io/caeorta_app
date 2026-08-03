@@ -38,6 +38,7 @@ export type DataCapability =
   | 'driveDiagnostics'
   | 'driveTelemetry'
   | 'recentDiagnostics'
+  | 'diagnostics'
   | 'currentState'
   | 'currentStateSubscription'
   | 'createVehicle'
@@ -72,6 +73,12 @@ export const DATA_SOURCE: Record<DataCapability, DataSourceMode> = {
   // mode it throws {@link notImplemented} (the inverse of the usual pattern).
   driveTelemetry: 'live',
   recentDiagnostics: ENV_DEFAULT,
+  // The S1 feed's vehicle-wide read. Separate from `recentDiagnostics` (same table,
+  // different query: no limit, plus filters) so the feed and the home preview can flip
+  // independently. Both are gated by CF-30's live-flip gate, which this PR does NOT
+  // change — reconciling the App's internal model does not make the agent's output
+  // vocabulary confirmed. See the note on `fetchDiagnostics`.
+  diagnostics: ENV_DEFAULT,
   currentState: ENV_DEFAULT,
   currentStateSubscription: ENV_DEFAULT,
   createVehicle: ENV_DEFAULT,
@@ -204,6 +211,76 @@ export async function fetchRecentDiagnostics(
 ): Promise<Tables<'diagnostic_outputs'>[]> {
   if (DATA_SOURCE.recentDiagnostics === 'live') return notImplemented('recentDiagnostics');
   return mocks.recentDiagnosticsForVehicle(vehicleId, limit);
+}
+
+/**
+ * Filters for the S1 Diagnostics feed ({@link fetchDiagnostics}). Every field is
+ * OPTIONAL and an ABSENT-or-EMPTY field means "no constraint on this axis" — so `{}`
+ * and `undefined` both return the full feed. Fields combine with AND.
+ *
+ * Shaped to map one-to-one onto the eventual PostgREST clauses so the live flip is a
+ * query, not a rewrite: `severity` → `.in('severity', …)`, `status` → `.in('status', …)`,
+ * `since`/`until` → `.gte`/`.lte` on `generated_at`.
+ */
+export interface DiagnosticsFilters {
+  /**
+   * Match the raw `severity` column (`info` | `warning` | `critical`), NOT the derived
+   * card state. Worth knowing for S1's chips: a contract-shaped `insufficient_data` row
+   * carries `severity='info'` (contract §7), so an "Info" chip includes it. If the design
+   * wants insufficient-data as its OWN chip — S8's notification prefs do treat it as a
+   * fourth, separate toggle — filter on `deriveDiagnosticCardState` in the UI instead of
+   * widening this; the column has no such value and the DB CHECK forbids one.
+   */
+  severity?: readonly string[];
+  /** Match the raw `status` column (`new` | `seen` | `dismissed` | `actioned`). */
+  status?: readonly string[];
+  /** Inclusive lower bound on `generated_at` (ISO-8601). */
+  since?: string | null;
+  /** Inclusive upper bound on `generated_at` (ISO-8601). */
+  until?: string | null;
+}
+
+/** `undefined`/empty list = no constraint (see {@link DiagnosticsFilters}). */
+function matchesList(value: string, allowed: readonly string[] | undefined): boolean {
+  return allowed === undefined || allowed.length === 0 || allowed.includes(value);
+}
+
+/**
+ * EVERY diagnostic for a vehicle, newest-first — the read behind the S1 Diagnostics feed
+ * (design §6 `S1`). Distinct from {@link fetchRecentDiagnostics}, which is the home
+ * screen's newest-three preview.
+ *
+ * Returns rows RAW: filtered, but neither deduped nor date-grouped. Contract §5 assigns
+ * dedup to the app's UI layer, so it and the date grouping are pure functions in
+ * `lib/diagnostics.ts` ({@link dedupeDiagnostics}, {@link groupDiagnosticsByDate}) that
+ * the screen composes — the seam must not pre-collapse rows a filter chip might want back.
+ *
+ * Live: `…eq('vehicle_id', …)` plus the clauses named on {@link DiagnosticsFilters},
+ * `.order('generated_at', desc)`. Filtering runs at the seam (not in the fixtures) for
+ * exactly that reason — it is the half that becomes SQL.
+ *
+ * BEFORE FLIPPING `DATA_SOURCE.diagnostics`: this reads `diagnostic_outputs`, so it sits
+ * behind CF-30's gate. This PR reconciled the App's internal model onto the contract
+ * shape, which removes the app-side divergence but does NOT close the carry — the agent
+ * team still has to confirm the canonical field, and §7's DECISION REQUIRED #3 (which of
+ * the two "I don't know"s a row is) is still open; see `deriveInsufficientDataKind`.
+ */
+export async function fetchDiagnostics(
+  vehicleId: string,
+  filters: DiagnosticsFilters = {},
+): Promise<Tables<'diagnostic_outputs'>[]> {
+  if (DATA_SOURCE.diagnostics === 'live') return notImplemented('diagnostics');
+
+  const { severity, status, since, until } = filters;
+  return mocks.diagnosticsForVehicle(vehicleId).filter((d) => {
+    if (!matchesList(d.severity, severity)) return false;
+    if (!matchesList(d.status, status)) return false;
+    // Lexicographic compare is a correct chronological compare for the ISO-8601 UTC
+    // timestamps this column holds, and is what the live `.gte`/`.lte` do server-side.
+    if (since != null && d.generated_at < since) return false;
+    if (until != null && d.generated_at > until) return false;
+    return true;
+  });
 }
 
 /**

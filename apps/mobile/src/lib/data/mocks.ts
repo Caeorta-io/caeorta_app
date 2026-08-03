@@ -360,7 +360,9 @@ export const mockDiagnostics = [
  * case across the fixture set (see `deriveDriveHealth`):
  *   • drive …702 (Jun 21) — a lone `warning` → derives `needs_look`.
  *   • drive …707 (Jun 18) — a lone `insufficient_data` → stays `clean` (§4.3: off the
- *     ladder, must NOT elevate health), the key proof case.
+ *     ladder, must NOT elevate health), the key proof case. Contract-shaped since CF-30:
+ *     the "off the ladder" signal is `category`, and its `severity` is a plain `info`
+ *     (rank 2), which is why it still does not elevate — see {@link deriveDriveHealth}.
  * The last drive (MOCK_DRIVE_ID) already carries critical+warning+info via
  * {@link mockDiagnostics} → `check_now`; every other drive has none → `clean`.
  *
@@ -396,8 +398,13 @@ export const mockOtherDriveDiagnostics = [
     id: '66666666-6666-4666-8666-666666666672',
     vehicle_id: MOCK_VEHICLE_ID,
     agent_version: 'v0.3.1',
-    category: 'engine',
-    severity: 'insufficient_data',
+    // THE contract shape for "I don't know" (contract §5 DDL + §7): insufficient_data is
+    // a CATEGORY, paired with severity='info', urgency='monitor' and confidence < 0.3.
+    // This fixture previously carried the sentinel in the SEVERITY column instead — a value
+    // the DDL's `CHECK severity IN (info,warning,critical)` would have rejected outright.
+    // Reconciled in CF-30; no fixture writes that sentinel anywhere in the app now.
+    category: 'insufficient_data',
+    severity: 'info',
     urgency: 'monitor',
     status: 'new',
     confidence: 0.22,
@@ -416,14 +423,165 @@ export const mockOtherDriveDiagnostics = [
 ] satisfies Tables<'diagnostic_outputs'>[];
 
 /**
- * Every mock diagnostic for the vehicle: the three newest (last-drive) rows plus the
- * older, other-drive rows above. The drive-scoped reader {@link diagnosticsForDrive}
- * and the drives-list health flags derive from this full set;
+ * Older vehicle-scoped diagnostics that give the S1 Diagnostics feed (design §6) enough
+ * depth to actually exercise its two pure rules. Everything here is OLDER than
+ * {@link mockOtherDriveDiagnostics}, so neither the newest-three preview
+ * ({@link recentDiagnosticsForVehicle}) nor any drive-health assertion moves.
+ *
+ * What each row is here to prove:
+ *   • **Date grouping** — with the rows above, the feed spans six UTC dates
+ *     (Jun 22 / 21 / 19 / 18 / 17 / 16), several with more than one row, so
+ *     `groupDiagnosticsByDate` has real multi-row days AND real single-row days.
+ *   • **Category repeats** — `fuel` appears three times and `insufficient_data` twice
+ *     (…672 above + …676 here). The agent writes one row per occurrence and does NOT
+ *     suppress repeats (contract §5), so a feed without repeats would never reach the
+ *     dedup path.
+ *   • **Active vs dismissed in the SAME category** — …675 is a dismissed `fuel` row
+ *     sitting beside two active ones. `dedupeDiagnostics` keys on category **+ active
+ *     state**, so this collapses to two rows, not one: dismissing an old occurrence must
+ *     never hide a live one, and a live one must never resurrect a dismissed one.
+ *   • **`referenced_drive_id: null`** — contract §5 is explicit that consumers must
+ *     tolerate NULL (a drive-scoped citation also becomes NULL if the drive is deleted,
+ *     ON DELETE SET NULL). Three rows here carry it, so the feed's no-drive path is real.
+ *   • **The whole `status` vocabulary** — new / seen / dismissed / actioned all appear.
+ *
+ * NOTE on the two `insufficient_data` rows: …672 is the TEMPORARY case ("not enough
+ * history yet") and …676 the PERMANENT one ("the car doesn't report this metric") —
+ * contract §7's two "I don't know"s. Both are active, so dedup collapses them to the
+ * newer one. That is the rule behaving correctly, and it is also exactly why §7's
+ * DECISION REQUIRED #3 matters: until the agent marks which case a row is,
+ * {@link deriveInsufficientDataKind} cannot tell them apart and the feed cannot choose
+ * to keep both. See CF-30.
+ */
+export const mockOlderDiagnostics = [
+  {
+    id: '66666666-6666-4666-8666-666666666673',
+    vehicle_id: MOCK_VEHICLE_ID,
+    agent_version: 'v0.3.1',
+    category: 'fuel',
+    severity: 'warning',
+    urgency: 'soon',
+    status: 'new',
+    confidence: 0.74,
+    title: 'Fuel trims ran lean on the highway stretch',
+    summary: 'Long-term fuel trim sat high for most of the cruise section.',
+    explanation:
+      'Long-term fuel trim held around +12 % for most of the steady-speed section of ' +
+      'this drive, which means the ECU was adding fuel to compensate for a lean ' +
+      'reading. On a stage-2 car this is most often an intake leak or an injector not ' +
+      'keeping up. Worth checking before the next spirited drive.',
+    recommended_action: 'Check the intake tract for leaks and inspect injector delivery.',
+    referenced_drive_id: '77777777-7777-4777-8777-777777777705',
+    referenced_dtc_ids: [],
+    referenced_telemetry_ids: [],
+    generated_at: '2026-06-19T18:41:30.000Z',
+  },
+  {
+    id: '66666666-6666-4666-8666-666666666674',
+    vehicle_id: MOCK_VEHICLE_ID,
+    agent_version: 'v0.3.1',
+    // Same category as …673 and also active → the pair `dedupeDiagnostics` collapses,
+    // deliberately on a DIFFERENT date so the collapse crosses a date group.
+    category: 'fuel',
+    severity: 'warning',
+    urgency: 'soon',
+    status: 'seen',
+    confidence: 0.66,
+    title: 'Fuel trims ran lean again',
+    summary: 'The same lean trim pattern showed up on a shorter drive.',
+    explanation:
+      'Long-term fuel trim climbed above +10 % again, on a much shorter drive than ' +
+      'the one before it. Repeating across different drive lengths makes a one-off ' +
+      'sensor reading less likely and an air leak more likely.',
+    recommended_action: 'Check the intake tract for leaks and inspect injector delivery.',
+    referenced_drive_id: '77777777-7777-4777-8777-777777777708',
+    referenced_dtc_ids: [],
+    referenced_telemetry_ids: [],
+    generated_at: '2026-06-18T07:12:40.000Z',
+  },
+  {
+    id: '66666666-6666-4666-8666-666666666675',
+    vehicle_id: MOCK_VEHICLE_ID,
+    agent_version: 'v0.3.1',
+    // A DISMISSED row in a category that also has active rows — the case the dedup key's
+    // active-state half exists for. Survives dedup alongside …673 (see the array note).
+    category: 'fuel',
+    severity: 'warning',
+    urgency: 'monitor',
+    status: 'dismissed',
+    confidence: 0.58,
+    title: 'Fuel trim drifted after the tune change',
+    summary: 'Trims moved outside their usual band shortly after the last tune.',
+    explanation:
+      'Fuel trims shifted away from the baseline in the days after the last tune ' +
+      'change. Some drift is expected while the ECU relearns; this is a note rather ' +
+      'than a fault.',
+    recommended_action: null,
+    referenced_drive_id: null,
+    referenced_dtc_ids: [],
+    referenced_telemetry_ids: [],
+    generated_at: '2026-06-17T19:22:00.000Z',
+  },
+  {
+    id: '66666666-6666-4666-8666-666666666676',
+    vehicle_id: MOCK_VEHICLE_ID,
+    agent_version: 'v0.3.1',
+    // Contract §7's PERMANENT "I don't know" (the car cannot report the metric), written
+    // in the same contract shape as …672's temporary one: nothing on the row distinguishes
+    // them today — only the prose does, and deliberately nothing keys on prose (see
+    // `deriveInsufficientDataKind`).
+    category: 'insufficient_data',
+    severity: 'info',
+    urgency: 'monitor',
+    status: 'seen',
+    confidence: 0.18,
+    title: "Fuel-system analysis isn't available on this car",
+    summary: 'The ECU does not report the air–fuel ratio the analysis needs.',
+    explanation:
+      'This car does not report a wideband air–fuel ratio over OBD-II, so the ' +
+      'fuel-system analysis has nothing to work from. This will not change with more ' +
+      'driving — it is a limit of what the ECU exposes, not a fault.',
+    recommended_action: null,
+    referenced_drive_id: null,
+    referenced_dtc_ids: [],
+    referenced_telemetry_ids: [],
+    generated_at: '2026-06-17T08:05:00.000Z',
+  },
+  {
+    id: '66666666-6666-4666-8666-666666666677',
+    vehicle_id: MOCK_VEHICLE_ID,
+    agent_version: 'v0.3.1',
+    category: 'electrical',
+    severity: 'info',
+    urgency: 'monitor',
+    // 'actioned' is the CRITICAL acknowledge target ("I've got it"), not a "resolved"
+    // marker — see `diagnosticActions.ts`. It is therefore an ACTIVE state for dedup.
+    status: 'actioned',
+    confidence: 0.81,
+    title: 'Charging voltage looked healthy',
+    summary: 'Battery voltage stayed in its normal band the whole drive.',
+    explanation:
+      'Battery voltage held between 14.1 V and 14.6 V throughout, which is what a ' +
+      'healthy charging system looks like. Nothing needs your attention.',
+    recommended_action: null,
+    referenced_drive_id: null,
+    referenced_dtc_ids: [],
+    referenced_telemetry_ids: [],
+    generated_at: '2026-06-16T21:30:00.000Z',
+  },
+] satisfies Tables<'diagnostic_outputs'>[];
+
+/**
+ * Every mock diagnostic for the vehicle: the three newest (last-drive) rows, the older
+ * other-drive rows, and the feed-depth rows above. The drive-scoped reader
+ * {@link diagnosticsForDrive} and the drives-list health flags derive from this full set,
+ * as does the vehicle-wide feed read {@link diagnosticsForVehicle};
  * {@link recentDiagnosticsForVehicle} intentionally stays on the newest trio.
  */
 export const allMockDiagnostics: Tables<'diagnostic_outputs'>[] = [
   ...mockDiagnostics,
   ...mockOtherDriveDiagnostics,
+  ...mockOlderDiagnostics,
 ];
 
 // ── DTCs (design §6 S5/S6) ───────────────────────────────────────────────────
@@ -670,8 +828,10 @@ export function diagnosticsForDrive(driveId: string): Tables<'diagnostic_outputs
 /**
  * The health-severity flags a drive's linked diagnostics imply, for the drives-list
  * pill. `has_critical` / `has_warning` mirror the live per-drive aggregate
- * (`bool_or(severity = 'critical' | 'warning')`); `info` / `insufficient_data` /
- * unknown severities set neither flag, so they never elevate health (§4.3).
+ * (`bool_or(severity = 'critical' | 'warning')`); `info` and unknown severities set
+ * neither flag, so they never elevate health (§4.3). An `insufficient_data` row reaches
+ * here as `severity = 'info'` (contract §7), so it is non-elevating by the same rule —
+ * no category special-case is needed, which is why CF-30's audit found nothing to fix here.
  */
 function driveHealthFlags(driveId: string): { hasCritical: boolean; hasWarning: boolean } {
   let hasCritical = false;
@@ -807,6 +967,20 @@ export function dtcById(dtcId: string): Dtc | null {
  */
 export function diagnosticForDtc(dtcId: string): Tables<'diagnostic_outputs'> | null {
   return findDiagnosticForDtc(allMockDiagnostics, dtcId);
+}
+
+/**
+ * EVERY diagnostic for a vehicle, newest-first — the S1 feed's read (design §6 `S1`), as
+ * opposed to {@link recentDiagnosticsForVehicle}'s newest-three home preview.
+ *
+ * Deliberately unfiltered and un-deduped: filtering mirrors the live `.eq/.in/.gte` clauses
+ * and so lives at the seam ({@link fetchDiagnostics}), while dedup is a UI rule the contract
+ * assigns to the app (§5) and lives in the pure `lib/diagnostics.ts` layer. This selector
+ * only supplies rows, in the order the live `.order('generated_at', desc)` returns them.
+ */
+export function diagnosticsForVehicle(vehicleId: string): Tables<'diagnostic_outputs'>[] {
+  if (vehicleId !== MOCK_VEHICLE_ID) return [];
+  return [...allMockDiagnostics].sort((a, b) => b.generated_at.localeCompare(a.generated_at));
 }
 
 export function recentDiagnosticsForVehicle(

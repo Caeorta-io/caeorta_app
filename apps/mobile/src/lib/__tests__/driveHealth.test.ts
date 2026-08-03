@@ -46,6 +46,19 @@ describe('deriveDriveHealth', () => {
   it('insufficient_data never elevates health (off the ladder, §4.3)', () => {
     // The key case: a drive whose only diagnostic is insufficient_data reads clean,
     // NOT needs_look/check_now.
+    //
+    // CHANGED IN CF-30, DELIBERATELY — the contract shape was ADDED, nothing was removed.
+    // This test previously covered only the app's severity sentinel, which is the shape
+    // the fixtures no longer use; on its own it would have stopped covering the case it
+    // is named for. Both shapes are asserted because CF-30's audit turned on exactly this
+    // point: `deriveDriveHealth` elevates only on the critical/warning RANKS, so the
+    // contract shape (severity='info', rank 2) and the sentinel (absent from the map)
+    // both fall through to clean, and there was never a behavioural gap here to fix.
+    const contractShaped: Diagnostic = { ...base, id: 'c', category: 'insufficient_data', severity: 'info' };
+    expect(deriveDriveHealth([contractShaped])).toBe('clean');
+    expect(deriveDriveHealth([contractShaped, withSeverity('i', 'info')])).toBe('clean');
+
+    // The legacy sentinel, still non-elevating (an unrecognised severity never elevates).
     expect(deriveDriveHealth([withSeverity('x', 'insufficient_data')])).toBe('clean');
     expect(
       deriveDriveHealth([withSeverity('x', 'insufficient_data'), withSeverity('i', 'info')]),

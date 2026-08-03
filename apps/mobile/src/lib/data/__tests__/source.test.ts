@@ -6,6 +6,7 @@ import { deriveDtcGrouping, dtcRowSchema } from '@caeorta/types';
 import {
   DATA_SOURCE,
   fetchCurrentState,
+  fetchDiagnostics,
   fetchDrive,
   fetchDriveDiagnostics,
   fetchDrives,
@@ -18,6 +19,7 @@ import {
   subscribeToCurrentStateMock,
 } from '../source';
 import {
+  allMockDiagnostics,
   MOCK_DRIVE_ID,
   MOCK_PENDING_DTC_IDS,
   MOCK_VEHICLE_ID,
@@ -172,10 +174,140 @@ describe('fetchDrive / fetchDriveDiagnostics', () => {
 
     // insufficient_data must NOT elevate: the drive still reads clean despite having a
     // linked diagnostic.
+    //
+    // CHANGED IN CF-30, DELIBERATELY — not to make a build pass. This assertion used to
+    // read `severity === 'insufficient_data'`, pinning a sentinel the ratified contract
+    // does not have: §5's DDL constrains `severity` to (info, warning, critical) and §7
+    // puts `insufficient_data` in `category`, paired with severity='info'. The old
+    // assertion locked a fixture the database would have REJECTED, so it was pinning the
+    // wrong thing rather than protecting anything. It now pins the full contract shape —
+    // all four fields, so a partial regression (say, category fixed but severity left
+    // behind) fails here too.
     const insufficient = await fetchDriveDiagnostics(INSUFFICIENT_DRIVE);
     expect(insufficient).toHaveLength(1);
-    expect(insufficient[0]?.severity).toBe('insufficient_data');
+    expect(insufficient[0]).toMatchObject({
+      category: 'insufficient_data',
+      severity: 'info',
+      urgency: 'monitor',
+    });
+    expect(insufficient[0]?.confidence).toBeLessThan(0.3);
     expect(deriveDriveHealth(insufficient)).toBe('clean');
+  });
+});
+
+describe('fetchDiagnostics (S1 feed seam, mock mode)', () => {
+  it('returns every diagnostic for the vehicle, newest-first', async () => {
+    const rows = await fetchDiagnostics(MOCK_VEHICLE_ID);
+    expect(rows).toHaveLength(allMockDiagnostics.length);
+    expect(rows.every((d) => d.vehicle_id === MOCK_VEHICLE_ID)).toBe(true);
+    const times = rows.map((d) => Date.parse(d.generated_at));
+    expect(times).toEqual([...times].sort((a, b) => b - a));
+  });
+
+  it('is a strict superset of the home preview, which stays the newest three', async () => {
+    // The two capabilities read the same table with different queries — this is the
+    // relationship that justifies them being separate DATA_SOURCE entries.
+    const feed = await fetchDiagnostics(MOCK_VEHICLE_ID);
+    const preview = await fetchRecentDiagnostics(MOCK_VEHICLE_ID, 3);
+    expect(feed.length).toBeGreaterThan(preview.length);
+    expect(feed.slice(0, 3).map((d) => d.id)).toEqual(preview.map((d) => d.id));
+  });
+
+  it('is empty for an unknown vehicle', async () => {
+    expect(await fetchDiagnostics(UNKNOWN_ID)).toEqual([]);
+  });
+
+  it('treats absent, empty-object and empty-array filters alike (no constraint)', async () => {
+    const all = await fetchDiagnostics(MOCK_VEHICLE_ID);
+    expect(await fetchDiagnostics(MOCK_VEHICLE_ID, {})).toEqual(all);
+    expect(await fetchDiagnostics(MOCK_VEHICLE_ID, { severity: [], status: [] })).toEqual(all);
+    expect(
+      await fetchDiagnostics(MOCK_VEHICLE_ID, { since: null, until: null }),
+    ).toEqual(all);
+  });
+
+  it('filters by severity, accepting several at once', async () => {
+    const warnings = await fetchDiagnostics(MOCK_VEHICLE_ID, { severity: ['warning'] });
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings.every((d) => d.severity === 'warning')).toBe(true);
+
+    const both = await fetchDiagnostics(MOCK_VEHICLE_ID, { severity: ['warning', 'critical'] });
+    expect(both.length).toBeGreaterThan(warnings.length);
+    expect(both.every((d) => d.severity === 'warning' || d.severity === 'critical')).toBe(true);
+
+    expect(await fetchDiagnostics(MOCK_VEHICLE_ID, { severity: ['nonexistent'] })).toEqual([]);
+  });
+
+  it('filters by status across the whole vocabulary', async () => {
+    for (const status of ['new', 'seen', 'dismissed', 'actioned']) {
+      const rows = await fetchDiagnostics(MOCK_VEHICLE_ID, { status: [status] });
+      // Every status is represented in the fixtures, so no chip renders a dead filter.
+      expect(rows.length).toBeGreaterThan(0);
+      expect(rows.every((d) => d.status === status)).toBe(true);
+    }
+  });
+
+  it('filters by an inclusive time window on generated_at', async () => {
+    const since = '2026-06-19T00:00:00.000Z';
+    const until = '2026-06-21T23:59:59.999Z';
+    const windowed = await fetchDiagnostics(MOCK_VEHICLE_ID, { since, until });
+
+    expect(windowed.length).toBeGreaterThan(0);
+    expect(windowed.every((d) => d.generated_at >= since && d.generated_at <= until)).toBe(true);
+    // Rows on both sides of the window really do exist, so this is a real narrowing.
+    const all = await fetchDiagnostics(MOCK_VEHICLE_ID);
+    expect(all.some((d) => d.generated_at < since)).toBe(true);
+    expect(all.some((d) => d.generated_at > until)).toBe(true);
+
+    // Bounds are inclusive: a window pinned exactly to one row's timestamp keeps it.
+    const exact = all[0] as Tables<'diagnostic_outputs'>;
+    const pinned = await fetchDiagnostics(MOCK_VEHICLE_ID, {
+      since: exact.generated_at,
+      until: exact.generated_at,
+    });
+    expect(pinned.map((d) => d.id)).toContain(exact.id);
+  });
+
+  it('combines filters with AND', async () => {
+    const rows = await fetchDiagnostics(MOCK_VEHICLE_ID, {
+      severity: ['warning'],
+      status: ['new'],
+      since: '2026-06-01T00:00:00.000Z',
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((d) => d.severity === 'warning' && d.status === 'new')).toBe(true);
+
+    // A contradictory combination is empty, not an error.
+    expect(
+      await fetchDiagnostics(MOCK_VEHICLE_ID, {
+        severity: ['critical'],
+        until: '2026-01-01T00:00:00.000Z',
+      }),
+    ).toEqual([]);
+  });
+
+  it('returns rows RAW — neither deduped nor grouped (contract §5 puts dedup in the UI)', async () => {
+    const rows = await fetchDiagnostics(MOCK_VEHICLE_ID);
+    const categories = rows.map((d) => d.category);
+    // Repeats survive the seam; collapsing them is `dedupeDiagnostics`' job, and a filter
+    // chip has to be able to bring a suppressed row back.
+    expect(new Set(categories).size).toBeLessThan(categories.length);
+  });
+
+  // CF-30's fixture reconciliation, pinned at the seam so a new fixture cannot reintroduce
+  // the sentinel. The DDL (contract §5) CHECKs severity IN (info,warning,critical), so a
+  // sentinel-severity row is one the database would reject outright.
+  it('no fixture uses insufficient_data as a SEVERITY, and every one that uses it as a category is contract-shaped', async () => {
+    const rows = await fetchDiagnostics(MOCK_VEHICLE_ID);
+    expect(rows.every((d) => ['info', 'warning', 'critical'].includes(d.severity))).toBe(true);
+
+    const insufficient = rows.filter((d) => d.category === 'insufficient_data');
+    expect(insufficient.length).toBeGreaterThan(0);
+    for (const d of insufficient) {
+      expect(d.severity).toBe('info');
+      expect(d.urgency).toBe('monitor');
+      expect(d.confidence).toBeLessThan(0.3);
+    }
   });
 });
 
