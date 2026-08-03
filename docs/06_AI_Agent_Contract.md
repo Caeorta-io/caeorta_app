@@ -1,5 +1,28 @@
 # AI Agent Contract
 
+> ## ℹ️ This is **v0.1**. A **v0.2 draft exists** and proposes to supersede it.
+>
+> **v0.1 (this file) remains the contract of record** — it is what both projects are
+> currently bound by. But it was drafted ~2026-05 and **never jointly reviewed**, so its six
+> "Week 1 open questions" stayed open while implementation moved ahead and the document
+> drifted from what shipped. That drift is risk **R1** and carry **CF-03**.
+>
+> **`docs/AI_Agent_Contract/ai-agent-contract.md`** is **v0.2 (draft)**, received from the
+> AI agent project on 2026-08-03. It reconciles the contract with the shipped schema,
+> resolves most of the six questions, and marks four new **[DECISION REQUIRED]** items.
+> **It is not ratified** — that needs the cross-project sync, which has not happened.
+>
+> **Read v0.2 before relying on anything below**, and see
+> `docs/AI_Agent_Contract/README.md` for the full artifact set (including a proposed
+> `agent_role` migration and a repo-review reporting 4 P0 defects). Two corrections in v0.2
+> matter immediately: it **pins the canonical telemetry metric vocabulary** (§3 — the input
+> CF-07 / R22 has been gated on) and it records that the agent should read
+> `vehicles.ecu_type` + `vehicles.modifications`, **not** `vehicle_modifications`, which is
+> empty and reserved for v2.
+>
+> On ratification, decide whether v0.2 replaces this file in place or this stays the stable
+> numbered snapshot with the live contract living in that folder.
+
 This document defines the **interface between this app/web project and the AI agent project**. The AI agent is built in a separate project (its prompts, evals, model selection, internals are owned there). This project consumes the agent's outputs via a contract.
 
 **This document is the single source of truth.** When it changes, both projects must update. Versioning is by date in this document's changelog at the bottom.

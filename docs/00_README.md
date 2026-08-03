@@ -16,7 +16,8 @@ If a future Claude (or you) opens a fresh chat in this project, this is the map.
 | `03_Tech_Stack.md` | Tool choice questions, "should we use X" questions |
 | `04_Repository_Structure.md` | File layout, environment setup, monorepo questions |
 | `05_Database_Schema.md` | Anything about Supabase tables, RLS, migrations, data modeling |
-| `06_AI_Agent_Contract.md` | Anything about how the app talks to the AI agent (which lives in another project) |
+| `06_AI_Agent_Contract.md` | Anything about how the app talks to the AI agent (which lives in another project). **v0.1 — the ratified contract of record.** Read alongside the v0.2 draft below |
+| `AI_Agent_Contract/` | The **v0.2 draft contract** + the agent project's repo review, proposed `agent_role` migration and safety-threshold template. **Proposals awaiting joint review — nothing here is applied.** Start at its `README.md` |
 | `07_Sync_Architecture.md` | Anything about device-to-cloud-to-app data flow |
 | `08_12_Week_Action_Plan.md` | What to build, in what order, in which week |
 | `09_Risks_And_Mitigations.md` | Things likely to go wrong, watch list |

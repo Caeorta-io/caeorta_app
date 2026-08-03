@@ -1,0 +1,204 @@
+# ============================================================================
+# CAEORTA — HARD SAFETY THRESHOLDS
+# ============================================================================
+#
+# Absolute limits. "Is this dangerous for ANY car?" — not "is this unusual for
+# THIS car?" (that's the adaptive per-vehicle baseline, which lives in code and
+# learns from each vehicle's own drive history).
+#
+# WHY THIS FILE EXISTS AS DATA, NOT CODE
+# --------------------------------------
+# These numbers decide when Caeorta tells someone to stop driving. They are
+# physical properties of an engine, sourced from factory specs or domain
+# reference — not something the agent should infer, and not something to bury
+# in a prompt or a code constant. They live here so they can be reviewed,
+# diffed, and blamed like any other safety-critical artifact.
+#
+# The agent NEVER writes to this file.
+#
+# WHY THE FLOOR EXISTS AT ALL (it is not redundant with the adaptive baseline)
+# ---------------------------------------------------------------------------
+# The adaptive baseline has two failure modes this file exists to catch:
+#
+#   1. It learns a fault as normal. A car that has run hot since day one
+#      (marginal thermostat, tired radiator) teaches the baseline that 112 C is
+#      "normal for this car" — so the baseline never flags it. The cars that
+#      most need warning are exactly the ones whose baselines are poisoned.
+#   2. Cold start has no baseline. For the first N drives there is nothing to
+#      compare against. Without a floor, a car actively cooking on drive two
+#      gets silence.
+#
+# The floor is checked from drive one, on every drive, forever. It is the only
+# thing that can fire `critical` before a baseline exists.
+#
+# ============================================================================
+# THE `status` FIELD IS A SAFETY GATE — READ THIS
+# ============================================================================
+#
+#   status: unvalidated   -> the agent MUST NOT fire `critical` from this
+#                            threshold. It may only downgrade to `warning` at
+#                            most, and should state that the limit is
+#                            provisional. This is the default.
+#
+#   status: validated     -> agent may fire `critical`. Requires `source` to
+#                            name a real reference and `validated_by` /
+#                            `validated_at` to be filled.
+#
+# This gate is what makes it safe to ship with the numbers blank. An empty or
+# unvalidated profile degrades the agent to advisory behaviour; it does not
+# produce a confidently wrong `critical`. Fill the numbers, flip the status.
+#
+# Rule: never set `status: validated` on a number you guessed.
+#
+# ============================================================================
+# UNITS — must match the app's telemetry vocabulary EXACTLY
+# ============================================================================
+# Per supabase/seed.sql (canonical as of 2026-07-17):
+#   speed_kph            number   km/h
+#   rpm                  number   revolutions/min
+#   coolant_temp_c       number   degrees Celsius
+#   boost_pressure_kpa   number   kPa  (NOT bar — 1 bar = 100 kPa)
+#   engine_load_pct      number   percent
+#
+# Metrics not currently emitted (see `planned_metrics` at the bottom) are
+# absent keys, not nulls — the device uses jsonb_strip_nulls. A missing metric
+# means "this car does not report it", NOT zero. Never threshold on an absent
+# key.
+#
+# ============================================================================
+
+schema_version: 1
+last_updated: null          # set when numbers are filled
+maintained_by: null         # who owns these numbers
+
+# ----------------------------------------------------------------------------
+# RESOLUTION ORDER
+# ----------------------------------------------------------------------------
+# The agent resolves a vehicle to exactly one profile:
+#   1. First profile in `profiles` whose `match` block matches the vehicles row
+#      (make / model / year range, case-insensitive).
+#   2. Otherwise `defaults`.
+#
+# `defaults` is intentionally conservative and unvalidated: an unmatched car
+# gets advisory-only behaviour, never a confident critical. Adding a vehicle to
+# the pilot without a profile degrades gracefully instead of failing loudly or
+# lying.
+# ----------------------------------------------------------------------------
+
+defaults:
+  description: >
+    Fallback for any vehicle without a specific profile. Deliberately blank and
+    unvalidated. Do NOT put "reasonable guesses" here — a wrong default is worse
+    than no default, because it applies silently to every unmatched car.
+  thresholds:
+    coolant_temp_c:
+      # Sustained: the reading must hold above the limit for this many seconds
+      # before firing. Guards against single-sample sensor glitches, which are
+      # common on OBD-II. Set to 0 to fire on a single sample.
+      warning:
+        above: null
+        sustained_seconds: null
+      critical:
+        above: null
+        sustained_seconds: null
+      source: null
+      status: unvalidated
+      validated_by: null
+      validated_at: null
+      notes: >
+        Only safety-relevant metric currently captured. Everything else in the
+        v1 vocabulary (rpm, speed, boost, load) is performance data, not a
+        safety signal on its own.
+
+profiles:
+
+  # --------------------------------------------------------------------------
+  # TEST VEHICLE — Maruti Swift 2016
+  # The only vehicle with real data today. Start here.
+  # --------------------------------------------------------------------------
+  - id: maruti_swift_2016
+    description: Maruti Suzuki Swift, 2016. Primary test vehicle.
+    match:
+      make: Maruti
+      model: Swift
+      year_min: 2016
+      year_max: 2016
+    engine: null              # e.g. "K12M 1.2 petrol" — affects the numbers
+    aspiration: null          # naturally_aspirated | turbo — see boost note below
+
+    thresholds:
+      coolant_temp_c:
+        warning:
+          above: null         # sustained temp that warrants attention
+          sustained_seconds: null
+        critical:
+          above: null         # temp at which damage risk is real -> stop driving
+          sustained_seconds: null
+        source: null          # e.g. "factory service manual, section X" / gauge spec
+        status: unvalidated
+        validated_by: null
+        validated_at: null
+        notes: >
+          Reference point, not a recommendation: the dev seed fixture
+          (supabase/seed.sql) simulates a drive peaking at 108.2 C and labels it
+          a hot drive. Whoever wrote that had a mental model of "too hot" —
+          worth asking them; it is probably the fastest route to a real number.
+
+  # --------------------------------------------------------------------------
+  # Add one block per distinct pilot vehicle. Copy the template above.
+  # A vehicle with no profile falls back to `defaults` (advisory-only).
+  # --------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------
+# NOT SAFETY THRESHOLDS — deliberately excluded
+# ----------------------------------------------------------------------------
+# rpm / boost_pressure_kpa / engine_load_pct do NOT belong here, even though
+# they have obvious "limits", because:
+#
+#   - Their safe ceiling is a property of the TUNE, not the engine. Redline on a
+#     Haltech-managed build is whatever the tuner set. A fixed rpm ceiling would
+#     fire on exactly the modified cars this product is for — the Torque Pro
+#     failure mode.
+#   - They are the adaptive baseline's job: "6800 rpm is unusual FOR THIS CAR"
+#     is answerable from history; "6800 rpm is dangerous for all cars" is not.
+#
+# The floor is for absolutes. Physics, not tuning.
+#
+# One caveat if `aspiration` is filled in: sustained boost on a car recorded as
+# naturally_aspirated is a sensor/config fault, not an engine fault. That is a
+# data-integrity check, not a safety threshold — it belongs in the pre-filter.
+# ----------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------
+# PLANNED METRICS — structure reserved, not yet emitted
+# ----------------------------------------------------------------------------
+# Per founder (2026-07-17): additional PIDs are enabled per-car, only where that
+# specific vehicle actually exposes them. The agent derives availability from
+# observed data (absent key = unavailable), so nothing here needs to exist
+# before it can run.
+#
+# When a car starts reporting one of these, add the block to that car's profile.
+# Until then, leave them out entirely — an absent threshold is correct; a
+# threshold on an absent metric would never fire and would rot silently.
+#
+#   oil_pressure_kpa:
+#     Genuinely safety-critical — low oil pressure under load destroys an engine
+#     in seconds. Currently NOT captured, and not exposed by standard OBD-II on
+#     most cars; needs a sensor or an ECU stream. BUILD REQ section 6 uses it as
+#     the flagship `critical` example, so the spec currently promises a
+#     diagnostic the hardware cannot produce.
+#     NOTE: this is a FLOOR (danger below), not a ceiling — the threshold shape
+#     is `below:`, not `above:`. Also load-dependent: low pressure at idle is
+#     normal, at 5000 rpm it is an emergency. Needs its own condition shape.
+#
+#   afr:
+#     Not currently captured. Needs a wideband. Required for the `fuel`
+#     category and for BUILD REQ section 2's flagship "lean under boost"
+#     example. Safe AFR is tune-dependent, so this is arguably baseline
+#     territory rather than a hard floor — EXCEPT for sustained dangerous lean
+#     under high load, which risks detonation on any engine.
+#
+#   intake_air_temp_c, oil_temp_c, knock_count, fuel_trim_short_pct,
+#   fuel_trim_long_pct:
+#     Useful; none are hard-floor material on their own.
+# ----------------------------------------------------------------------------
