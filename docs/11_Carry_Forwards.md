@@ -189,6 +189,42 @@ original six:
 > promotion ritual mandates a workdiary entry (step 8), of which there is none since
 > 2026-06-21. If Platform has promoted them without logging it, this line is wrong and
 > the missing log entry is the thing to fix.
+>
+> ---
+>
+> ### Amendment 2026-08-03 (session 41) — AI-agent v0.2 proposal lands; CF-07 closes
+>
+> **The largest single movement on this registry since it was created, and it came from
+> outside the App track.** The AI-agent project produced a **v0.2 contract proposal on
+> 2026-07-17** that reconciles the contract against this repo's shipped schema. It reached
+> this project's session history only on **2026-08-03** and merged the same day (PR #50,
+> `211dc5d`) as documents under `docs/AI_Agent_Contract/`. Four entries move:
+>
+> - **CF-03** — major status change, **not a close.** Four of the six original open
+>   questions are resolved (trigger mechanism → durable `agent_work_queue` + NOTIFY-as-
+>   wakeup; dedup confirmed; `agent_request_queue` → yes; deep-analysis cadence confirmed
+>   *but its emitter found never to have existed*). **Four founder decisions taken
+>   2026-08-03** and **nine review findings (4 P0 + 3 P1 bugs, 2 P2 doc findings)** routed
+>   to Sulaiman. Stays open because **every concrete artifact is still unbuilt** and the
+>   agreement is currently one-directional.
+> - **CF-04** — a **drafted** `agent_role` migration now exists, as a document under
+>   `docs/`, not in `supabase/migrations/`. Unapplied. Still open.
+> - **CF-07** — **CLOSED.** The app's provisional metric keys are adopted as the canonical
+>   vocabulary verbatim; no key value changes anywhere.
+> - **CF-08** — **scope widened** from "coolant threshold" to **hard safety thresholds**
+>   across metrics (coolant, oil pressure, …), and **re-owned from engineering to
+>   founder/domain-research.** The v0.2 package names it *the only remaining item the agent
+>   project cannot source or decide for itself.*
+>
+> **Revised accounting: 39 entries; 5 closed (CF-12, CF-13, CF-22, CF-25, CF-07), 34 open.**
+>
+> **A provenance note worth keeping.** This proposal sat for ~2.5 weeks between being
+> produced (2026-07-17) and being surfaced here (2026-08-03) — during which the session-37
+> sweep re-verified CF-03 as "unchanged, nothing moved during the whole of Week 5" and
+> called it the most time-critical entry in the file. That was accurate against this repo
+> and wrong about the world. **R1's doc-drift risk is bidirectional**, and the same gap now
+> runs the other way: the four founder decisions above exist only in this repo until
+> someone carries them back into the agent project's context.
 
 ---
 
@@ -280,36 +316,104 @@ original six:
   `currentStateSubscription` live-branch comment in `source.ts`; workdiary
   sessions 23, 24, 27, 28, 29, 30.
 
-### CF-03 — AI Agent Contract: six open questions unacknowledged + not shared (R1)
+### CF-03 — AI Agent Contract: six open questions unacknowledged + not shared (R1)  *(v0.2 proposal received — substantially de-risked, every artifact still unbuilt)*
 
 - **Category:** Cross-track dependency / flag
 - **Origin:** Week 1, contract v0 authored session 12 (`docs/ai-agent-contract.md`);
   carried at Week-2 close (2026-06-22).
-- **Current status:** Open, re-verified against `docs/06`. The changelog stops
-  at "**2026-05-XX (v0.1):** Initial draft. To be reviewed jointly with AI
-  agent project in Week 1" — no acknowledgment recorded. The six "Open
-  questions to resolve in Week 1" stand unresolved: (1) trigger mechanism
-  (NOTIFY/webhook/polling), (2) multi-vehicle batching, (3) deep-analysis
-  cadence, (4) `insufficient_data` threshold, (5) cross-diagnostic
-  deduplication, (6) whether to build `agent_request_queue` in v1. The contract
-  is still not shared (no agent repo reachable from the App founder's `gh`), and
-  the weekly cross-project sync is not calendared. Mitigation remains "on paper."
-  **Re-verified 2026-08-03 (session 37), unchanged — and now the most time-critical entry
-  in this file.** `docs/06`'s changelog still ends at the v0.1 draft line; the six open
-  questions are still open. **Nothing moved on this during the whole of Week 5.** Week 6 —
-  which the App track begins the day after this sweep — is the AI-agent integration week
-  whose own preamble reads "the week most likely to surface contract gaps; plan for
-  friction." **Blocker: the AI-agent team must acknowledge or reject the six defaults, and
-  the founder must share the contract + calendar the sync.** Neither is App-track work; this
-  entry cannot be closed from this repo no matter how long it carries.
-- **What's needed to resolve:** Share the contract with the agent project (a
-  GitHub issue on the agent repo); get the six proposal-defaults acknowledged or
-  rejected; create the recurring Friday cross-project sync. Week 6 is the
-  buffered integration day where gaps surface if this hasn't happened first.
-- **Owner:** AI-agent team (acknowledge/reject the defaults) + founder (share +
-  calendar the sync).
-- **Cross-references:** R1; `docs/08` Week-2 "Carry from Week 1"; `docs/06`
-  "Open questions" + Changelog; workdiary session 12.
+- **Current status:** **MAJOR STATUS CHANGE, 2026-08-03 — not a close.** The AI-agent
+  project produced a **v0.2 contract proposal on 2026-07-17**, reconciling the contract
+  against the schema this repo actually shipped (`20260602130000`). It reached this
+  project's session history only on **2026-08-03**, ~2.5 weeks later, and merged to `main`
+  the same day as **PR #50** (`211dc5d`, squash-merged) into `docs/AI_Agent_Contract/`:
+  `ai-agent-contract.md` (the v0.2 draft), `proposed-app-changes.md`,
+  `findings-from-repo-review.md`, `safety_thresholds.yaml`, and a proposed
+  `20260717000000_create_agent_role.sql`.
+
+  **The v0.2 artifacts are documents on `main`, not applied changes.** Nothing in
+  `supabase/migrations/`, `supabase/functions/` or the app has moved. `docs/06` remains
+  the ratified v0.1 contract of record; v0.2 is a proposal awaiting joint review.
+
+  **The six original open questions, re-verified against the v0.2 draft:**
+  1. **Trigger mechanism — RESOLVED.** Durable **`agent_work_queue` + NOTIFY-as-wakeup**,
+     replacing NOTIFY-only. Enqueue becomes a trigger on `sync_sessions AFTER UPDATE OF
+     status` (fires atomically with the commit, so no code path can skip it and a
+     rolled-back commit can't fire it) rather than v0.1's "Edge Function's last step".
+     **Not built — no migration on `main`.**
+  2. **Multi-vehicle batching — subsumed structurally**, not separately answered: the
+     queue's **unique partial index** `(vehicle_id, kind) WHERE state='pending'` coalesces
+     per vehicle and enforces cooldowns declaratively.
+  3. **Deep-analysis cadence — cadence confirmed** (≤1 deep run per vehicle per week), but
+     the review found **no weekly emitter has ever existed** — the cron migration schedules
+     only downsample + two cleanups. Specified since v0.1, never implemented, and not
+     previously recorded as missing anywhere in this repo. Founder decision below.
+  4. **`insufficient_data` threshold — reframed and open.** v0.2 splits it into
+     *temporary* (cold start, recoverable) vs *permanent* (sensor absent). Both use
+     `category='insufficient_data'`, `confidence<0.3`, `severity='info'`,
+     `urgency='monitor'`; how to distinguish them is DECISION REQUIRED #3 (recommend a
+     `title`/`explanation` copy convention for v1, no schema change).
+  5. **Cross-diagnostic deduplication — CONFIRMED as v0.1 specified.** Agent writes one
+     row per occurrence and uses prior outputs as continuity context; **the app** dedupes
+     in the UI by category + active state. The agent does not suppress repeats.
+  6. **`agent_request_queue` in v1 — RESOLVED: yes**, as `agent_work_queue` (see #1).
+
+  **This closes CF-07** — the metric vocabulary is settled, the app's own keys adopted as
+  canonical. See CF-07 for the evidence; not duplicated here.
+
+  **Four founder decisions taken 2026-08-03** (recorded here because they were taken in
+  conversation and, per session 39's lesson, a decision that lives only in a conversation
+  is not recorded):
+  1. **`drives.has_anomaly` = app-derived** — a trigger on `diagnostic_outputs` insert
+     setting the flag where severity > `'info'`. Keeps the agent's write surface at two
+     tables (`diagnostic_outputs`, `agent_status`) and keeps the flag consistent with the
+     outputs by construction. Resolves a real contradiction: the schema doc calls it
+     "set by agent" while BUILD REQ §1 and the contract both say the agent writes only two
+     tables — and the column is currently **write-once-`false`**, set at insert by
+     `device_sync_complete` and never updated by anything in the repo.
+  2. **Add `referenced_telemetry_snapshot jsonb` to `diagnostic_outputs`** — the agent
+     copies the handful of cited samples inline at write time. `diagnostic_outputs` is
+     retained indefinitely while raw `telemetry` is purged at 30 days, and
+     `referenced_telemetry_ids` is a bare `uuid[]` with no FK — so from day 31 every
+     diagnostic in a user's permanent history cites rows that no longer exist.
+  3. **Add `telemetry.drive_id` + backfill.** Today the association is a working
+     convention (`get_drive_telemetry` filters `sync_session_id` + `timestamp BETWEEN
+     started_at AND ended_at`) with **no index on `telemetry.sync_session_id`**, so it
+     scans.
+  4. **BUILD the weekly deep-analysis pg_cron emitter** (not cut to v2) — see #3 above.
+
+  **Nine findings from the agent project's repo review** (`findings-from-repo-review.md`,
+  read against `main` 2026-07-17, verified empirically against PostgreSQL 16): **4 P0 + 3
+  P1 bugs, plus 2 P2 doc-correction findings.** Routed to Sulaiman 2026-08-03; **none fixed
+  yet.** Nothing is in prod — the P0s sit in dev-only migrations, and P1-1/P1-3 in the
+  deployed-to-dev `device_sync_complete`. Detail is in that file and deliberately not
+  duplicated here. Two bear directly on this entry: **P0-4** (`notify_agent` is callable by
+  any authenticated user, so any user can trigger agent runs on arbitrary vehicles) and
+  **P2-1** — `docs/ai-agent-contract.md`, the document BUILD REQ §4 calls "THE source of
+  truth" and which R1 exists to keep from drifting, **is not in the repo at all**; only the
+  immutable v0.1 `docs/06` is committed. The review names that as the root cause of most
+  of the mismatches it found.
+
+  **Why this stays open:** the proposal is a large de-risking — four of six questions
+  resolved, a concrete architecture, and CF-07 closed — but **every concrete artifact is
+  still unbuilt**, and the agreement is currently one-directional.
+- **What's needed to resolve — two tracks:**
+  - **(a) Platform (Sulaiman) — review + build. None of this exists on `main`:** the
+    `agent_role` migration (CF-04), `agent_work_queue` + its enqueue triggers,
+    `telemetry.drive_id` + backfill, `referenced_telemetry_snapshot`, the `has_anomaly`
+    trigger, the weekly deep-analysis pg_cron emitter, and the 7 bug fixes.
+  - **(b) Founder — communicate the four decisions back into the AI-agent project's own
+    context**, so both sides hold the same agreement. **R1's doc-drift risk applies to
+    silence in *either* direction, not just this side's.** The v0.2 draft still lists
+    these as "4 decisions marked for joint review"; until the answers land there, the
+    agent project is building against open questions this project considers settled.
+    Also still outstanding from the original entry: the recurring cross-project sync is
+    **not calendared**.
+- **Owner:** Platform track (build) + founder (decisions back to the agent project +
+  calendar the sync) + AI-agent team (ratify v0.2, or `docs/06` and the draft diverge).
+- **Cross-references:** R1; CF-04 (`agent_role`), CF-07 (**closed by this**), CF-08
+  (safety thresholds, widened); `docs/AI_Agent_Contract/README.md` and its four documents;
+  `docs/08` Week-2 "Carry from Week 1"; `docs/06` "Open questions" + Changelog; workdiary
+  sessions 12, 37, 41; PR #50.
 
 ### CF-04 — `agent_role` read-only Postgres role migration
 
@@ -325,12 +429,32 @@ original six:
   (`rls_policies.sql` lines 16, 418, 454 name it as a separate future migration), and
   `docs/05` line 598 still marks the read-only verification TODO. **Blocker: CF-03.**
   This entry cannot move before that one does.
-- **What's needed to resolve:** Contract v0 merges + agent confirms read scope →
-  write the `agent_role` migration granting exactly that scope; then add the
-  deferred RLS verification test.
-- **Owner:** Platform track (migration) + AI-agent team (read-scope confirmation).
-- **Cross-references:** CF-03; R1; `docs/08` Week-2 "Carry from Week 1";
-  `docs/05` § Testing (deferred) + Migration discipline; workdiary session 7.
+
+  **Updated 2026-08-03 (session 41) — a draft now exists, still unapplied.** The AI-agent
+  project's v0.2 package includes a proposed migration at
+  **`docs/AI_Agent_Contract/20260717000000_create_agent_role.sql`** — note the path: it is
+  a **document under `docs/`, deliberately not in `supabase/migrations/`**, so it is not
+  in the migration sequence and nothing applies it. `supabase/migrations/` is unchanged at
+  seven files; the forward references in `rls_policies.sql` and the `docs/05` TODO both
+  still stand.
+
+  The draft **self-documents its own open questions** rather than assuming a scope — it
+  carries inline notes on the points the agent project could not decide alone, including
+  the commented-out **column-scoped** `GRANT UPDATE (has_anomaly) ON drives` that founder
+  decision 1 (CF-03) has now settled the other way: `has_anomaly` becomes app-derived via
+  a trigger, so that grant should stay out and the agent's write surface stays at two
+  tables. Whoever reviews the draft should reconcile it against all four decisions before
+  applying it.
+- **What's needed to resolve:** Sulaiman reviews the drafted migration, reconciles it
+  against the four founder decisions of 2026-08-03 and the agent project's confirmed read
+  scope, then lands it **in `supabase/migrations/`** (a new timestamp if the drafted one
+  has been overtaken); then add the deferred RLS read-only verification test and clear the
+  `docs/05` TODO.
+- **Owner:** Platform track (review + apply the migration) + AI-agent team (read-scope
+  confirmation as part of ratifying v0.2).
+- **Cross-references:** CF-03; R1; `docs/AI_Agent_Contract/20260717000000_create_agent_role.sql`
+  (the draft) + that folder's `README.md`; `docs/08` Week-2 "Carry from Week 1";
+  `docs/05` § Testing (deferred) + Migration discipline; workdiary sessions 7, 41.
 
 ### CF-05 — Admin dashboard: drive-list-per-device
 
@@ -521,12 +645,55 @@ original six:
 
 ## Provisional-value-reconciliation
 
-### CF-07 — Provisional jsonb metric-key vocabulary — `TODO(metric-keys)` (R22 #1)
+### CF-07 — Provisional jsonb metric-key vocabulary — `TODO(metric-keys)` (R22 #1)  *(CLOSED 2026-08-03)*
 
 - **Category:** Provisional-value-reconciliation
 - **Origin:** Week 3, data seam session 22 (PR #25); recorded in the Week-3
   close table, session 24.
-- **Current status:** Open. A provisional key set is now load-bearing in
+- **Current status: CLOSED 2026-08-03 — the app's provisional keys are now the canonical
+  vocabulary.** The AI-agent project's v0.2 contract draft, §3 *Metric vocabulary* ("new in
+  v0.2 — closes R22 / `TODO(metric-keys)`"), states it directly: *"The canonical telemetry
+  metric vocabulary is the app's existing set. The firmware conforms to these names and
+  units; the agent keys on them; the app's provisional keys become canonical."* The table:
+
+  | key | unit | note |
+  |---|---|---|
+  | `speed_kph` | km/h | |
+  | `rpm` | rpm | |
+  | `coolant_temp_c` | °C | only safety-relevant metric captured today |
+  | `boost_pressure_kpa` | kPa | **not bar** — 1 bar = 100 kPa |
+  | `engine_load_pct` | % | |
+
+  `safety_thresholds.yaml` independently pins the same five under *"UNITS — must match the
+  app's telemetry vocabulary EXACTLY"*, citing `supabase/seed.sql` as canonical as of
+  2026-07-17. **The guess turned out to be the answer** — every provisional usage
+  (`mocks.ts`, `LastDriveCard`, `DiagnosticsPreview`, drive-detail `PEAK_METRICS`, the three
+  live telemetry-chart channel keys, and the S6 freeze-frame panel of CF-28 gap #2) was
+  already correct, so **no key value changes anywhere.**
+
+  Two things v0.2 adds that the App track should know, neither of which reopens this:
+  **absent ≠ zero ≠ normal** — the device emits `jsonb_strip_nulls`'d metrics, so an
+  unavailable metric is an **absent key**, never a null and never a zero; per-vehicle
+  capability is *derived* from keys observed across recent drives, not configured. And
+  additional PIDs (`afr`, `oil_pressure_kpa`, `intake_air_temp_c`, …) are per-car
+  extensions on top of this set, not replacements for it.
+- **Residual (tracked elsewhere, not here):** the `TODO(metric-keys)` comment flags can now
+  be removed as a tidy-up, and v0.2 notes that `device_sync_complete`'s `peak_metrics`
+  seeding reads a missing metric as `0` (`Math.max(x ?? 0, val)`) — that is bug **P1-2** in
+  `findings-from-repo-review.md`, carried under CF-03, **not** a vocabulary question.
+- **Closed by:** the v0.2 contract draft, §3 — see CF-03 for the provenance and the
+  ratification status of v0.2 as a whole.
+- **Owner:** — (closed). Flag removal is incidental App-track tidy-up.
+- **Cross-references:** CF-03 (parent), CF-28 (freeze-frame keys — the vocabulary half is
+  now settled), CF-08 (the *value* question, still open and now wider);
+  `docs/AI_Agent_Contract/ai-agent-contract.md` §3; `docs/AI_Agent_Contract/safety_thresholds.yaml`
+  § UNITS; R22 (#1); `docs/08` Week-3 + Week-4 close tables; workdiary sessions 22, 24, 28,
+  29, 30, 41 + decisions log 2026-06-22.
+
+<details>
+<summary>Superseded — the open status carried until 2026-08-03, kept for the trail</summary>
+
+- **Previous status:** Open. A provisional key set is now load-bearing in
   `mocks.ts`, `LastDriveCard`, `DiagnosticsPreview`, the drive-detail
   `PEAK_METRICS` (`rpm` / `speed_kph` / `coolant_temp_c`), and — most
   consequentially — the three live telemetry-chart channel keys
@@ -541,15 +708,16 @@ original six:
   (CF-28 gap #2), where a wrong key renders an **empty panel rather than an error**. Still
   no canonical key set in `docs/06` or `docs/07`. **Blocker: the hardware/AI-agent team
   owns the vocabulary** — not resolvable from this repo.
-- **What's needed to resolve:** The hardware/AI-agent contract confirms the
+- **Previously needed to resolve:** The hardware/AI-agent contract confirms the
   canonical key set; then update the `mocks.ts` provisional keys and every
   hardcoded key reference, remove the `TODO(metric-keys)` flags. This is a
   mandatory reconciliation gate before any live flip of `lastDrive`,
   `currentState`, `recentDiagnostics`, or the telemetry charts.
-- **Owner:** Hardware/AI-agent team (canonical set) + App track (reconciliation
-  + `TODO` removal).
-- **Cross-references:** R22 (#1); `docs/08` Week-3 + Week-4 close tables;
-  workdiary sessions 22, 24, 28, 29, 30 + decisions log 2026-06-22.
+
+  *Outcome: the confirmation arrived and adopted the app's set unchanged, so the
+  "update every hardcoded key reference" work turned out to be empty.*
+
+</details>
 
 ### CF-28 — Freeze-frame capture fidelity + key vocabulary (R24 #2)
 
@@ -919,7 +1087,7 @@ original six:
   `shouldNotifyForDtc` in `apps/mobile/src/lib/dtcNotifications.ts`; PRs #42, #44;
   workdiary sessions 34, 36.
 
-### CF-08 — Coolant "hot" threshold — `TODO(coolant-hot-threshold)` = provisional 105 °C (R22 #2)
+### CF-08 — Hard safety thresholds (coolant, oil pressure, …) — `TODO(coolant-hot-threshold)` = provisional 105 °C (R22 #2)  *(scope widened 2026-08-03)*
 
 - **Category:** Provisional-value-reconciliation
 - **Origin:** Week 4, session 28 (2026-07-03).
@@ -936,12 +1104,54 @@ original six:
   freeze-frame Metric Tiles render **every** tile in the `normal` state precisely because
   105 °C is a chart-recolour guess, not a general tile-ranking rule (session-35 decision).
   **Blocker: a canonical value from the hardware/AI-agent contract or a domain source.**
-- **What's needed to resolve:** Reconcile the numeric threshold against the
-  hardware/AI-agent contract (or a domain source) before live coolant data is
-  trusted. A right key with a wrong threshold still misleads.
-- **Owner:** Hardware/AI-agent team (or a domain source) + App track.
-- **Cross-references:** R22 (#2); `docs/08` Week-4 close table; workdiary
-  sessions 28, 30 + decisions log 2026-07-03 and 2026-07-05.
+
+  **SCOPE WIDENED 2026-08-03 (session 41) — this is not a coolant question, and it is not
+  an engineering task.** The AI-agent project's v0.2 package reframes it as **hard safety
+  thresholds** across multiple metrics — per-engine coolant *and* oil-pressure limits, with
+  `safety_thresholds.yaml` as the proposed home. Two things changed about this entry:
+
+  1. **It is the agent project's single external dependency.** `proposed-app-changes.md` §7
+     states it outright: *"These decide when `critical` fires on a user's car; they must
+     come from factory specs or a domain reference, not the agent project's judgement.*
+     ***This is the only remaining item the agent project cannot source or decide for
+     itself.***" Everything else in v0.2 the agent project could resolve, propose or build.
+     This one it cannot.
+  2. **It needs real domain research, not a code decision.** No amount of reading this repo
+     produces the number. It comes from factory specs or a domain reference, per engine.
+     Filing it as an engineering task is what has let it sit for four weeks — a developer
+     looking at it correctly concludes there is nothing to implement.
+
+  **The design is already safe to ship without the numbers**, which is why this is
+  important but not blocking: `safety_thresholds.yaml` carries a **`status` safety gate** —
+  `unvalidated` (the default) means the agent **must not fire `critical`** from that
+  threshold and may only downgrade to `warning` while stating the limit is provisional;
+  `validated` unlocks `critical` and requires `source`, `validated_by` and `validated_at`
+  to be filled. An empty or unvalidated profile degrades the agent to advisory behaviour
+  rather than producing a confidently wrong `critical`. The file's own rule: *"never set
+  `status: validated` on a number you guessed."* **The App's 105 °C is exactly such a
+  guess**, and it is a chart-recolour cutoff, not a safety gate — it must not be promoted
+  into `safety_thresholds.yaml` as though it were sourced.
+
+  Why the floor is needed at all, per the file (it is not redundant with the adaptive
+  per-vehicle baseline): a baseline **learns a fault as normal** — a car that has run hot
+  since day one teaches it that 112 °C is fine, so the cars most needing a warning are
+  exactly the ones whose baselines are poisoned — and **cold start has no baseline at all**,
+  so without a floor a car cooking on drive two gets silence.
+- **What's needed to resolve:** Founder-led domain research producing sourced per-engine
+  limits (coolant, oil pressure, and any further metric the pilot fleet exposes) from
+  factory specs or a domain reference; fill `safety_thresholds.yaml` with `source`,
+  `validated_by`, `validated_at` and flip `status` to `validated` per profile. Separately
+  and independently, the App's `COOLANT_HOT_THRESHOLD_C = 105` should be reconciled against
+  the validated coolant number once it exists — **one source of truth**, the app consuming
+  the validated value rather than keeping its own (this is DECISION REQUIRED #4 in the v0.2
+  draft, still open).
+- **Owner:** **Founder / domain research** — *not* engineering, and not resolvable by the
+  AI-agent team, the App track or Platform. App track consumes the result.
+- **Cross-references:** CF-03 (parent — v0.2 provenance); CF-07 (the *key* half, now
+  closed — this is the *value* half); R22 (#2);
+  `docs/AI_Agent_Contract/safety_thresholds.yaml` (the `status` gate + rationale),
+  `docs/AI_Agent_Contract/proposed-app-changes.md` §7; `docs/08` Week-4 close table;
+  workdiary sessions 28, 30, 41 + decisions log 2026-07-03, 2026-07-05 and 2026-08-03.
 
 ---
 
