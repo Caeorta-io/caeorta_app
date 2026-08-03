@@ -1,0 +1,52 @@
+# CODEOWNERS — automatic reviewer routing
+#
+# Why this exists: branch protection is unavailable on the GitHub Free plan, so
+# "every PR reviewed by the owning founder" is honour-system (see docs/11 § CF-20
+# and R19, which has recurred 4x). CODEOWNERS does not *enforce* review without
+# branch protection, but it does auto-request the right reviewer on every PR, so
+# nothing lands on the wrong pair of eyes by omission.
+#
+# Ownership follows the founder role split (docs/08 § Founder role split):
+# Muhammed owns App, Sulaiman owns Platform. Note the execution model — Muhammed
+# authors code across both areas; Sulaiman reviews Platform-area PRs and owns the
+# underlying decisions. So these entries are about REVIEW, not authorship.
+#
+# Syntax: last matching pattern wins. Keep the fallback first.
+
+# ---------------------------------------------------------------------------
+# Default — App founder
+# ---------------------------------------------------------------------------
+*                                   @MuhammedRaslan
+
+# ---------------------------------------------------------------------------
+# Platform track — Sulaiman owns these decisions
+# ---------------------------------------------------------------------------
+/supabase/                          @22SHY @MuhammedRaslan
+/apps/admin/                        @22SHY @MuhammedRaslan
+/packages/supabase/                 @22SHY @MuhammedRaslan
+
+# CI/CD is a Platform-area responsibility
+/.github/workflows/                 @22SHY @MuhammedRaslan
+
+# ---------------------------------------------------------------------------
+# Cross-cutting docs — both founders
+# ---------------------------------------------------------------------------
+# The schema doc must move in lockstep with migrations (CLAUDE.md § Workflow
+# conventions), so it carries the same ownership as supabase/.
+/docs/05_Database_Schema.md         @22SHY @MuhammedRaslan
+
+# The carry registry, the action plan and the risk register are the shared
+# planning surface — both tracks read them to decide what to build next.
+/docs/08_12_Week_Action_Plan.md     @22SHY @MuhammedRaslan
+/docs/09_Risks_And_Mitigations.md   @22SHY @MuhammedRaslan
+/docs/11_Carry_Forwards.md          @22SHY @MuhammedRaslan
+
+# The app<->agent interface: changes here bind a third project.
+/docs/06_AI_Agent_Contract.md       @22SHY @MuhammedRaslan
+/docs/AI_Agent_Contract/            @22SHY @MuhammedRaslan
+
+# ---------------------------------------------------------------------------
+# Designer-owned in practice (no GitHub account yet — left with App founder so
+# the file is not unowned; see docs/11 § CF-24 / CF-33 / CF-34 / CF-37).
+# ---------------------------------------------------------------------------
+/docs/design/                       @MuhammedRaslan
