@@ -91,6 +91,61 @@ original six:
 > unchanged: `DATA_SOURCE.dtcs` is still `'mock'`, `dtcs` still has no status/seen column
 > (**CF-29** premise holds), and the three `apps/admin` lint errors from `22acf4c` are
 > still red on `main` (**CF-05** caveat). Entries not named here were not re-checked.
+>
+> ---
+>
+> ### FULL re-verification 2026-08-03 (session 37, Week-5 close-out sweep)
+>
+> **The first pass over the whole registry since it was written.** Every entry was
+> re-checked against a live clone of `origin/main` at **`85b47b0`** (PR #44, merged
+> 2026-08-02T14:48Z) — not transcribed from an older table. This supersedes the
+> 2026-07-05 blanket verification date in the header above; **no entry now carries a
+> status older than the date on its own line.**
+>
+> **Method.** `git fetch origin` → branched off `origin/main` `85b47b0` → read the
+> artifact each entry names (migration file, Edge Function, `source.ts` capability flag,
+> doc section, `package.json` dependency) rather than the entry's own prose. Three checks
+> ran against live systems rather than the repo: `pnpm -r lint` (CF-05's three admin
+> errors), `gh api repos/Caeorta-io/caeorta_app` (CF-20's merge settings), and
+> `gh api …/branches/main/protection` (CF-20's branch protection — 404). Platform's last
+> commit to `main` is **`d582b62` (2026-07-08)**; everything after it is App-track PRs
+> #40–#44 — so no Platform-side work has silently resolved an entry this pass the way
+> `create_vehicle` once resolved CF-01's Platform half.
+>
+> **Closed (2):** **CF-12** (downsample check — promoted to closed-by-founder-decision;
+> the decision was already recorded in the 2026-07-05 decisions log, the entry had simply
+> never been updated to match) and **CF-25** (the `docs/05` seed.sql wording — the fix is
+> on `main` in `b875bf5`, so its "resolved in this PR" phrasing was retired for a dated
+> closure). Both carry their resolving artifact on the entry.
+>
+> **Re-verified and left OPEN (23):** CF-01, CF-02, CF-03, CF-04, CF-05, CF-06, CF-07,
+> CF-08, CF-09, CF-10, CF-11, CF-14, CF-15, CF-16, CF-17, CF-18, CF-19, CF-20, CF-21,
+> CF-22, CF-23, CF-24, CF-27. Each carries a refreshed status line with a `2026-08-03`
+> marker and a named blocker. **Nothing blocked on hardware, the AI-agent team, the
+> designer, funding or a founder decision was closed**, however tidy that would have been
+> — a carry closed on optimism corrupts the registry.
+>
+> **Carried unchanged (11):** the DTC-arc entries re-verified 2026-08-02 in sessions
+> 35/36 — CF-28, CF-29, CF-30, CF-31, CF-32, CF-33, CF-34, CF-35, CF-36, CF-37, CF-38.
+> One day old, re-read this pass, nothing to correct. **CF-26 is deliberately untouched**
+> (see its entry — the inaccuracy is intentional and is not to be "fixed" by routine work).
+>
+> **Added (1):** **CF-39** — the Week-5 on-device verification backlog, consolidating what
+> was scattered across CF-13's residual note and the session-35/36 after-reports.
+>
+> **Already closed, re-confirmed (1):** **CF-13**, closed 2026-08-02 in session 35. Left
+> closed; its residual note #1 (the on-device look at the preview swap and the S6 related
+> card) was **moved to CF-39**, which is now the live tracking for it.
+>
+> **Accounting:** 2 closed this pass + 1 already closed + 23 re-verified-open + 11 carried
+> unchanged + CF-26 (untouched by design) + CF-39 (new) = **39 entries; 3 closed, 36 open.**
+>
+> **One status is inferred rather than directly observed — CF-17.** Prod Supabase state
+> cannot be read from this repo. The entry is left OPEN on the project's own record:
+> `docs/05` still lists both Week-5 migrations as "applied on dev, NOT on prod", and the
+> promotion ritual mandates a workdiary entry (step 8), of which there is none since
+> 2026-06-21. If Platform has promoted them without logging it, this line is wrong and
+> the missing log entry is the thing to fix.
 
 ---
 
@@ -110,6 +165,10 @@ original six:
   contract, but `DATA_SOURCE.createVehicle` is **still `'mock'`**, the live `fetch`
   is unwired, and no E2E run has happened — so this stays "built, not E2E-verified."
   The `ecu_type` open question below is also still unresolved.
+  **Re-verified 2026-08-03 (session 37), unchanged.** `DATA_SOURCE.createVehicle` still
+  reads `ENV_DEFAULT` (i.e. `'mock'`) in `source.ts`; `create_vehicle` is still present
+  among the 11 deployed Edge Functions. **Blocker: the App-side live wiring + E2E run,
+  which itself waits on the `ecu_type` canonical-set question owned by the hardware track.**
 - **What's needed to resolve:** Platform deploys `create_vehicle`; both tracks
   agree the contract's `ecu_type` open question (currently free text
   `z.string().min(1).max(60)` until the hardware track locks a canonical set);
@@ -141,6 +200,11 @@ original six:
   `RealtimeChannel`; the App mock emitter's contract is
   `(vehicleId, onUpdate, onChannelStatus) => () => void`. The interfaces do not
   match; the swap is not a one-liner.
+  **Re-verified 2026-08-03 (session 37), unchanged.** `DATA_SOURCE.currentStateSubscription`
+  still reads `ENV_DEFAULT`; the live branch still throws `notImplemented`; no adapter
+  module exists. **Blocker: the cross-track interface agreement, which must precede any
+  code** — it touches the shared `packages/supabase` boundary, so this cannot be unblocked
+  App-side alone.
 - **What's needed to resolve:** Agree the adapter interface cross-track (a
   contract doc, same pattern as `create_vehicle_contract.md`) **before** any
   code — it touches the shared `packages/supabase` boundary. Then App authors a
@@ -168,6 +232,14 @@ original six:
   deduplication, (6) whether to build `agent_request_queue` in v1. The contract
   is still not shared (no agent repo reachable from the App founder's `gh`), and
   the weekly cross-project sync is not calendared. Mitigation remains "on paper."
+  **Re-verified 2026-08-03 (session 37), unchanged — and now the most time-critical entry
+  in this file.** `docs/06`'s changelog still ends at the v0.1 draft line; the six open
+  questions are still open. **Nothing moved on this during the whole of Week 5.** Week 6 —
+  which the App track begins the day after this sweep — is the AI-agent integration week
+  whose own preamble reads "the week most likely to surface contract gaps; plan for
+  friction." **Blocker: the AI-agent team must acknowledge or reject the six defaults, and
+  the founder must share the contract + calendar the sync.** Neither is App-track work; this
+  entry cannot be closed from this repo no matter how long it carries.
 - **What's needed to resolve:** Share the contract with the agent project (a
   GitHub issue on the agent repo); get the six proposal-defaults acknowledged or
   rejected; create the recurring Friday cross-project sync. Week 6 is the
@@ -186,6 +258,11 @@ original six:
   which tables/columns it reads. `docs/05` § Testing lists `agent_role`
   read-only verification as deferred "until the AI Agent Contract v0 lands and
   the role is created in a follow-up migration."
+  **Re-verified 2026-08-03 (session 37), unchanged.** No `agent_role` migration exists —
+  the seven files in `supabase/migrations/` contain only *forward references* to it
+  (`rls_policies.sql` lines 16, 418, 454 name it as a separate future migration), and
+  `docs/05` line 598 still marks the read-only verification TODO. **Blocker: CF-03.**
+  This entry cannot move before that one does.
 - **What's needed to resolve:** Contract v0 merges + agent confirms read scope →
   write the `agent_role` migration granting exactly that scope; then add the
   deferred RLS verification test.
@@ -208,6 +285,15 @@ original six:
   `no-html-link-for-pages`), so `main` is lint-red in the admin workspace. Noted
   here because it is Platform-owned code and App-track PRs cannot make the repo-wide
   lint gate green until it's fixed.
+  **Re-verified 2026-08-03 (session 37) — the drive-list half is still done; the lint half
+  is still red, and is now the sole reason this entry is open.** `pnpm -r lint` was run
+  against `main` this pass and fails identically to the session-33 and session-36 checks:
+  `apps/admin/app/devices/[id]/page.tsx` — `39:15` and `40:13` `@typescript-eslint/no-explicit-any`,
+  `72:9` `@next/next/no-html-link-for-pages` (plus one non-blocking `no-unused-vars`
+  warning in `app/page.tsx`). **Unchanged for four weeks** — Platform's last commit to
+  `main` is `d582b62` (2026-07-08). **Blocker: Platform-owned code; App-track PRs cannot
+  fix it without crossing track ownership**, so the repo-wide lint gate stays red and every
+  App PR must report it as pre-existing rather than green.
 - **What's needed to resolve:** Nothing for the drive-list itself. Separately,
   Platform should clear the three admin lint errors so the workspace-wide gate is
   green again.
@@ -279,6 +365,12 @@ original six:
   reworked the file's teardown (see CF-25); the App-added fixture rows survived.
   Any future Platform-side `seed.sql` edit must preserve the App fixture (the
   drive-detail / telemetry-chart on-device path depends on it).
+  **Re-verified 2026-08-03 (session 37).** `supabase/seed.sql` has not been touched since
+  `9d453ca` (PR #37, 2026-07-05) — no Platform edit has landed on it, so the App fixture is
+  intact and nothing has been clobbered. **This entry is a standing flag with no closable
+  end state**, which is why it stays open indefinitely: it is not unfinished work, it is a
+  coordination rule that applies for as long as both tracks can edit the file. It is
+  correctly *not* a candidate for closure, and shouldn't be re-examined as one each sweep.
 - **What's needed to resolve:** Nothing to "close" — this is an ongoing
   awareness flag: coordinate before either track edits `seed.sql`.
 - **Owner:** Both tracks (coordination); Platform owns the file.
@@ -303,6 +395,11 @@ original six:
   the live-read path it yields a silently-empty chart, not an error. The
   canonical set is owned by the hardware/AI-agent contract and is undocumented
   in `docs/06`/`docs/07` (only prose like "max rpm, max boost, max coolant temp").
+  **Re-verified 2026-08-03 (session 37), unchanged — and its blast radius grew again in
+  Week 5.** The same provisional vocabulary now also backs the S6 freeze-frame panel
+  (CF-28 gap #2), where a wrong key renders an **empty panel rather than an error**. Still
+  no canonical key set in `docs/06` or `docs/07`. **Blocker: the hardware/AI-agent team
+  owns the vocabulary** — not resolvable from this repo.
 - **What's needed to resolve:** The hardware/AI-agent contract confirms the
   canonical key set; then update the `mocks.ts` provisional keys and every
   hardcoded key reference, remove the `TODO(metric-keys)` flags. This is a
@@ -693,6 +790,11 @@ original six:
   hotThreshold)` is a whole-series switch, not a per-point gradient — but that
   confirms the mechanism, **not the 105 value**. No canonical "hot" threshold is
   documented anywhere.
+  **Re-verified 2026-08-03 (session 37), unchanged.** Still the project's only per-metric
+  threshold, and Week 5 established why that matters beyond the coolant chart: S6's
+  freeze-frame Metric Tiles render **every** tile in the `normal` state precisely because
+  105 °C is a chart-recolour guess, not a general tile-ranking rule (session-35 decision).
+  **Blocker: a canonical value from the hardware/AI-agent contract or a domain source.**
 - **What's needed to resolve:** Reconcile the numeric threshold against the
   hardware/AI-agent contract (or a domain source) before live coolant data is
   trusted. A right key with a wrong threshold still misleads.
@@ -712,6 +814,13 @@ original six:
 - **Current status:** Unrun since Week 2, re-verified. The pairing flow
   (`lib/pairing.ts`, `(app)/pair/*`) is built and all unit tests pass; the live
   handshake against a real seed device has never been executed.
+  **Re-verified 2026-08-03 (session 37), unchanged — 11 weeks unrun.** Note this is **not**
+  the same dev-build run as **CF-39**: CF-39 needs only the existing dev client (no new
+  native modules), whereas this entry needs a **fresh EAS development build** carrying
+  `expo-camera` and `@orbital-systems/react-native-esp-idf-provisioning`. Do not assume
+  running CF-39 covers this one. **Blocker: a fresh dev build + access to a real seed
+  device.** Partly gated by the same `expo-updates` 56.0.19 / `expo` 56.0.8 skew recorded
+  in CF-23.
 - **What's needed to resolve:** A fresh EAS development build carrying
   `expo-camera` (~56.0.8) and `@orbital-systems/react-native-esp-idf-provisioning`
   (~0.5.5). On a physical Android device: claim a real seed device, confirm the
@@ -733,6 +842,10 @@ original six:
   — are unratified. Both are isolated in one typed seam
   (`lib/provisioningConfig.ts`) with PoP unset and a provisional `secure2`
   default; neither is a committed choice.
+  **Re-verified 2026-08-03 (session 37), unchanged.** **Blocker: the hardware/firmware
+  track must expose a provisioning endpoint and ratify the PoP source + security scheme.**
+  Not closable from this repo under any circumstances — no amount of App-side work
+  advances it.
 - **What's needed to resolve:** The hardware/firmware track exposes a
   provisioning endpoint **and** ratifies the PoP source + security scheme; then
   the App verifies the live wire path (ratifying the two params is a one-file
@@ -751,6 +864,11 @@ original six:
   on Platform's `get_drive_telemetry` server-side downsample (≤300 points) + the
   `pg_cron` nightly aggregation — but the Together perf test with 30 days of
   simulated data has not been executed.
+  **Re-verified 2026-08-03 (session 37), unchanged.** Still not run. Note this entry is
+  **not** resolved by CF-12's closure — that was the optional `returned_rows ≤ 300` spot
+  check, deliberately skipped; this is the real 30-day perf test and remains genuinely
+  outstanding. **Blocker: a seeded 30-day dataset + a dev build; needs both tracks.**
+  Feeds the Week-9 charting re-eval, so it wants doing before then.
 - **What's needed to resolve:** A dev build + a seeded 30-day dataset; profile
   chart smoothness. Feeds the Week-9 charting re-eval (stay on Victory Native vs.
   migrate).
@@ -758,19 +876,96 @@ original six:
 - **Cross-references:** `docs/08` Week-4 DoD + close table; R5 (Supabase scaling);
   workdiary sessions 29, 30.
 
-### CF-12 — `returned_rows ≤ 300` downsample check (skipped by choice)
+### CF-12 — `returned_rows ≤ 300` downsample check (skipped by choice)  *(CLOSED 2026-08-03)*
 
 - **Category:** On-device / integration verification pending
 - **Origin:** Week 4, session 28; closure decision session 30 (2026-07-05).
-- **Current status:** Unrun, **explicitly skipped by founder decision — not
-  forgotten.** It was flagged from the start as an optional server-side concern.
-  The seed fixture carries 361 telemetry samples specifically so the server
-  downsample path *does* run; confirming the response is actually ≤300 rows was
-  deemed non-blocking at the session-30 verification close.
-- **What's needed to resolve:** (Optional) confirm `get_drive_telemetry` returns
-  ≤300 points for the 361-sample seeded drive. Not gating anything.
-- **Owner:** App / Platform (optional).
-- **Cross-references:** workdiary sessions 28, 30 + decisions log 2026-07-05.
+- **Current status:** **CLOSED (2026-08-03, session 37) — closed by founder decision, not
+  by execution.** The check was never run and is not going to be; that was decided on
+  **2026-07-05** and the decision is on the record. **Resolving artifact:** the
+  `workdiary.md` decisions-log row dated 2026-07-05 — *"the `returned_rows ≤ 300` vs 361
+  downsample check stays skipped (optional server-side concern from the start)"* — taken
+  at the session-30 PR-#34 verification close, alongside the founder's ruling that
+  `splitTelemetryChannels`' unit coverage plus the on-device coolant-amber check are
+  sufficient closure for that loop.
+  This entry has been carrying an already-decided item as though it were outstanding.
+  Closing it changes nothing about the system: the server-side downsample is Platform's
+  `get_drive_telemetry` contract, the seed fixture's 361 samples still exercise the
+  `>300 → downsample` path, and nothing gates on the row count. **Closure criteria met:**
+  owner is App/Platform (not hardware, AI-agent, designer or funding); a recorded founder
+  decision resolves it; no build risk is created — the adjacent perf question survives
+  independently as **CF-11**, which is a real unrun test and stays open.
+- **What's needed to resolve:** Nothing — decided. (If a future session wants the number
+  anyway it is one call against the seeded drive; it would be new work, not this carry.)
+- **Owner:** — *(Closed.)*
+- **Cross-references:** **CF-11** (the 30-day perf test — genuinely unrun, still open, and
+  the entry this one is easily confused with); workdiary sessions 28, 30 + decisions log
+  2026-07-05; session 37 sweep.
+
+### CF-39 — Week-5 on-device verification backlog (one batched dev-build run)
+
+- **Category:** On-device / integration verification pending
+- **Origin:** Week 5 Days 4–5, sessions 35 and 36 (2026-08-02); consolidated into a single
+  tracked entry at the Week-5 close, session 37 (2026-08-03).
+- **Current status:** Open — **built, typecheck/lint/test-green, not seen on hardware.**
+  This entry exists because the backlog was previously scattered across CF-13's residual
+  note #1 and two sessions' after-reports, which is how a verification gap gets lost across
+  a week boundary. **Everything Week 5 shipped up to and including S5 is already verified**
+  — all 8 Diagnostic Card variants and the three-group S5 render on a physical device in
+  session 34b, the empty-Pending branch via `__DEV__` fixture variants in 34c. **The
+  residual is the week's last three deliverables**, all of which postdate that run:
+
+  1. **S6 · DTC detail render** (session 35, PR #43) — the screen has never been opened on
+     hardware. Wanted: the large code badge + status pill, section order, the always-rendered
+     "what it means" / likely-causes gap copy (CF-35), and the freeze-frame panel's empty
+     state on the 2 of 7 fixtures that carry no frame.
+  2. **The `DiagnosticsPreview` card swap** (session 35, PR #43) — a **placement** check, not
+     a component check: the atom itself is verified. Confirm the swapped card sits correctly
+     in the vehicle-detail panel. **Expect a known, accepted palette mismatch** — the card is
+     token-styled for the dark canvas and vehicle-detail is still on the stock light palette
+     until Week 8. That is **CF-15**'s debt, accepted at the session-35 ASK gate; it is not a
+     defect to report.
+  3. **The in-app new-DTC banner** (session 36, PR #44) — four things, and the first is the
+     one no unit test can prove:
+     - **The SecureStore round-trip:** dismiss → **force-quit** → relaunch → the banner
+       stays gone. This is the entire point of defining "new" as *unacknowledged* rather
+       than *recent* (CF-36); if the acknowledged-set doesn't survive a cold start, the
+       surface nags exactly as the rejected recency-window design would have.
+     - **The hydration gate:** no flash of an already-dismissed banner on cold start before
+       the persisted set loads.
+     - **The expected content under default prefs:** the banner should surface **4 codes** —
+       **P0234** (critical), **P0299 / P0128 / P0301** (warning) — while **P0171**
+       (`unknown` tier) and both cleared codes stay correctly silent. A different count is a
+       real finding: it means either the preference gate or `deriveDtcBadgeSeverity`'s tier
+       map is behaving differently against the fixtures than the tests assert (CF-32).
+     - **Row wrap at 3 codes** with a long plain-language title, and the same light-screen
+       palette mismatch as (2).
+  4. **The freeze-frame tile-grid wrap risk** (flagged session 35) — the Metric Tile grid
+     uses `min-w-[48%] flex-1` inside a `flex-wrap` container. That is a two-per-row
+     intention expressed as a constraint rather than a column count; with a long metric
+     label or a wide value it can wrap to one tile per row or leave a stretched orphan.
+     **Unit tests cannot see this** — it is pure layout, and the only way to know is to look
+     at a DTC whose freeze frame carries an odd number of tiles.
+
+- **What's needed to resolve:** One dev-build run on the physical Android device, covering
+  all four above in a single session. **No new native modules are involved** —
+  `expo-secure-store` was chosen for the acknowledged-set precisely because it is already
+  in the existing dev build (over AsyncStorage, which would have forced a rebuild), so the
+  committed arm64 dev client should serve. Two known environment constraints from CF-23
+  apply: use **USB, not wireless adb**, and the `expo-updates` 56.0.19 / `expo` 56.0.8 skew
+  still blocks any x86_64/emulator build, so this must run on the physical device.
+- **Owner:** App track (Muhammed, on hardware).
+- **Gate:** blocks nothing structurally — none of this is on the critical path for Week 6,
+  and no live flip depends on it. What it gates is the right to call Week 5
+  **on-device-verified** rather than **built**; `docs/08`'s Week-5 close states that
+  distinction explicitly and will need updating when this runs.
+- **Cross-references:** **CF-13** (closed — its residual #1 is now carried here, not there);
+  **CF-15** (the accepted light/dark palette mismatch on items 2 and 3); **CF-32** (the tier
+  map the 4-code expectation would falsify); **CF-36** (the acknowledged-set the SecureStore
+  round-trip proves); **CF-35** (the gap copy S6 renders); **CF-23** (the dev-build
+  environment gotchas, incl. the `expo-updates` skew); **CF-34** (the Figma-parity diff —
+  a *different* check, and cheapest to do while looking at the same screens); `docs/08`
+  Week-5 close (DoD scorecard); PRs #43, #44; workdiary sessions 34b, 34c, 35, 36, 37.
 
 > **Resolved & intentionally NOT listed here:** the "on-device real-data chart
 > render" item (the Week-4 "built ≠ verified" row, marked **Blocked** in session
@@ -801,6 +996,9 @@ original six:
   1. **On-device look pending** for the preview swap and the S6 related card (session 35 is
      built-not-verified). The atom itself is verified — all 8 variants were observed on a
      physical device in session 34b — so this is a placement check, not a component check.
+     **Moved 2026-08-03 (session 37): this residual is now tracked in its own entry,
+     § CF-39**, together with the rest of the Week-5 on-device backlog. It is recorded here
+     only for the trail — **CF-39 is the live tracking, not this line.**
   2. **Known visual, by design:** the card is token-styled for the dark canvas and
      vehicle-detail is still on the stock light palette, so dark cards sit on a white
      screen until Week 8. That is **CF-15's** debt, not this entry's — accepted by the
@@ -848,6 +1046,12 @@ original six:
   `colorsLight` is committed key-for-key against `colorsDark` (test-enforced) but
   not switchable. This was previously buried inside R11's status prose — named
   explicitly here.
+  **Re-verified 2026-08-03 (session 37), unchanged and correctly deferred.** Deliberately
+  **not** closed: "deferred by design" is a schedule, not a resolution, and the Week-8 task
+  is still ahead. Week 5 added surface area to it — S5, S6 and the new-DTC banner are all
+  token-styled dark screens, so the eventual light flip now has more to audit than it did
+  at Week 4. **Blocker: none — it is scheduled Week-8 work** (plus the designer's
+  light-mode spot-check).
 - **What's needed to resolve:** The Week-8 light task turns it on (a config swap,
   no screen edits, per the static-token design) **and** runs the light-mode
   spot-check (design §13 "Recommended next") — flip the `semantic` collection to
@@ -868,6 +1072,14 @@ original six:
   specifically so those un-migrated screens render unchanged. This was previously
   only *implicit* in Week 8's generic "visual polish" bullet — named explicitly
   here.
+  **Re-verified 2026-08-03 (session 37) — unchanged, but Week 5 made its cost visible on
+  a shipped screen.** Vehicle detail is still a light stock-palette screen, and it now
+  hosts **two** dark token-styled components: the `DiagnosticsPreview` card (session 35)
+  and the new-DTC banner (session 36). Both mismatches were accepted at ASK gates in
+  preference to leaving duplicated severity rules in the codebase — so this entry is now
+  carrying a *known, deliberate* visual defect on a shipped screen until Week 8, not just
+  an un-migrated palette. Worth stating plainly at the Week-8 planning point.
+  **Blocker: none — scheduled Week-8 work.**
 - **What's needed to resolve:** In Week 8, migrate those screens to semantic
   tokens, strip the `ds-` radius namespace, and flip radius to override (so
   `rounded-*` becomes the design scale everywhere).
@@ -886,6 +1098,10 @@ original six:
   observation of the real charts, though the designer hasn't formally signed off;
   (c) decide whether Sign out / Unpair want custom-styled confirmation dialogs
   vs. native.
+  **Re-verified 2026-08-03 (session 37), unchanged.** **Batch this with the other designer
+  items — CF-24, CF-33, CF-34 and CF-37** — which between them now amount to one
+  conversation covering four design-doc gaps plus a parity check. **Blocker: designer
+  availability;** designer-owned decisions cannot be closed from this track.
 - **What's needed to resolve:** Designer + App resolve the three items (or
   explicitly cut them) during the polish window.
 - **Owner:** Designer + App track.
@@ -906,6 +1122,16 @@ original six:
   `20260614000001_add_notify_agent` and `20260614000002_add_pg_cron_jobs`. Also
   still pending: the **prod-side** Dashboard OTP config (Magic Link template →
   `{{ .Token }}`, Confirm-email OFF, OTP length 6) — done on dev, not prod.
+  **Re-verified 2026-08-03 (session 37) — OPEN on the project's own record, but note the
+  status is INFERRED, not directly observed.** Prod Supabase state cannot be read from this
+  repo. Two pieces of evidence, both pointing the same way: `docs/05` (§ Migration
+  discipline) still lists `20260614000001_add_notify_agent` and
+  `20260614000002_add_pg_cron_jobs` as *"applied on dev, NOT on prod"*, and the promotion
+  ritual's **step 8 mandates a workdiary entry** for every promotion — there is none since
+  the 2026-06-21 Week-1 promotion. Platform's last commit to `main` is `d582b62`
+  (2026-07-08). **Blocker: a Platform prod-link session.** ⚠️ **If Platform has promoted
+  these without logging it, this entry is wrong** — and the missing workdiary entry is then
+  the actual defect, since the project has no other way to know prod state.
 - **What's needed to resolve:** A follow-up prod-link session per the `docs/05`
   8-step ritual, once the corresponding Week-4/5 Edge Functions are confirmed
   prod-ready. **Caution:** `add_pg_cron_jobs` starts its nightly jobs the moment
@@ -926,6 +1152,12 @@ original six:
   write columns (`device_secret`, `claimed_by_user_id`, `claimed_at`,
   `created_at`, `last_seen_at`, `firmware_version`, `last_sync_at`) are
   application-enforced, not DB-enforced.
+  **Re-verified 2026-08-03 (session 37) — checked directly, still absent.** A grep for
+  `REVOKE` / `GRANT UPDATE` across all seven files in `supabase/migrations/` returns
+  **nothing**: no column-scope migration has landed. The gap is unchanged since Week 1 —
+  owner-should-not-write columns on `devices` remain protected by application code only.
+  **Blocker: Platform track must author the migration.** Not App-track work, and not
+  closable here despite being "unblocked" for two months.
 - **What's needed to resolve:** A migration that REVOKEs UPDATE on the
   device-managed columns from `authenticated` and GRANTs the owner-writable
   subset (likely just `status`).
@@ -941,8 +1173,15 @@ original six:
 - **Current status:** **Does not exist.** R14 lists an "EAS Update + EAS Build
   emergency-release runbook in `docs/`" as a mitigation so a JS-only fix can be
   cut without Muhammed; a repo-wide search at the Week-1 retro found no such
-  doc — it has been a paper mitigation. (Not re-searched exhaustively this pass,
-  but no runbook doc is present in `docs/`.)
+  doc — it has been a paper mitigation.
+  **Re-verified 2026-08-03 (session 37) — searched properly this pass; it still does not
+  exist.** A content search for `runbook` / `emergency-release` across `docs/` matches only
+  the four files that *reference* the missing runbook (`docs/08`, `docs/09`, `docs/11`,
+  `workdiary.md`); no runbook document is present. Ten weeks as a paper mitigation.
+  **Blocker: nobody has written it.** Worth naming plainly — this is one of the very few
+  open entries with **no external dependency at all**. It stays open purely because it has
+  never been prioritised, and R14 (bus factor) is a live, unmitigated risk while it doesn't
+  exist.
 - **What's needed to resolve:** Write the runbook in `docs/` (conditions:
   Muhammed unavailable, urgent JS-only fix needed; both founders have EAS access).
 - **Owner:** App track / founder.
@@ -958,6 +1197,19 @@ original six:
   not enforced in repo settings as of the session-5/6 carries; branch protection
   on `main` (required status checks) is unavailable on the GitHub Free plan, so
   CI red does not block merge and enforcement is honor-system.
+  **Re-verified 2026-08-03 (session 37) — checked against the live GitHub API for the first
+  time, and BOTH halves are confirmed open.** Previous statuses said "still not enforced as
+  of the session-5/6 carries", i.e. inherited rather than observed. Now measured:
+  - `gh api repos/Caeorta-io/caeorta_app` → `allow_squash_merge: true`,
+    **`allow_merge_commit: true`**, **`allow_rebase_merge: true`**. Squash is *allowed*, not
+    *exclusive* — all three merge methods remain selectable in the UI, so the documented
+    squash-only convention is unenforced. Also noted: `delete_branch_on_merge: false`.
+  - `gh api …/branches/main/protection` → **404 "Branch not protected"**, confirming no
+    branch protection on `main`.
+  This is the concrete mechanism behind R19, which has now recurred 4×. The first half is a
+  **2-minute founder toggle** (untick merge-commit + rebase in Settings → General → Pull
+  Requests) and needs no plan upgrade. **Blocker: (a) a founder settings toggle — available
+  today; (b) required status checks, funding-gated on a paid plan.**
 - **What's needed to resolve:** Toggle squash-only in repo settings now (2-minute
   founder action). Enable required status checks / branch protection when on a
   paid plan (funding-gated, post-pilot).
@@ -972,6 +1224,14 @@ original six:
 - **Current status:** Not activated ($25 one-time). This is the v1 pilot's
   distribution channel (Play Internal Testing) and is a hard **Week-10**
   dependency; activation is typically same-day.
+  **Re-verified 2026-08-03 (session 37), unchanged — and the schedule pressure on it has
+  changed materially.** The original guidance was "activate by end of Week 9 at the
+  latest." Against the calendar (see `docs/08` Week-5 close), **plan Week 9 would have
+  ended 2026-07-19 — two weeks ago** — while the App track is only now entering plan
+  Week 6. The deadline is therefore no longer meaningfully "Week 9"; the honest framing is
+  that it must be activated **before the Week-10 release work begins**, whenever that
+  lands. Activation is same-day, so it is not on the critical path *provided* it isn't
+  forgotten. **Blocker: funding — a founder decision to spend $25.**
 - **What's needed to resolve:** Pay + activate the Google Play Console account by
   end of Week 9 at the latest.
 - **Owner:** Founder (funding).
@@ -986,8 +1246,19 @@ original six:
 - **Current status:** `expo-symbols` is unused by any code but is still a
   dependency. Kept deliberately (removable in a later cleanup); SF Symbols are
   iOS-flavoured and this build is Android-only.
+  **Re-verified 2026-08-03 (session 37) — confirmed still true, and confirmed READY to
+  close, but deliberately NOT closed in this PR.** `apps/mobile/package.json` line 37 still
+  carries `"expo-symbols": "~56.0.5"`, and a search across `apps/mobile/src/` returns
+  **zero** references. Nothing depends on it. **The reason it stays open here is scope, not
+  doubt:** removing it is a `package.json` + `pnpm-lock.yaml` change, and this is a
+  docs-and-conventions PR. Bundling a dependency edit into it would mean a reviewer
+  checking a lockfile diff inside a documentation review, and — since the mobile app is
+  built via EAS/native dev client — a dependency change is the one kind of edit that can
+  produce a build difference no doc review would catch. **Blocker: none technical. It wants
+  its own small, isolated cleanup PR**, where a broken install is obvious and revertible in
+  one commit. Do that and this entry closes immediately.
 - **What's needed to resolve:** Drop `expo-symbols` from `apps/mobile` in a
-  dependency-cleanup pass.
+  dependency-cleanup pass — **its own PR**, not folded into an unrelated one.
 - **Owner:** App track.
 - **Cross-references:** `docs/03`; workdiary sessions 26, 27, 28, 29, 30.
 
@@ -1040,6 +1311,13 @@ original six:
   8. **Deep links beat coordinate taps for driving the app:** scheme is `caeorta`, and
      `caeorta://expo-development-client/?url=http%3A%2F%2Flocalhost%3A8081` + `adb reverse
      tcp:8081 tcp:8081` bypasses the "Failed to download remote updates" launcher entirely.
+- **Re-verified 2026-08-03 (session 37), unchanged — and it is about to be load-bearing.**
+  `docs/04` still has no consolidated local-native-setup writeup; all eight session-34b
+  findings remain undocumented there. **CF-39** (the Week-5 on-device backlog) is the next
+  thing that will need this knowledge, and two of the eight findings apply to it directly:
+  use USB rather than wireless adb, and the `expo-updates` 56.0.19 / `expo` 56.0.8 skew
+  still blocks any emulator build. **Blocker: founder-owned doc** — `docs/04` is edited by
+  the founder, not from this track. The drafted follow-up prompts are still queued.
 - **What's needed to resolve:** Two queued follow-ups (both founder-owned, since
   `docs/04` is founder-edited): (1) the Metro/NDK/Skia local-setup writeup —
   **a full follow-up prompt for this is already drafted and ready to run**, and it
@@ -1060,6 +1338,12 @@ original six:
   `S4 · Drive detail` inventory line, lists "date/distance header, summary
   metrics, three telemetry charts (Speed/Boost/Coolant), diagnostics" — **no map
   slot** — even though the app now renders a map placeholder in that position.
+  **Re-verified 2026-08-03 (session 37), unchanged.** Now the **oldest of four** items
+  needing the same designer conversation — with **CF-33** (no route into S5), **CF-34**
+  (S5/S6 Figma parity unchecked) and **CF-37** (no in-app new-DTC surface specified). One
+  session covers all four; asking separately wastes the designer's time and this one has
+  been waiting since Week 4. **Blocker: designer availability** — designer-owned doc, not
+  editable from this track.
 - **What's needed to resolve:** The designer adds a map row to the S4 inventory
   (designer-owned doc; not editable from this track).
 - **Owner:** Designer.
@@ -1170,22 +1454,28 @@ original six:
   `apps/mobile/src/app/(app)/vehicles/[id]/dtcs/index.tsx` and `[dtcId].tsx`; PRs #42, #43;
   workdiary sessions 34, 34c (raised as "Figma parity for S5 still unchecked"), 35.
 
-### CF-25 — `docs/05` stale seed.sql "safe to re-run" claim  *(resolved in this PR)*
+### CF-25 — `docs/05` stale seed.sql "safe to re-run" claim  *(CLOSED 2026-08-03)*
 
 - **Category:** Documentation-gap
 - **Origin:** `docs/05` § Test fixtures, written before PR #37.
-- **Current status:** **Resolved in this PR.** `docs/05` previously said "Use
-  `INSERT … ON CONFLICT DO NOTHING` everywhere so the seed file is safe to
-  re-run" — but the actual re-runnability mechanism (PR #37, `9d453ca`) is an
-  ordered **child → parent DELETE teardown** block: `vehicles.device_id
-  REFERENCES devices(id) ON DELETE RESTRICT` (the only `RESTRICT` FK among the
-  seeded tables) made `ON CONFLICT DO NOTHING` insufficient. Verified by reading
-  the current `supabase/seed.sql`. `docs/05`'s Test-fixtures wording is corrected
-  to cite the PR-#37 teardown-order mechanism as part of this PR.
-- **What's needed to resolve:** Done (this PR, step 5).
-- **Owner:** App track (this PR).
-- **Cross-references:** `docs/05` § Test fixtures; PR #37; workdiary sessions 28,
-  30.
+- **Current status:** **CLOSED (2026-08-03, session 37).** The fix is on `main` and was
+  re-read there this pass; the entry's "resolved in this PR" phrasing was written while
+  the fix was still in flight and has been ambiguous ever since that PR merged.
+  **Resolving artifact: commit `b875bf5`** (PR #39, "docs: add carry-forwards registry
+  (docs/11); point 05/08/09/README at it", merged 2026-07-05) — the same PR that created
+  this registry also carried the `docs/05` correction. `docs/05` § Test fixtures now reads
+  *"As of PR #37 (`9d453ca`, merged 2026-07-05) it genuinely is: the file opens with a
+  single **child → parent DELETE teardown block** …"*, explicitly naming
+  `vehicles.device_id REFERENCES devices(id) ON DELETE RESTRICT` as the only `RESTRICT` FK
+  among the seeded tables and stating that `ON CONFLICT DO NOTHING` alone was **not**
+  sufficient. The superseded "ON CONFLICT everywhere" claim is gone. **Closure criteria
+  met:** App-track owner, a concrete merged commit resolves it, no build risk.
+- **What's needed to resolve:** Nothing — done in `b875bf5`.
+- **Owner:** App track. *(Closed.)*
+- **Cross-references:** `docs/05` § Test fixtures (the corrected wording); PR #37
+  (`9d453ca`, the mechanism) and PR #39 (`b875bf5`, the doc correction); **CF-06** (the
+  standing `seed.sql` cross-track clobber-risk flag — still open, and the reason this
+  file's re-runnability matters); workdiary sessions 28, 30; session 37 sweep.
 
 ### CF-26 — `CLAUDE.md` "sole code author" inaccuracy (deliberately unfixed)
 
@@ -1228,6 +1518,14 @@ original six:
 - **What's needed to resolve:** Founder executes the calendar cadence, the
   Issues/board, and WhatsApp Business when convenient; the housekeeping chores
   are opportunistic.
+- **Re-verified 2026-08-03 (session 37), unchanged.** Still open: the recurring daily-sync
+  and Friday-retro calendar events, the GitHub Issues + project board, and WhatsApp
+  Business. Two of these have stopped being merely "process hygiene": the **Friday retro**
+  is the cadence in which a week-close like this one would normally happen, and the
+  **cross-project sync** that **CF-03** needs is the same class of unscheduled meeting —
+  the AI Agent Contract has now gone ten weeks unacknowledged partly because no recurring
+  slot exists in which to raise it. **Blocker: founder actions;** none are code, and none
+  can be closed from this track.
 - **Owner:** Founder.
 - **Cross-references:** `docs/08` Week-2 "Carry from Week 1" (slipped
   working-agreement set); R4 (designer handoff — largely mitigated); workdiary

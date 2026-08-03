@@ -467,8 +467,28 @@ the Day-3 S5 badge:
    **unrated rather than at its true tier** — understated, never overstated, never a
    crash. Tracked as CF-32. Note this is a *different* column and owner from CF-30's
    agent-side `severity`-vs-`category` question.
+5. **Explanation + likely-causes body (§6 `S6`: "what it means", likely-causes).** *Added
+   Day 4, session 35.* §6 asks for an explanation written for a **tuned/modified** engine
+   plus a causes list, and **no source the app can reach carries that register**:
+   `dtcs.description` is verbatim SAE jargon (null on 2 of 7 fixtures), `dtcTitles.ts` is a
+   title map with no body, and `dtc_lookup.common_causes` — the nearest source, and partly
+   tune-aware — is generic-OBD-II text that is **not wired into the DTC seam**. Both
+   sections therefore render **always**, carrying copy that names the gap; authoring
+   per-code prose would mean inventing engineering claims about a modified engine, which §8
+   rules out. Tracked as CF-35. Like #3, the blocking input is a **content decision**, and
+   it has the same decision-maker — resolve CF-31 and CF-35 together.
+6. **Seen/acknowledged state (the in-app new-DTC surface).** *Added Day 5, session 36.*
+   The sibling of #1: `dtcs` has **no seen, ack, dismissed or status column of any kind**,
+   while the adjacent `diagnostic_outputs` already carries
+   `status text CHECK ('new','seen','dismissed','actioned')`. With "new" defined as
+   *unacknowledged* rather than *recent* (founder call), the acknowledged-set is
+   necessarily **App-local** — persisted in `expo-secure-store`, capped at 40 ids. Three
+   consequences cannot be fixed App-side: it is **per-device**, it does **not survive
+   reinstall**, and it can **evict**. Tracked as CF-36. **Sequence it with CF-29** — both
+   are missing `dtcs` state columns found from the same screens, and one migration could
+   carry both.
 
-**Likelihood:** High (all four are live today in the seam, and Days 3-4 build screens on them).
+**Likelihood:** High (all six are live today in the seam, and Days 3–5 built screens on them).
 
 **Impact:** Medium — nothing is *wrong* while the capability stays mock; the exposure is
 entirely at live-flip, where a section vanishes, a panel empties, jargon reaches a
@@ -497,14 +517,21 @@ headline, or a badge understates a real fault. High if a flip happens without th
 - **Gate the live flip.** Resolving CF-28, CF-29, CF-32 and CF-07/R22 is a precondition
   for flipping `DATA_SOURCE.dtcs`. Add these to the live-flip runbook alongside R22's checks.
 
-**Status:** Open. New at Week-5 Day 2 (App-track session 33); a fourth gap (#4, severity
-vocabulary) added at Day 3 (session 34). Related: R1 / R22 (vocabulary drift), R23
-(resolved predecessor).
+**Status:** Open. New at Week-5 Day 2 (App-track session 33); #4 (severity vocabulary)
+added at Day 3 (session 34); **#5 (S6 body content) added at Day 4 (session 35) and #6
+(seen/ack state) at Day 5 (session 36)** — both were being tracked in `docs/11` and
+cross-referenced as "R24 #5" before they were written in here; the omission was caught and
+corrected in the 2026-08-03 Week-5 close-out sweep (session 37). Re-verified against
+`origin/main` `85b47b0` on 2026-08-03: unchanged, `DATA_SOURCE.dtcs` still `'mock'`.
+Related: R1 / R22 (vocabulary drift), R23 (resolved predecessor).
 
 **Carry:** tracked as outstanding work items in `docs/11_Carry_Forwards.md` § CF-28
 (freeze-frame fidelity), § CF-29 (Pending state), § CF-30 (`insufficient_data`
 category-vs-severity), § CF-31 (plain-language DTC titles), § CF-32 (`severity_raw`
-vocabulary).
+vocabulary), § CF-35 (S6 explanation/likely-causes content source), and § CF-36 (DTC
+seen/ack state). The design-doc gaps the same screens surfaced are separate and
+designer-owned — § CF-33, § CF-34 and § CF-37 — and the notification-preference-model
+conflict is § CF-38.
 
 ---
 
