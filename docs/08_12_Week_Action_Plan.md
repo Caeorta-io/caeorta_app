@@ -511,9 +511,13 @@ summary:
 - **Freeze-frame capture fidelity + key vocabulary** — the capture point contradicts the
   column comment, and the metric keys are still provisional. See
   `docs/11_Carry_Forwards.md` § CF-28 (and § CF-07 for the shared key set).
-- **Notification-preference model conflict** — the design, the schema and the App now
-  describe "which severities notify me" three non-equivalent ways; must be reconciled
-  **before Week 7 builds S8**. See `docs/11_Carry_Forwards.md` § CF-38.
+- **Notification-preference model conflict** — the design, the schema and the App described
+  "which severities notify me" three non-equivalent ways. **Resolved 2026-08-02 as Option
+  C1** (keep the threshold for the ranked Warning/Info tiers, Critical becomes an always-on
+  floor, `insufficient` gets its own boolean on `user_preferences`). **Still open** on one
+  designer intent-check — C1 holds only if §6's four-toggle layout was a default drawing
+  rather than a deliberate non-monotone requirement. See `docs/11_Carry_Forwards.md`
+  § CF-38.
 - **Design-doc gaps (designer-owned)** — no in-app new-DTC surface is specified, no route
   into S5 is recorded, and the DTC Figma board has never been opened, so S5/S6/the banner
   are all built-from-spec with parity unchecked. See `docs/11_Carry_Forwards.md` § CF-37,
@@ -530,22 +534,33 @@ summary:
 
 **Handoff into Week 6.** Three build notes, then the three gates.
 
-Build notes: (a) **CF-38 must be decided before S8 is built** in Week 7, and Week 6's
-severity-based UI (`warning → prominent banner on vehicle detail`) is the same surface the
-DTC banner already borrowed — build them as one component, not two; (b) Week 6's Diagnostic
+Build notes: (a) **CF-38 is now decided (Option C1, 2026-08-02)** — Week 7's S8 binds to
+`{ threshold, insufficientEnabled }`, not to four independent toggles, so build to that
+shape; Week 6's severity-based UI (`warning → prominent banner on vehicle detail`) is the
+same surface the DTC banner already borrowed — build them as one component, not two;
+(b) Week 6's Diagnostic
 detail screen (S2) is where `T3 · Critical takeover` naturally lands, which is also what
 CF-37 needs before the critical tier can leave the banner; and (c) the DTC arc's
 containment holds only while `DATA_SOURCE.dtcs` stays `'mock'` — **do not flip it.**
 
-**What actually gates Week 6 — and none of it moved during Week 5.** Stated plainly because
-all three are outside the App track's control, so no amount of Week-6 building resolves
-them:
+**What actually gates Week 6.** Two of the three are outside the App track's control, so no
+amount of Week-6 building resolves them. **One of the three moved at the Week-5 close:**
+CF-38 was decided on 2026-08-02 and is now down to a single designer question.
 
 | Gate | Owner | State entering Week 6 |
 |---|---|---|
 | **CF-03 / R1** — the AI Agent Contract's six open questions, still unacknowledged; the contract still unshared; the weekly cross-project sync still not calendared | AI-agent team + founder | **Unchanged for ten weeks.** Week 6 *is* the buffered integration week whose preamble warns "plan for friction" — this is that friction, arriving on schedule |
 | **CF-29** — the Pending-DTC decision (keep the group and have Platform back it, or cut it from v1 and amend design §6 `S5`); the hardware question of whether the device can report pending at all sits underneath it | **Founder decision**, then Platform + hardware | **Unchanged since 2026-07-26.** Blocks the `DATA_SOURCE.dtcs` live flip |
-| **CF-38** — the three-way notification-preference-model conflict | Founder + designer, then Platform | **Open, and the only carry with a deadline: before Week 7 builds S8.** Week 6 is the last clear week to decide it |
+| **CF-38** — the notification-preference model | **Designer** (one question), then Platform + App | **DECIDED 2026-08-02 as Option C1** — threshold kept for the ranked Warning/Info tiers, Critical an always-on floor, `insufficient` gets its own boolean. **Still open on one intent-check:** C1 holds only if §6's four toggles were a default drawing, not a deliberate non-monotone requirement. If non-monotone was intended, it flips to per-tier booleans and the threshold retires |
+
+**For Sulaiman — three `dtcs`/`user_preferences` columns are now waiting, and they should
+ship as one migration pass, not three.** `CF-29` (pending/confirmed state on `dtcs`),
+`CF-36` (seen/ack state on `dtcs` — the `diagnostic_outputs.status` shape is the one to
+copy), and **CF-38's new `insufficient` boolean on `user_preferences`** (additive,
+`DEFAULT false`, existing rows backfill `false`; `notification_severity_threshold` is
+untouched). The tables differ, so it is one *pass*, not one `ALTER TABLE` — but grouping
+them means one review and one prod-promotion window instead of three. **CF-29 still needs
+its founder decision first**; the other two are ready once CF-38's intent-check returns.
 
 Week 6 can be built in full without any of these landing — the AI feed and Diagnostic detail
 screens read `diagnostic_outputs`, not `dtcs`. But CF-03 is the one that determines whether

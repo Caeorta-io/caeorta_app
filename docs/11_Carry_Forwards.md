@@ -161,6 +161,28 @@ original six:
 >
 > **Revised accounting: 39 entries; 4 closed (CF-12, CF-13, CF-22, CF-25), 35 open.**
 >
+> ---
+>
+> ### Amendment 2026-08-03 (session 39) — CF-38 resolved as Option C1, still open
+>
+> **CF-38 has a decision.** The session-37 sweep listed it among the 11 "carried unchanged"
+> DTC-arc entries; it has since been resolved as **Option C1** by founder decision dated
+> **2026-08-02** (taken at the Week-5 close, recorded here after the fact). The three-way
+> conflict is settled: the monotone `notification_severity_threshold` column is **kept** for
+> the ranked Warning/Info tiers, **Critical** becomes an always-on floor rather than a
+> toggle, and the off-ladder `insufficient` tier gets its **own boolean** on
+> `user_preferences` — an additive one-column migration, no restructure.
+>
+> **It does NOT close.** One residual holds it open: C1 is correct only if design §6's
+> four-toggle layout was a default drawing rather than a deliberate non-monotone
+> requirement. If the designer confirms non-monotone was intended, C1 flips to per-tier
+> booleans and the threshold retires. Status label on the entry:
+> **DECIDED-PENDING-DESIGNER-INTENT-CHECK.** That single question is the only thing that
+> can still move it — every remaining work item is internal.
+>
+> **Accounting unchanged: 39 entries; 4 closed, 35 open.** CF-38 moves within the open set
+> from *undecided cross-track conflict* to *decided, pending one designer confirmation*.
+>
 > **One status is inferred rather than directly observed — CF-17.** Prod Supabase state
 > cannot be read from this repo. The entry is left OPEN on the project's own record:
 > `docs/05` still lists both Week-5 migrations as "applied on dev, NOT on prod", and the
@@ -322,14 +344,66 @@ original six:
 - **Cross-references:** `docs/08` Week-4 plan + close table; workdiary sessions
   29, 30 (recorded absent), Platform session 12 (built), 33 (re-verified present).
 
-### CF-38 — Three non-equivalent notification-preference models
+### CF-38 — Three non-equivalent notification-preference models  *(RESOLVED as Option C1, 2026-08-02 — OPEN pending one designer intent-check)*
 
 - **Category:** Cross-track dependency / flag
 - **Origin:** Week 5 Day 5, session 36 (2026-08-02) — found while building the in-app
   new-DTC notification's preference gate.
-- **Current status:** Open, and **a modelling conflict, not a missing piece**. Three
-  descriptions of "which severities notify me" now exist, and two of them cannot express
-  the third:
+- **Current status: RESOLVED as Option C1 (founder decision, 2026-08-02) — but NOT closed.
+  One designer confirmation is outstanding, and it is the only thing that can still move
+  this entry.** Status label: **DECIDED-PENDING-DESIGNER-INTENT-CHECK.**
+
+  **The agreed model (C1).** Three parts, and the point of it is that each tier is stored
+  by a mechanism that matches whether it is actually *ordered*:
+  1. **`user_preferences.notification_severity_threshold` is KEPT** — the existing monotone
+     three-value column (migration `20260602130000`), unchanged. **No replacement
+     migration.** It carries the two genuinely *ranked*, user-configurable tiers:
+     **Warning and Info**. Platform's `send_diagnostic_notification` skip logic keeps
+     working as written.
+  2. **Critical becomes an always-on floor, not a user-configurable toggle.** §6 already
+     says "**Critical = Always**"; C1 makes that structural rather than a convention. The
+     App side already enforces it in the type system — `DtcNotificationPrefs` types
+     `critical` as the literal `true`, not `boolean`, so no prefs object can silence it and
+     no S8 toggle can bind to it.
+  3. **`insufficient` — the off-ladder §4.3 tier — gets its OWN boolean on
+     `user_preferences`, default `false`.** An **additive one-column migration**, not a
+     restructure. This is the part the threshold structurally cannot do: the column's three
+     values *are* the §4.3 ladder, and an off-ladder tier is not comparable to them, so it
+     needs its own slot rather than a rank.
+
+  **This is NOT the option (c) rejected below — read the difference before assuming it is.**
+  Rejected (c) kept a per-severity model App-side and **persisted the closest threshold**,
+  which is lossy: it silently discards non-monotone states, the failure mode where a user
+  turns something off and it stays on. C1 changes the *model* instead of mapping between
+  two mismatched ones — the threshold carries only tiers that are genuinely ordered, and
+  the tier that isn't ordered gets its own storage. **Nothing is silently dropped at write
+  time.** What C1 gives up, it gives up openly, and that is the asterisk:
+
+  **⚠️ THE OPEN RESIDUAL — one question, and it is the whole reason this stays open.**
+  With Critical pinned on and Insufficient independent, the threshold's remaining job is
+  just Warning-vs-Info. So C1 can express `{Critical}`, `{Critical, Warning}` and
+  `{Critical, Warning, Info}` — but **not `{Critical, Info}`**, i.e. *"Info on, Warning
+  off"*. That single combination is the entire cost of C1.
+  **C1 is correct if and only if §6's four-toggle drawing was a default layout rather than
+  a deliberate non-monotone requirement.** If the designer confirms non-monotone *was*
+  intended — that "Critical + Info but not Warning" is a real case someone wants — then
+  **this flips to Option (a)**: per-tier booleans, the threshold retires, and
+  `send_diagnostic_notification`'s skip logic is rewritten. That is a materially bigger
+  change, which is exactly why the check happens **before** anyone writes the migration.
+
+  **One equivalence the designer and Platform are implicitly ratifying, flagged so it is
+  not discovered later.** The single `insufficient` boolean will serve **two different
+  upstream causes**: the agent's `insufficient_data` on `diagnostic_outputs` (CF-30) and
+  the App's `unknown` tier on `dtcs` — `deriveDtcBadgeSeverity`'s fallback for an
+  unreadable `severity_raw` (CF-32). Session 36 already treated these as the same
+  preference deliberately (both mean "we could not rank this", and §4.3 gives them the same
+  off-ladder treatment), and that is recorded in `DEFAULT_DTC_NOTIFICATION_PREFS`' header.
+  It is a reasonable equivalence, not an accident — but it is one switch governing two
+  sources, so if either track later wants them controlled separately, that is a second
+  column, not a tweak.
+
+  **Superseded — the original conflict, kept for the trail.** Three descriptions of "which
+  severities notify me" existed, and two of them could not express the third:
   1. **Design §6 `S8 · Notification prefs`** — *per-severity toggles*: "**Critical =
      Always**, Warning on, Info off, Insufficient off". Four independent switches,
      including the off-ladder `insufficient` tier.
@@ -353,28 +427,55 @@ original six:
   currently disjoint: Platform's function gates **push for `diagnostic_outputs`**, the
   App's gate is **in-app for `dtcs`**. They converge in Week 7, when the S8 screen has to
   bind to storage and push arrives.
-- **What's needed to resolve:** A cross-track decision **before Week 7 builds S8**, since
-  the screen is what forces the binding. Three shapes:
-  - **(a) Promote the schema to the design's model** — replace the single threshold with
-    per-severity booleans (or a jsonb prefs blob) on `user_preferences`, including a slot
-    for `insufficient`. Matches §6; needs a migration and an update to
-    `send_diagnostic_notification`'s skip logic.
-  - **(b) Cut S8 down to a threshold** — amend design §6 `S8` to a single "notify me about
-    X and above" control. Cheapest, loses the per-severity model and the Insufficient
-    toggle, and needs designer sign-off.
-  - **(c) Keep both and map** — App keeps per-severity, persists the closest threshold.
-    **Rejected as a recommendation:** it silently discards non-monotone states, which is
-    the failure mode where a user turns something off and it stays on.
-  Whichever lands, `docs/05` § `user_preferences` and design §6 `S8` must end up
-  describing the same model.
-- **Owner:** Founder + designer (which model §6 keeps) → Platform track (the column, if
-  (a)) + App track (bind S8 to it in Week 7).
-- **Cross-references:** CF-36 (the other missing state the same surface needs);
+  The three shapes that were on the table when this was opened — **(a)** promote the schema
+  to per-severity booleans, **(b)** cut S8 down to a bare threshold (loses the Insufficient
+  toggle entirely), and **(c)** keep both and persist the closest threshold (**rejected**:
+  silently discards non-monotone states). **C1 is a refinement of (b) that does not lose the
+  Insufficient toggle** — it keeps the threshold for the ranked tiers and gives the
+  off-ladder tier its own switch instead of dropping it. **(a) remains the fallback** if the
+  designer intent-check comes back "non-monotone was deliberate".
+
+- **What's needed to resolve — three work items, ALL INTERNAL. No hardware, AI-agent,
+  funding or external dependency gates this entry.** It is genuinely closable inside the
+  team, which is unusual for this file and is the reason it should not be allowed to drift.
+  1. **Designer — the intent-check (the blocking item).** Confirm §6's four-toggle layout
+     was **not** a deliberate non-monotone choice. Then reconcile §6 `S8` to describe what
+     C1 actually builds: **"Critical = Always (floor, no toggle) + a Warning/Info threshold
+     control + a standalone Insufficient switch."** Do this **in the same conversation as
+     CF-24, CF-33, CF-34 and CF-37** — five designer items now, one sitting.
+  2. **Platform (Sulaiman) — one additive migration.** A single boolean column on
+     `user_preferences` for `insufficient`, `DEFAULT false`, existing rows backfilling
+     `false`. `notification_severity_threshold` is **untouched** and
+     `send_diagnostic_notification` needs no change for the ranked tiers — only a new read
+     of the boolean for the off-ladder one. **Batch it with the Platform DTC-state work
+     rather than shipping it standalone** — CF-36 (seen/ack state) and CF-29 (pending state)
+     are both waiting on `dtcs` columns. *Note the tables differ* — CF-36/CF-29 want columns
+     on `dtcs`, this one is on `user_preferences` — so it is one migration **pass**, not
+     literally one `ALTER TABLE`. Grouping them means one review and one promotion window
+     instead of three.
+  3. **App — a model edit, not a rebuild.** Adapt the session-36 screenless prefs model from
+     the four-key mapped type to **`{ threshold, insufficientEnabled }`**, keeping
+     `critical` structurally always-on. `shouldNotifyForDtc` keeps reusing
+     `deriveDtcBadgeSeverity`'s tier — the gate's shape does not change, only how the tier is
+     compared against stored prefs. **S8 binds to this in Week 7**, which is the deadline
+     that has always driven this entry.
+  `docs/05` § `user_preferences` and design §6 `S8` must end up describing the same model —
+  that requirement is unchanged, C1 is just now the model they should both describe.
+- **Owner:** **Designer** (the intent-check — the one blocking input) → **Platform track**
+  (the additive boolean, batched with the CF-36/CF-29 migration pass) + **App track** (adapt
+  the prefs model; bind S8 in Week 7). Founder decision **taken 2026-08-02** — no longer an
+  open founder item.
+- **Cross-references:** **CF-36** (the sibling `dtcs` state gap — **batch the Platform
+  migration work**; the same Week-7 S8 screen is what forces both bindings); **CF-29** (the
+  third column in that same Platform pass); **CF-30** and **CF-32** (the two different
+  off-ladder sources the single `insufficient` boolean will govern — see the equivalence
+  note above); **CF-37** + CF-24/CF-33/CF-34 (the designer batch this intent-check joins);
   `TODO(s8-prefs)` in `apps/mobile/src/lib/dtcNotifications.ts` and
-  `lib/dtcNotificationStore.ts`; `docs/05` § `user_preferences`; `docs/08` Week 7
-  ("Notification preferences screen: per-severity toggle, quiet hours, per-vehicle
-  settings"); design §6 `S8` + §4.3; `supabase/functions/send_diagnostic_notification`;
-  PR #44; workdiary session 36.
+  `lib/dtcNotificationStore.ts`; `DEFAULT_DTC_NOTIFICATION_PREFS` (records the
+  `unknown` ↔ "Insufficient" mapping); `docs/05` § `user_preferences`; **`docs/08` Week 7**
+  ("Notification preferences screen") — the S8 build this unblocks — and the Week-6 handoff
+  block; design §6 `S8` + §4.3; `supabase/functions/send_diagnostic_notification`;
+  PR #44 (opened); workdiary sessions 36, 39.
 
 ### CF-06 — `supabase/seed.sql` is cross-track-owned (clobber-risk flag)
 
