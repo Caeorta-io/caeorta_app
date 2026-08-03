@@ -152,6 +152,86 @@ consumer, not just a visual one.
 - Always store the returned unsubscribe fn in a ref and call it on unmount **unconditionally** — the channel must never outlive the screen. Dependency array is `[id]` only, so a vehicle change tears down and re-subscribes.
 - The mock emitter (`subscribeToCurrentStateMock`) and the real `subscribeToCurrentState` share the **same external interface** — `(vehicleId, onUpdate, onChannelStatus) => () => void` — so the swap is a per-capability flag flip in `source.ts`, not a screen change. Note the real `@caeorta/supabase` helper does **not** natively match that shape (it needs a client, returns a `RealtimeChannel`, has a separate async `unsubscribe`, and emits no channel status); the live branch owns a thin adapter that maps it onto the seam contract, keeping the adapter — and the shape mismatch — out of the screen.
 
+## Week 5 patterns
+
+From the DTC arc (PRs #40–#44). The *reuse* rule for derived tiers lives above under
+**Derived-tier reuse**; these four are the constraints that pair with it.
+
+### Two derivations that look identical are allowed to differ — say why in the code
+
+`deriveDtcBadgeSeverity` and `deriveDiagnosticCardState` both map an unrecognised severity
+to a fallback, and they **deliberately pick different ones**. Copying either rule to the
+other is a real bug, so the difference is documented at both sites rather than left to look
+like an inconsistency.
+
+- **Fall back ON the ladder when the value came from a system with a known vocabulary.** A
+  diagnostic's `severity` is authored by the AI agent, so an unrecognised value is
+  vocabulary *drift within a known set* — rendering it as the quietest on-ladder tier
+  (`info`) is honest.
+- **Fall back OFF the ladder when the value is unconstrained.** A DTC's `severity_raw` is
+  plain `text` with no CHECK — whatever the ECU happened to write. Mapping it to `info`
+  would **assert a tier the app does not have**, so it renders an off-ladder `unknown`
+  instead (design §4.3 + §8: show that we don't know).
+- **The test is the source of the value, not its type.** Before choosing a fallback, ask
+  whether a closed vocabulary exists upstream. If one does, degrade inside it; if none
+  does, degrade outside it.
+- **Both directions must fail toward understatement, never overstatement**, and never throw.
+  Once a derivation gains a *behavioural* consumer, note what the fallback now costs — an
+  `unknown` badge is cosmetic, but `unknown` also meaning "never notifies" is not.
+
+### A component that satisfies §11 only in context must say so in its own header
+
+Design §11 ("never colour alone") is satisfied **across the S5 row**, not inside the badge:
+`DtcCodeBadge` carries colour + a per-tier glyph + the raw code, and the severity's **text
+label** sits on the row's meta line. Putting the severity word inside the badge would
+displace the code — the thing a user cross-references against a scanner or a forum.
+
+- **The consequence is a reuse constraint, and it belongs in the component's own doc
+  comment:** `DtcCodeBadge` is **not §11-compliant standalone** and must not be dropped onto
+  a new surface without a severity label beside it. A reviewer of a *future* screen will not
+  re-read the §11 reasoning in some week's PR description; they will read the component.
+- Generalise: **when an accessibility rule is satisfied by a composition rather than by a
+  component, the component is a trap.** Write the constraint at the definition, and collapse
+  the signals into one `accessibilityLabel` so screen readers get them together.
+
+### Render a set from its ORDER constant, so changing the set changes the screen
+
+`DTC_GROUPINGS` (the union) and `DTC_GROUPING_ORDER` (the render order) live in
+`@caeorta/types`; S5 builds its sections by mapping the order constant, and `groupDtcs` is
+typed `Record<DtcGrouping, Dtc[]>`. A test asserts the order covers every member exactly
+once.
+
+- **The payoff is that resolving CF-29 costs two edits and no screen change.** Narrowing the
+  union turns `groupDtcs`' `pending: []` line into a **compile error** (not a silently dead
+  branch), and the screen renders two sections on its own because it never hard-coded three.
+- **Type the containment in both directions.** A narrowed *return* type (`deriveDtcGrouping`
+  → `'active' | 'history'`) makes **widening** a compile event; a `Record<Union, T>` makes
+  **narrowing** one. Use both when a provisional set is expected to change.
+- Never hand-write a list of section headers that duplicates a union's members. The
+  duplicate is where the drift happens.
+
+### "New" means unacknowledged, not recent
+
+For any surface that interrupts the user about a set of items:
+
+- **Prefer acknowledgement state over a recency window.** A time window needs no storage,
+  which is its whole appeal — but it **re-notifies on every app open** until it lapses, and
+  the timestamp usually records when the *upstream system* saw the thing, not when the
+  *user* did. `dtcs.first_seen_at` is when the ECU reported the code; a code that set three
+  weeks ago and was never opened is still news to its owner.
+- **The cost is state, so keep the pure half storage-agnostic.** Parse / merge / serialize
+  helpers live in the feature's pure module and are unit-tested there; the persisting store
+  is a thin I/O shell. Swapping to a server column later then touches the shell only.
+- **Cap any locally-persisted set and document what eviction means.** SecureStore warns
+  above ~2048 bytes per value, so the acknowledged-set is capped at 40 ids, oldest first —
+  and the fact that eviction *can* re-notify is written down rather than hidden, because it
+  is the one way the surface can nag.
+- **Two actions, not a gauntlet:** dismiss acknowledges everything surfaced in one tap;
+  tapping through to look at an item acknowledges **nothing**. Going to look at something is
+  not being done with it.
+- **Test the property, not just the cases:** the assertion that matters is *dismiss → same
+  input rows → empty selection* (no re-notify), which no per-case test gives you.
+
 ## Design system
 
 The mobile design system foundation (Week 4, session 26). Source of truth for the

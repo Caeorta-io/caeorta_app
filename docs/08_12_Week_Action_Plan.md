@@ -379,16 +379,71 @@ The Week-4 carries, in summary:
 
 ### Week close — App track (sessions 32–36)
 
-- **Week 5 App track complete** against all four checklist items, mock-data-first
-  throughout (`DATA_SOURCE.dtcs` is still `'mock'` and deliberately stays there — see the
-  carries). Shipped: the **eight-variant Diagnostic Card atom** + `/dev/diagnostic-card`
-  harness (session 32, PR #40), the **DTC data seam** + drive-detail card swap (session
-  33, PR #41), **S5 · DTC list** with the severity/grouping derivations (session 34, PR
-  #42), **S6 · DTC detail** + the `DiagnosticsPreview` card swap (session 35, PR #43), and
-  the **in-app new-DTC notification** + this week-close pass (session 36, PR #44).
-  On-device verification ran mid-week rather than at the end (sessions 34b/34c): all 8 card
-  variants, the three-group S5 render, and the empty-Pending branch were observed on a
-  physical device.
+- **Week 5 App track complete** against all four checklist items, across five PRs
+  (#40 → #44, sessions 32–36), **mock-data-first throughout** — `DATA_SOURCE.dtcs` is still
+  `'mock'` and deliberately stays there, see the carries. On-device verification ran
+  mid-week rather than at the end (sessions 34b/34c), which is why the atom and S5 are
+  verified while the week's last three deliverables are not.
+
+- **What shipped, one line per PR.**
+
+  | PR | Session | What it delivered |
+  |---|---|---|
+  | **#40** | 32 | The **Diagnostic Card atom** — 4 visual states × collapsed/expanded = design §5.1's eight variants, with the severity→visual rule centralised in `deriveDiagnosticCardState` and a `__DEV__` harness at `/dev/diagnostic-card`. |
+  | **#41** | 33 | The **DTC data seam** (typed `Dtc`, boundary parse, `freeze_frame_metrics` mirroring the real column) **+ the drive-detail card swap**, retiring the first stand-in and its screen-local `SEVERITY_DOT` map. |
+  | **#42** | 34 | **S5 · DTC list** — grouped Active/Pending/History with always-rendered empty groups, plus the `deriveDtcBadgeSeverity` / `groupDtcs` derivations and the §11-compliant badge/label split. |
+  | **#43** | 35 | **S6 · DTC detail** (status pill, freeze-frame panel, declared content gaps) **+ the `DiagnosticsPreview` card swap** — retiring the last stand-in and **closing CF-13**. |
+  | **#44** | 36 | The **in-app new-DTC notification** — vehicle-detail banner, the typed screenless S8 preference gate, the SecureStore acknowledged-set — plus the first pass of this close. |
+
+- **DoD status, in the three states this project distinguishes.** *Built* = written, typed,
+  unit-tested, gate-green. *On-device-verified* = observed running on the physical Android
+  device. *Audited-against-spec* = checked against the delivered design, with divergences
+  recorded rather than assumed absent.
+
+  | Week-5 item | Built | On-device-verified | Audited-against-spec |
+  |---|---|---|---|
+  | Diagnostic card component (the DoD's "reusable atom") | ✅ | ✅ session 34b — all 8 variants | ✅ §5.1; every stand-in retired, so `deriveDiagnosticCardState` is the only severity→visual rule in the app |
+  | DTC list view (S5) | ✅ | ✅ sessions 34b/34c — incl. the empty-Pending branch | ⚠️ **built from §6's written inventory, not the Figma board** (CF-34); the Pending group has no live source (CF-29) |
+  | DTC detail (S6) | ✅ | ❌ **not yet — CF-39** | ⚠️ same written-spec-only basis (CF-34). Two §6 sections ship as **declared gaps**, not content (CF-35), and "Mark cleared" is deliberately absent — see the divergence note below |
+  | In-app new-DTC notification | ✅ | ❌ **not yet — CF-39** | ❌ **cannot be audited: the design specifies no such surface at all** (CF-37). Placement, the definition of "new" and the preference model were App-track calls at a session-36 ASK gate |
+  | `DiagnosticsPreview` card swap | ✅ | ❌ **not yet — CF-39** | ✅ §5.1 (placement check only; the atom itself is verified) |
+
+  **Read the middle column honestly: the DTC arc is BUILT and largely on-device verified,
+  but S6, the preview swap and the banner are the residual** — all three postdate the
+  session-34b run. They are tracked as one batched dev-build run in
+  `docs/11_Carry_Forwards.md` § **CF-39**. **Week 5 is therefore "built, and verified up to
+  and including S5" — not "fully verified."** The third column carries the more structural
+  finding: two of four items could not be fully audited against the design because the
+  design does not describe them, which is what CF-34 and CF-37 exist to record.
+
+- **Calendar vs. plan — the honest position.** The plan's anchor is *Week 1 start: Monday
+  **2026-05-18*** (decisions log, 2026-05-13). Counting from there, **today, 2026-08-03, is
+  the first day of plan-calendar Week 12 — the final week**, nominally Play Internal
+  Testing and pilot launch. The App track is closing **Week 5** and starting **Week 6**.
+
+  | | Nominal window | Actual |
+  |---|---|---|
+  | Week 5 | 2026-06-15 → 2026-06-21 | closed **2026-08-02** — exactly **6 weeks late** |
+  | Week 6 | 2026-06-22 → 2026-06-28 | starting **2026-08-03** — 6 weeks late |
+  | Week 12 | 2026-08-03 → 2026-08-09 | **begins today**, with 7 plan-weeks of scope unbuilt |
+
+  **The slip is ~6 weeks and it is not recent.** It was structural from the start — Week 1
+  alone ran to its 2026-06-19 reconciliation, roughly 4.5 calendar weeks — and it widened
+  by three more in the **2026-07-05 → 2026-07-26 gap**, three calendar weeks with no
+  App-track sessions between the Week-4 close and Week-5 Day 1. Once work resumed, the
+  execution rate was fine: Week 5's five days of scope ran across eight calendar days
+  (sessions 32–36), which is roughly plan pace. **The deficit is elapsed calendar time, not
+  throughput.**
+
+  Two consequences worth stating rather than discovering later. **(a) "Week N" in this
+  document is now a unit of scope, not a date** — it means five working sessions, and every
+  remaining date in the plan should be read that way. **(b) The Week-10 dependency has
+  quietly moved from "future" to "unscheduled":** Google Play Console activation (CF-21) was
+  to be done "by end of Week 9 at the latest", and plan-Week 9 ended 2026-07-19. It is a
+  same-day $25 activation, so it is not on the critical path — but it now has no date at all
+  attached to it, which is a worse state than being late. *No re-baselining of the 12-week
+  calendar is proposed here; that is a founder decision and belongs in the revision log
+  below, not in a week-close.*
 
 - **Both DoD lines are met, with one honest qualification.** "DTCs as first-class objects"
   is real: they have a typed seam, a boundary parse, canonical derivations
@@ -423,6 +478,23 @@ The Week-4 carries, in summary:
   blocked the build — each is contained App-side with the containment documented — but
   together they are why `DATA_SOURCE.dtcs` must not flip live yet.
 
+- **Carry delta for the week — net +9.** By CF-number only; the detail lives in
+  `docs/11_Carry_Forwards.md` and is not duplicated here.
+  - **Opened (11):** **CF-28 – CF-38.** Ten of the eleven are DTC-arc findings; the outlier
+    is CF-38, the notification-preference-model conflict, which was found by reading
+    *Platform's* implementation rather than the App's.
+  - **Closed (3):** **CF-13** (the eight-variant Diagnostic Card — the only one closed by
+    Week-5 *build* work; every stand-in retired, PR #43), plus **CF-12** and **CF-25**,
+    both closed in the 2026-08-03 close-out sweep as **bookkeeping**, not new work — each
+    had already been resolved (CF-12 by a founder decision recorded 2026-07-05, CF-25 by
+    commit `b875bf5`) and the registry had simply not been updated to say so.
+  - **Added at close (1):** **CF-39** — the Week-5 on-device verification backlog,
+    consolidating what had been scattered across CF-13's residual note and two sessions'
+    after-reports.
+  - **Registry now stands at 39 entries: 3 closed, 36 open.** The full sweep — every entry
+    re-verified against `origin/main` `85b47b0` — is recorded in the registry header's
+    2026-08-03 re-verification block.
+
 **Carried forward.** Full detail (owner, unblock, current status) lives in
 **`docs/11_Carry_Forwards.md`**, the canonical registry. The Week-5 App carries, in
 summary:
@@ -447,20 +519,38 @@ summary:
   are all built-from-spec with parity unchecked. See `docs/11_Carry_Forwards.md` § CF-37,
   § CF-33 and § CF-34.
 - **On-device verification of the week's last three deliverables** — S6, the
-  `DiagnosticsPreview` swap and the notification banner, as one batched dev-build run. See
-  `docs/11_Carry_Forwards.md` § CF-13 (residual #1) and § CF-34.
+  `DiagnosticsPreview` swap and the notification banner, plus the freeze-frame tile-grid
+  wrap risk, as one batched dev-build run. Consolidated at the Week-5 close into a single
+  tracked entry: `docs/11_Carry_Forwards.md` § **CF-39** (it was previously scattered
+  across CF-13's residual note and two after-reports). Cheapest to run alongside § CF-34's
+  Figma-parity diff, which looks at the same screens.
 - **`apps/admin` lint red on `main`** (Platform-owned, from `22acf4c`) — unchanged all
   week; App-track PRs cannot make the repo-wide gate green. See
   `docs/11_Carry_Forwards.md` § CF-05.
 
-**Handoff into Week 6.** Three things Week 6 should know before it starts: (a) **CF-38
-must be decided before S8 is built** in Week 7, and Week 6's severity-based UI
-(`warning → prominent banner on vehicle detail`) is the same surface the DTC banner
-already borrowed — build them as one component, not two; (b) Week 6's Diagnostic detail
-screen (S2) is where `T3 · Critical takeover` naturally lands, which is also what CF-37
-needs before the critical tier can leave the banner; and (c) **CF-03 is still open** — the
-AI Agent Contract's six questions remain unacknowledged and the contract unshared, which
-is exactly the friction Week 6's own preamble warns about.
+**Handoff into Week 6.** Three build notes, then the three gates.
+
+Build notes: (a) **CF-38 must be decided before S8 is built** in Week 7, and Week 6's
+severity-based UI (`warning → prominent banner on vehicle detail`) is the same surface the
+DTC banner already borrowed — build them as one component, not two; (b) Week 6's Diagnostic
+detail screen (S2) is where `T3 · Critical takeover` naturally lands, which is also what
+CF-37 needs before the critical tier can leave the banner; and (c) the DTC arc's
+containment holds only while `DATA_SOURCE.dtcs` stays `'mock'` — **do not flip it.**
+
+**What actually gates Week 6 — and none of it moved during Week 5.** Stated plainly because
+all three are outside the App track's control, so no amount of Week-6 building resolves
+them:
+
+| Gate | Owner | State entering Week 6 |
+|---|---|---|
+| **CF-03 / R1** — the AI Agent Contract's six open questions, still unacknowledged; the contract still unshared; the weekly cross-project sync still not calendared | AI-agent team + founder | **Unchanged for ten weeks.** Week 6 *is* the buffered integration week whose preamble warns "plan for friction" — this is that friction, arriving on schedule |
+| **CF-29** — the Pending-DTC decision (keep the group and have Platform back it, or cut it from v1 and amend design §6 `S5`); the hardware question of whether the device can report pending at all sits underneath it | **Founder decision**, then Platform + hardware | **Unchanged since 2026-07-26.** Blocks the `DATA_SOURCE.dtcs` live flip |
+| **CF-38** — the three-way notification-preference-model conflict | Founder + designer, then Platform | **Open, and the only carry with a deadline: before Week 7 builds S8.** Week 6 is the last clear week to decide it |
+
+Week 6 can be built in full without any of these landing — the AI feed and Diagnostic detail
+screens read `diagnostic_outputs`, not `dtcs`. But CF-03 is the one that determines whether
+Week 6's integration day is an integration or a discovery exercise, and it is the item most
+worth moving before Day 1.
 
 ---
 
@@ -710,6 +800,7 @@ Do not fill this week with new features.
 
 When this plan changes, log it here with date and reason. Don't pretend the original plan was always what's happening.
 
+- 2026-08-03 — **Week-5 close-out + the calendar position stated explicitly for the first time.** The Week-5 close section gained a DoD scorecard in three states (built / on-device-verified / audited-against-spec), a per-PR shipped list, a carry delta by CF-number, and a calendar-vs-plan table. **The finding worth logging: measured from the plan's own anchor (Week 1 start, Monday 2026-05-18), today is the first day of plan-calendar Week 12 — the final week — while the App track is starting Week 6. The slip is ~6 weeks.** It is not new and it is not a throughput problem: Week 1 alone ran to its 2026-06-19 reconciliation, and three more weeks were lost in the 2026-07-05 → 2026-07-26 gap between the Week-4 close and Week-5 Day 1; Week 5 itself ran five days of scope in eight calendar days, roughly plan pace. **No re-baselining is proposed** — "Week N" is henceforth read as a unit of scope (five working sessions), not a date. **A founder decision on whether to re-baseline the 12-week calendar, cut scope, or leave it as-is belongs here and has not been taken.** One dependency needs attention regardless: CF-21 (Google Play Console, $25, same-day) was due "end of Week 9", which passed on 2026-07-19, and now has no date attached at all. Alongside this, the carry registry got its first full sweep — all 39 entries re-verified against `origin/main` `85b47b0`; see `docs/11_Carry_Forwards.md`.
 - 2026-06-19 — **Week 1 reconciliation.** DoD: 3/5 fully done (Muhammed runs the codebase locally; app logs in via email OTP against dev; CI green on a trivial PR — PR #18), 2/5 partial (Supabase: dev has all 5 migrations + seed + RLS, prod still unpromoted; AI Agent Contract v0 exists but is unmerged and not yet shared). Slipped into Week 2 (see "Carry from Week 1"): prod migration promotion + Dashboard OTP config, `agent_role` migration, `devices` column-scope migration, AI-contract sharing + weekly-sync invite. Slipped working-agreement items (founder actions, not code): designer working session, Figma component-system confirmation, daily-sync + Friday-retro calendar events, GitHub Issues + project board. Nothing was silently dropped. Note: Sulaiman's Platform track ran ahead to Week 5 (Edge Functions, admin dashboard, Vault, sync pipeline) — those weeks' work is logged in the workdiary's Platform-track entries.
 - 2026-06-19 — **Execution model clarified mid-Week-1.** Reading B (Muhammed sole code author; Sulaiman reviews-only and owns Platform-area decisions) made explicit via Prompt 0 in session 4. Reflected in `CLAUDE.md`, `docs/01`, `docs/02`, `docs/04`, `docs/08`, `workdiary`, `conventions.md`.
 - 2026-06-19 — **Auth decision corrected.** Email magic link v1 → Email OTP (code-only) v1. `CLAUDE.md` fixed session 10; `docs/03` fixed session 11; this revision logs the change in the Action Plan's Week 1 deliverables + DoD.
