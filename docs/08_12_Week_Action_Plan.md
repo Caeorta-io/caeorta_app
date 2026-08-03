@@ -618,7 +618,7 @@ The week most likely to surface contract gaps. Plan for friction.
 - [ ] Expo Notifications setup
 - [ ] Token registration on app launch → `device_push_tokens`
 - [ ] Test on real iOS + Android
-- [ ] Notification preferences screen: per-severity toggle, quiet hours, per-vehicle settings
+- [ ] Notification preferences screen (`S8`): **not per-severity toggles** — build to CF-38's Option C1, final as of 2026-08-03: **Critical = Always** (a floor, rendered without a toggle) **+ one Warning/Info threshold control + a standalone Insufficient switch**, binding to `{ threshold, insufficientEnabled }`. Plus quiet hours and per-vehicle settings.
 - [ ] Deep linking: notification tap → diagnostic detail
 - [ ] Foreground notification handling (in-app banner when app open)
 

@@ -163,7 +163,7 @@ original six:
 >
 > ---
 >
-> ### Amendment 2026-08-03 (session 39) — CF-38 resolved as Option C1, still open
+> ### Amendment 2026-08-03 (session 39) — CF-38 resolved as Option C1, still open  *(superseded — closed later the same day, see session 42)*
 >
 > **CF-38 has a decision.** The session-37 sweep listed it among the 11 "carried unchanged"
 > DTC-arc entries; it has since been resolved as **Option C1** by founder decision dated
