@@ -163,7 +163,7 @@ original six:
 >
 > ---
 >
-> ### Amendment 2026-08-03 (session 39) — CF-38 resolved as Option C1, still open
+> ### Amendment 2026-08-03 (session 39) — CF-38 resolved as Option C1, still open  *(superseded — closed later the same day, see session 42)*
 >
 > **CF-38 has a decision.** The session-37 sweep listed it among the 11 "carried unchanged"
 > DTC-arc entries; it has since been resolved as **Option C1** by founder decision dated
@@ -182,6 +182,10 @@ original six:
 >
 > **Accounting unchanged: 39 entries; 4 closed, 35 open.** CF-38 moves within the open set
 > from *undecided cross-track conflict* to *decided, pending one designer confirmation*.
+>
+> *(**Superseded 2026-08-03** — the intent-check was answered "incidental" later the same
+> day and CF-38 closed; the `DECIDED-PENDING-DESIGNER-INTENT-CHECK` label and the Option (a)
+> contingency above are historical. See the session-42 amendment below.)*
 >
 > **One status is inferred rather than directly observed — CF-17.** Prod Supabase state
 > cannot be read from this repo. The entry is left OPEN on the project's own record:
@@ -217,6 +221,7 @@ original six:
 >   project cannot source or decide for itself.*
 >
 > **Revised accounting: 39 entries; 5 closed (CF-12, CF-13, CF-22, CF-25, CF-07), 34 open.**
+> *(Superseded later the same day — see the CF-38 amendment below.)*
 >
 > **A provenance note worth keeping.** This proposal sat for ~2.5 weeks between being
 > produced (2026-07-17) and being surfaced here (2026-08-03) — during which the session-37
@@ -225,6 +230,29 @@ original six:
 > and wrong about the world. **R1's doc-drift risk is bidirectional**, and the same gap now
 > runs the other way: the four founder decisions above exist only in this repo until
 > someone carries them back into the agent project's context.
+>
+> ---
+>
+> ### Amendment 2026-08-03 (session 42) — CF-38 CLOSED, designer intent-check answered
+>
+> **The one question holding CF-38 open is answered: §6's four-toggle layout was
+> incidental, not a deliberate non-monotone requirement.** Nobody intended *"Critical +
+> Info but not Warning"* as a supported state, so the single combination Option C1 cannot
+> express is a combination nobody wants. **CF-38 closes**, and the **Option (a) fallback —
+> per-tier booleans, threshold retired, `send_diagnostic_notification` rewritten — is
+> withdrawn rather than deferred.**
+>
+> **What this unblocks concretely:** Week 7's S8 screen builds against
+> `{ threshold, insufficientEnabled }` with **no contingency branch**, the §6
+> reconciliation (Critical = Always floor + Warning/Info threshold control + standalone
+> Insufficient switch) proceeds as drawn, and Platform's additive `insufficient` boolean is
+> safe to ship in the CF-36/CF-29 migration pass without waiting on anything. The
+> designer's remaining §6 redline is **housekeeping, not a gate** — the shape it will
+> describe is already final.
+>
+> **Revised accounting: 39 entries; 6 closed (CF-12, CF-13, CF-22, CF-25, CF-07, CF-38),
+> 33 open.** The designer batch drops to **four decisions** (CF-24, CF-33, CF-34, CF-37)
+> plus CF-38's one redline.
 
 ---
 
@@ -487,14 +515,26 @@ original six:
 - **Cross-references:** `docs/08` Week-4 plan + close table; workdiary sessions
   29, 30 (recorded absent), Platform session 12 (built), 33 (re-verified present).
 
-### CF-38 — Three non-equivalent notification-preference models  *(RESOLVED as Option C1, 2026-08-02 — OPEN pending one designer intent-check)*
+### CF-38 — Three non-equivalent notification-preference models  *(RESOLVED as Option C1 — CLOSED 2026-08-03, designer intent-check answered)*
 
 - **Category:** Cross-track dependency / flag
 - **Origin:** Week 5 Day 5, session 36 (2026-08-02) — found while building the in-app
   new-DTC notification's preference gate.
-- **Current status: RESOLVED as Option C1 (founder decision, 2026-08-02) — but NOT closed.
-  One designer confirmation is outstanding, and it is the only thing that can still move
-  this entry.** Status label: **DECIDED-PENDING-DESIGNER-INTENT-CHECK.**
+- **Current status: RESOLVED as Option C1 (founder decision, 2026-08-02) and CLOSED
+  2026-08-03 — the designer intent-check is answered.** The four-toggle layout in design §6
+  was **incidental, not a deliberate non-monotone requirement**: nobody intended
+  *"Critical + Info but not Warning"* as a supported state. **C1 stands with no residual
+  risk of reopening, and the Option (a) fallback is withdrawn** — per-tier booleans are off
+  the table, `notification_severity_threshold` is not retiring, and
+  `send_diagnostic_notification`'s skip logic is not being rewritten.
+
+  **The shape is final — Week 7 can build S8 against it with no fallback branch.** The §6
+  reconciliation proceeds exactly as drawn below: **Critical = Always (a floor, rendered
+  without a toggle) + one Warning/Info threshold control + a standalone Insufficient
+  switch.** No conditional design work, no "pending confirmation" caveat on the migration,
+  and the one additive boolean column is safe to batch with the other Platform DTC-state
+  work. What C1 openly gives up — the inexpressible `{Critical, Info}` combination — is
+  now a confirmed non-requirement rather than an accepted risk.
 
   **The agreed model (C1).** Three parts, and the point of it is that each tier is stored
   by a mechanism that matches whether it is actually *ordered*:
@@ -520,19 +560,20 @@ original six:
   turns something off and it stays on. C1 changes the *model* instead of mapping between
   two mismatched ones — the threshold carries only tiers that are genuinely ordered, and
   the tier that isn't ordered gets its own storage. **Nothing is silently dropped at write
-  time.** What C1 gives up, it gives up openly, and that is the asterisk:
+  time.** What C1 gives up, it gives up openly — and that cost has now been checked and
+  accepted:
 
-  **⚠️ THE OPEN RESIDUAL — one question, and it is the whole reason this stays open.**
-  With Critical pinned on and Insufficient independent, the threshold's remaining job is
-  just Warning-vs-Info. So C1 can express `{Critical}`, `{Critical, Warning}` and
-  `{Critical, Warning, Info}` — but **not `{Critical, Info}`**, i.e. *"Info on, Warning
-  off"*. That single combination is the entire cost of C1.
-  **C1 is correct if and only if §6's four-toggle drawing was a default layout rather than
-  a deliberate non-monotone requirement.** If the designer confirms non-monotone *was*
-  intended — that "Critical + Info but not Warning" is a real case someone wants — then
-  **this flips to Option (a)**: per-tier booleans, the threshold retires, and
-  `send_diagnostic_notification`'s skip logic is rewritten. That is a materially bigger
-  change, which is exactly why the check happens **before** anyone writes the migration.
+  **✅ THE RESIDUAL — resolved 2026-08-03.** With Critical pinned on and Insufficient
+  independent, the threshold's remaining job is just Warning-vs-Info. So C1 can express
+  `{Critical}`, `{Critical, Warning}` and `{Critical, Warning, Info}` — but **not
+  `{Critical, Info}`**, i.e. *"Info on, Warning off"*. That single combination was the
+  entire cost of C1, and the entry stayed open on one question: **was §6's four-toggle
+  drawing a default layout, or a deliberate non-monotone requirement?**
+  **Answered: incidental.** The layout was not a considered decision to support
+  non-monotone selections, so the one state C1 cannot express is a state nobody wants.
+  The Option (a) contingency — per-tier booleans, threshold retired,
+  `send_diagnostic_notification` rewritten — **is withdrawn, not deferred.** The check
+  happened before anyone wrote the migration, which is what it was for.
 
   **One equivalence the designer and Platform are implicitly ratifying, flagged so it is
   not discovered later.** The single `insufficient` boolean will serve **two different
@@ -564,6 +605,8 @@ original six:
   representation. Separately, **`insufficient` has no place in the CHECK at all** — the
   column's three values are the §4.3 ladder, and the off-ladder tier the design gives its
   own toggle simply cannot be stored.
+  *(Historical — as of 2026-08-03 the design-side half of this conflict is settled: §6's
+  four-toggle model was incidental, and §6 reconciles to what C1 builds.)*
   Two things keep this from being urgent today. The App-side prefs are **in-memory and
   not yet bound to `user_preferences`** (there is no S8 screen — see CF-37's Week-7 note),
   so nothing is currently written to a column it doesn't fit. And the two paths are
@@ -575,17 +618,21 @@ original six:
   toggle entirely), and **(c)** keep both and persist the closest threshold (**rejected**:
   silently discards non-monotone states). **C1 is a refinement of (b) that does not lose the
   Insufficient toggle** — it keeps the threshold for the ranked tiers and gives the
-  off-ladder tier its own switch instead of dropping it. **(a) remains the fallback** if the
-  designer intent-check comes back "non-monotone was deliberate".
+  off-ladder tier its own switch instead of dropping it. ~~**(a) remains the fallback** if the
+  designer intent-check comes back "non-monotone was deliberate".~~ **(a) is withdrawn as of
+  2026-08-03** — the intent-check came back "incidental", so there is no fallback branch.
 
-- **What's needed to resolve — three work items, ALL INTERNAL. No hardware, AI-agent,
-  funding or external dependency gates this entry.** It is genuinely closable inside the
-  team, which is unusual for this file and is the reason it should not be allowed to drift.
-  1. **Designer — the intent-check (the blocking item).** Confirm §6's four-toggle layout
-     was **not** a deliberate non-monotone choice. Then reconcile §6 `S8` to describe what
-     C1 actually builds: **"Critical = Always (floor, no toggle) + a Warning/Info threshold
-     control + a standalone Insufficient switch."** Do this **in the same conversation as
-     CF-24, CF-33, CF-34 and CF-37** — five designer items now, one sitting.
+- **What's needed to resolve — the blocking question is answered; two build items remain,
+  BOTH INTERNAL.** No hardware, AI-agent, designer, funding or external dependency gates
+  this entry any longer. What is left is ordinary scheduled work.
+  1. ~~**Designer — the intent-check (the blocking item).**~~ **DONE 2026-08-03** —
+     confirmed the four-toggle layout was incidental, not a deliberate non-monotone
+     requirement. **Remaining and non-blocking:** reconcile the §6 `S8` drawing to describe
+     what C1 actually builds — **"Critical = Always (floor, no toggle) + a Warning/Info
+     threshold control + a standalone Insufficient switch."** This is a doc/redline
+     housekeeping item, not a decision; **Week 7 does not wait on it**, since the shape it
+     will describe is already final. Fold it into the designer sitting alongside CF-24,
+     CF-33, CF-34 and CF-37 — **that batch is now four decisions plus this one redline.**
   2. **Platform (Sulaiman) — one additive migration.** A single boolean column on
      `user_preferences` for `insufficient`, `DEFAULT false`, existing rows backfilling
      `false`. `notification_severity_threshold` is **untouched** and
@@ -604,10 +651,11 @@ original six:
      that has always driven this entry.
   `docs/05` § `user_preferences` and design §6 `S8` must end up describing the same model —
   that requirement is unchanged, C1 is just now the model they should both describe.
-- **Owner:** **Designer** (the intent-check — the one blocking input) → **Platform track**
-  (the additive boolean, batched with the CF-36/CF-29 migration pass) + **App track** (adapt
-  the prefs model; bind S8 in Week 7). Founder decision **taken 2026-08-02** — no longer an
-  open founder item.
+- **Owner:** **Platform track** (the additive boolean, batched with the CF-36/CF-29
+  migration pass) + **App track** (adapt the prefs model; bind S8 in Week 7). Founder
+  decision **taken 2026-08-02**; designer intent-check **answered 2026-08-03** — neither is
+  an open input any longer, and the designer's remaining §6 redline is housekeeping that
+  does not gate the build.
 - **Cross-references:** **CF-36** (the sibling `dtcs` state gap — **batch the Platform
   migration work**; the same Week-7 S8 screen is what forces both bindings); **CF-29** (the
   third column in that same Platform pass); **CF-30** and **CF-32** (the two different
@@ -618,7 +666,7 @@ original six:
   `unknown` ↔ "Insufficient" mapping); `docs/05` § `user_preferences`; **`docs/08` Week 7**
   ("Notification preferences screen") — the S8 build this unblocks — and the Week-6 handoff
   block; design §6 `S8` + §4.3; `supabase/functions/send_diagnostic_notification`;
-  PR #44 (opened); workdiary sessions 36, 39.
+  PR #44 (opened); workdiary sessions 36, 39, 41.
 
 ### CF-06 — `supabase/seed.sql` is cross-track-owned (clobber-risk flag)
 
