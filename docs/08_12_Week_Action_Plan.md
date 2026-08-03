@@ -577,6 +577,39 @@ worth moving before Day 1.
 
 The week most likely to surface contract gaps. Plan for friction.
 
+**Scoping note (2026-08-03) — the App-track build and the integration day are two
+different commitments, and only one of them is inside this repo's control. Read the
+week as such.**
+
+**The App track proceeds mock-first regardless, exactly as every prior week has.** The
+feed, Diagnostic detail, severity UI, insufficient-data treatment and the
+`agent_status`-driven notification surface all read `diagnostic_outputs`; none of them
+waits on Platform. Week 6 is done on the App side when those screens are done, and that
+judgement does not depend on whether a real agent ever runs during the week.
+
+**The "Together" integration day is gated on CF-03's Platform backlog landing on `main`
+first, and none of it is there.** Verified against `origin/main` `ee2dd43` on 2026-08-03:
+`supabase/migrations/` holds seven files, and **zero** of the seven required artifacts are
+among them — the `agent_role` migration (CF-04), `agent_work_queue` + its enqueue triggers,
+`telemetry.drive_id` + backfill, `referenced_telemetry_snapshot`, the `has_anomaly`
+trigger, the weekly deep-analysis pg_cron emitter, and the seven bug fixes from the agent
+project's repo review. The near-misses are not exceptions: `agent_role` appears in
+`rls_policies.sql` only as the forward reference CF-04 already records, and the schema's
+one `drive_id` is `diagnostic_outputs.referenced_drive_id`, a different column on a
+different table. See `docs/11_Carry_Forwards.md` § CF-03 for the full backlog and its
+provenance.
+
+**Integration day slipping to Week 7 or later is therefore the likely outcome, and this
+note records it as a scoping fact rather than a risk to be re-decided when it happens.**
+Seven items of Platform build-and-fix work, none of them started, sitting on top of Week
+6's own Platform column, is not a calendar week of work — and the last migration to reach
+`main` did so on 2026-07-08, nearly four weeks before this was written. When the slip
+arrives it needs no fresh decision, no re-planning session and no re-baselining: the App
+track keeps building mock-first, and integration day runs in the week after the backlog
+actually lands. What *would* warrant a decision is the opposite case — CF-03 still unbuilt
+several weeks from now, at which point the question is whether v1 ships against mocks, not
+whether Week 6 was met.
+
 ### App founder
 - [ ] AI feed screen: chronological diagnostic_outputs, filterable by severity/status/time
 - [ ] Diagnostic detail screen:
@@ -600,15 +633,26 @@ The week most likely to surface contract gaps. Plan for friction.
 - [ ] App subscribes to `agent_status` changes
 - [ ] Admin: agent activity feed, feedback aggregation (% thumbs up, top complained-about)
 
-### Together (Integration Day mid-week)
+### Together (Integration Day mid-week) — **contingent, see the scoping note above**
+
+Runs in the first week after CF-03's Platform backlog is on `main`, which per the scoping
+note is not expected to be this one. It is not cancelled and not descoped — it is
+scheduled against an event rather than a date.
+
 - [ ] Run real data through real agent → real diagnostics in real app
 - [ ] Find 5-10 contract gaps
 - [ ] Fix doc and both sides' code
 - [ ] Smoke test 10 realistic scenarios
 
 ### Definition of done — Week 6
-- App feels like an AI-powered product, not a data viewer
-- Real drive → real diagnostic → user can give feedback that flows to agent project
+
+**Week 6 closes on the first bullet alone.** The second is the integration day's DoD and
+travels with it to whichever week that lands in; Week 6 is not held open waiting for it.
+
+- App feels like an AI-powered product, not a data viewer — against mock
+  `diagnostic_outputs`, which is sufficient for this bullet
+- *(travels with integration day)* Real drive → real diagnostic → user can give feedback
+  that flows to agent project
 
 ---
 
