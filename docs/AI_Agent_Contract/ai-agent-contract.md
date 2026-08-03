@@ -77,8 +77,18 @@ One row per unit of work. `kind ∈ {routine, deep, dtc}`; `state ∈ {pending, 
 ### Cooldowns (unchanged from v0.1)
 ≤1 routine run per vehicle per hour; ≤1 deep run per vehicle per week; manual runs (v2) bypass cooldowns, rate-limited per user per day.
 
-### Deep analysis  **[DECISION REQUIRED #2]**
-v0.1/BUILD REQ promise a weekly per-vehicle deep-analysis emitter from the app project. **No such pg_cron job exists** (the cron migration schedules only downsample + two cleanups). Decide: **build the weekly `deep` enqueue**, or **cut deep analysis from v1** and document it as v2. A trigger nothing fires must not ship silently.
+### Routine vs deep: same channel, different jobs  *(resolved — build deep)*
+
+**Decision (2026-07-17): build the weekly deep emitter now** (not cut to v2). The app project adds a pg_cron job that, once a week, enqueues a `deep` row per active vehicle and fires the same `pg_notify('agent_trigger','')`.
+
+`routine` and `deep` share the wake-up channel and the claim loop, but are **not** the same job. The agent consumes them differently:
+
+- **Scope.** `routine` = the drives in one sync session (`sync_session_id` set). `deep` = the whole vehicle over a trailing window (`sync_session_id` NULL; agent derives the window — default trailing 7 days of drives). Different reads, prompt, and token budget.
+- **Enqueue shape.** `deep` rows set `kind='deep'`, `vehicle_id`, and leave `sync_session_id`/`dtc_id` NULL. The cron does one `INSERT ... SELECT` across active vehicles with `ON CONFLICT DO NOTHING` against the `(vehicle_id, kind) WHERE state='pending'` dedupe index (no doubling if a `deep` is already pending). Default cadence Sundays 02:00 UTC.
+- **Per-vehicle mutex (agent-side rule).** `agent_status` is keyed on `vehicle_id` alone (no `kind`), so a `routine` and a `deep` for the same vehicle must **not** run concurrently — they'd race on the status row. The claim loop takes a per-vehicle lock, not just per-row `SKIP LOCKED`.
+- **Priority (agent-side rule).** `deep` has no latency SLO (§10); `routine` has 60s. Under contention `routine` wins: claim ordering is `ORDER BY (kind='routine') DESC, enqueued_at`.
+
+None of the last two require app-side work — they're how the agent consumes the queue. Recorded here because they're contract-visible behaviour, not just implementation.
 
 ---
 
@@ -177,18 +187,25 @@ A **drive** is one ignition-cycle aggregate; `device_sync_complete` segments on 
 
 ## 11. Open decisions (carried, for the review)
 
-| # | Decision | Recommendation |
+| # | Decision | Status (2026-07-17) |
 |---|---|---|
 | 1 | Trigger mechanism | **Resolved → work queue (§4).** |
-| 2 | Deep analysis: build emitter or cut from v1 | Founder call; don't ship a silent no-op. |
-| 3 | `insufficient_data` temporary vs permanent | (a) copy convention for v1. |
-| 4 | Coolant threshold single source of truth | One source; app consumes validated value. |
+| 2 | Deep analysis: build or cut | **Resolved → build the weekly emitter (§4).** |
+| — | `has_anomaly` ownership | **Resolved → app-derived** via trigger on `diagnostic_outputs.severity`. Agent write surface stays `diagnostic_outputs` + `agent_status`. |
+| — | `referenced_telemetry_ids` vs 30-day purge | **Resolved → add `referenced_telemetry_snapshot jsonb`** (§5). App-side migration pending. |
+| — | `telemetry.drive_id` | **Resolved → add column + one-time backfill** (§3). App-side migration pending. |
+| 3 | `insufficient_data` temporary vs permanent | Open — recommend (a) copy convention for v1. |
+| 4 | Coolant threshold single source of truth | Open — one source; app consumes validated value. |
+| — | Hard safety thresholds (values) | Open — founder/domain research. Non-blocking: `unvalidated` gate keeps `critical` off until filled (§8). |
 
-**App-side changes v0.2 depends on** (all in `proposed-app-changes.md`): `agent_work_queue` + enqueue triggers; drop/replace `notify_agent` RPC; `telemetry.drive_id`; `referenced_telemetry_snapshot`; `has_anomaly` app-derived; plus the confirmed bug fixes (downsample cron, `peak_metrics` negative-seed, `vehicles.last_sync_at` write).
+**App-side changes v0.2 depends on**, routed to the Platform track, unbuilt on `main` as of 2026-07-17 (agent builds against these once landed): `agent_work_queue` + enqueue triggers; weekly `deep` pg_cron enqueue; drop/replace `notify_agent` RPC; `telemetry.drive_id` + backfill; `referenced_telemetry_snapshot`; `has_anomaly` app-derived trigger. Plus confirmed bug fixes (`findings-from-repo-review.md`): downsample cron (P0-1/2/3), `peak_metrics` negative-seed (P1-2), `vehicles.last_sync_at` write (P1-1).
+
+Until these land, the agent is built against a local Postgres with the shipped schema + these four migrations applied, and re-pinned to real DDL when Platform confirms column names/types.
 
 ---
 
 ## Changelog
 
+- **2026-07-17 (v0.2, decisions folded in):** Cross-project review with App track. Resolved: trigger = work queue (#1); deep analysis = build weekly emitter (#2); `has_anomaly` = app-derived; `referenced_telemetry_ids` = add `referenced_telemetry_snapshot`; `telemetry.drive_id` = add + backfill. Added routine/deep consumption split (§4). Remaining open: `insufficient_data` split (#3), coolant-threshold source (#4), hard threshold values (founder). App-side migrations routed to Platform track, unbuilt on `main`.
 - **2026-07-17 (v0.2, draft):** Reconciled with shipped schema (`20260602130000`). Adopted work-queue trigger (was Option A NOTIFY-only). Added canonical metric vocabulary (closes R22 / `TODO(metric-keys)`) and per-vehicle capability model. Recorded baselining + `safety_thresholds.yaml` with unvalidated safety gate. Recorded 5-min drive / 3-hour thermal-session split. Split `insufficient_data` into temporary/permanent. Corrected vehicle-context source (`vehicles.*`, not `vehicle_modifications`). Flagged nullable `recommended_action`/`referenced_drive_id`, telemetry-retention vs `referenced_telemetry_ids`, deep-analysis missing emitter, coolant-threshold dual source. 4 decisions marked for joint review.
 - **2026-05-XX (v0.1):** Initial draft (`06_AI_Agent_Contract.md`). Never jointly reviewed; superseded.
