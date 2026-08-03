@@ -212,13 +212,32 @@ original six:
   reads `ENV_DEFAULT` (i.e. `'mock'`) in `source.ts`; `create_vehicle` is still present
   among the 11 deployed Edge Functions. **Blocker: the App-side live wiring + E2E run,
   which itself waits on the `ecu_type` canonical-set question owned by the hardware track.**
-- **What's needed to resolve:** Platform deploys `create_vehicle`; both tracks
-  agree the contract's `ecu_type` open question (currently free text
-  `z.string().min(1).max(60)` until the hardware track locks a canonical set);
-  then App flips `DATA_SOURCE.createVehicle` → `'live'` in `source.ts`, wires
+
+  **Updated 2026-08-03 (later session — requiring `ecu_type`).** Two changes to this
+  item's picture:
+
+  1. **The `ecu_type` canonical-set question is resolved, and was never actually
+     open.** `vehicles.ecu_type` has carried
+     `CHECK (ecu_type IN ('oem','haltech','aem','motec','link','other'))` since the
+     initial schema migration. The "free text until the hardware track locks a set"
+     posture rested on reading `database.types.ts` (`string | null`) as proof of no
+     constraint — an invalid inference, since the generator never renders CHECKs. The
+     App side now validates `z.enum(ECU_TYPES)` against that exact set, so this is no
+     longer a blocker on anything.
+  2. **The "Platform half now DONE" status is too generous.** An audit of
+     `supabase/functions/create_vehicle/index.ts` against the contract found **six
+     conformance gaps**, all live-flip blockers — most consequentially, the function
+     defaults an absent `ecu_type` to `'oem'` (silently marking every car stock), and
+     it returns human error strings where the App orchestrator maps stable machine
+     codes, so all four device-specific error paths would collapse to `network`. The
+     full table is in `docs/create_vehicle_contract.md` § *Deployed implementation —
+     conformance gaps*. Treat the Platform half as **built but not contract-conformant.**
+- **What's needed to resolve:** Platform brings `create_vehicle` into conformance with
+  the contract (the six-gap table above); then App flips
+  `DATA_SOURCE.createVehicle` → `'live'` in `source.ts`, wires
   the live `fetch`, and runs the add-vehicle flow on-device with a claimed
   `device_id`, confirming a `vehicles` row with correct `owner_user_id` /
-  `device_id` / fields.
+  `device_id` / `ecu_type` / `modifications` / fields.
 - **Owner:** Platform track (Edge Function) + App track (live-branch wiring +
   E2E run).
 - **Cross-references:** `docs/08` Week-3 close table; `docs/05` `vehicles`
