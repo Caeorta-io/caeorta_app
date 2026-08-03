@@ -140,6 +140,27 @@ original six:
 > **Accounting:** 2 closed this pass + 1 already closed + 23 re-verified-open + 11 carried
 > unchanged + CF-26 (untouched by design) + CF-39 (new) = **39 entries; 3 closed, 36 open.**
 >
+> ---
+>
+> ### Amendment 2026-08-03 (session 38) — CF-22 closed won't-do
+>
+> **One entry moved after the sweep above, and the sweep was wrong about it.** Session 37
+> listed **CF-22** among the 23 "re-verified and left open", recording it as *confirmed
+> ready to close, held back only for PR scope*. Acting on that in session 38 found the
+> premise was wrong: **`expo-symbols` is a hard transitive dependency of `expo-router`**
+> (`expo-router@56.2.8` `package.json:157`), so removing our direct declaration removes
+> nothing from the tree. CF-22 is **CLOSED as won't-do**, not done — no dependency or
+> lockfile change shipped.
+>
+> **Worth generalising, because it is a failure mode this file is exposed to:** the
+> session-37 pass re-verified CF-22's *facts* correctly (unused by our code, still in
+> `package.json`) and never questioned the entry's *assumption* that the dependency was
+> ours to remove. **Re-verification confirms whether recorded facts still hold; it does not
+> check whether they still mean what the entry claims.** When an entry has carried the same
+> framing for months, the framing is the thing to re-read.
+>
+> **Revised accounting: 39 entries; 4 closed (CF-12, CF-13, CF-22, CF-25), 35 open.**
+>
 > **One status is inferred rather than directly observed — CF-17.** Prod Supabase state
 > cannot be read from this repo. The entry is left OPEN on the project's own record:
 > `docs/05` still lists both Week-5 migrations as "applied on dev, NOT on prod", and the
@@ -1238,7 +1259,7 @@ original six:
 - **Cross-references:** `docs/08` Section 0 status + Week-10; workdiary session 1
   open items.
 
-### CF-22 — `expo-symbols` removal
+### CF-22 — `expo-symbols` removal  *(CLOSED 2026-08-03 — won't-do)*
 
 - **Category:** Infra / tooling queued
 - **Origin:** Week 4, session 26 (PR #32) — lucide-react-native superseded the
@@ -1257,10 +1278,39 @@ original six:
   produce a build difference no doc review would catch. **Blocker: none technical. It wants
   its own small, isolated cleanup PR**, where a broken install is obvious and revertible in
   one commit. Do that and this entry closes immediately.
-- **What's needed to resolve:** Drop `expo-symbols` from `apps/mobile` in a
-  dependency-cleanup pass — **its own PR**, not folded into an unrelated one.
-- **Owner:** App track.
-- **Cross-references:** `docs/03`; workdiary sessions 26, 27, 28, 29, 30.
+- **CLOSED 2026-08-03 (session 38) — as WON'T-DO, and the session-37 status above was
+  wrong about the premise.** The isolated cleanup PR was attempted and **abandoned on a
+  finding**: `expo-symbols` is **not an optional dependency this project chose**. It is a
+  **hard transitive dependency of `expo-router`**, which is the app's routing foundation —
+  verified in `expo-router@56.2.8`'s own `package.json` line 157:
+  `"expo-symbols": "^56.0.5"`. The lockfile agrees: the `expo-symbols` entry inside the
+  `expo-router@56.2.8` snapshot is what actually installs it.
+  **What removal would and would not achieve**, measured by actually doing it:
+  - **Would:** delete the redundant *direct* declaration in `apps/mobile/package.json` and
+    its 3-line importer block in `pnpm-lock.yaml`.
+  - **Would NOT:** remove the package from the tree. `expo-symbols@56.0.5` stays in the
+    lockfile's `packages:` and `snapshots:` sections and stays on disk in
+    `node_modules/.pnpm/` — pulled by `expo-router` regardless. **No install-size, build-time
+    or native-surface saving whatsoever.** The only observable change is that
+    `apps/mobile/node_modules/expo-symbols` stops being a direct symlink.
+  **Why closed rather than left open:** this entry has been carrying a promise of a cleanup
+  that does not exist. The honest resolution is not "do it later" but "there is nothing
+  worth doing" — the original session-26 framing ("kept as a dependency, removable in a later
+  cleanup") assumed we owned the dependency, and we never did. Removing the direct
+  declaration is defensible as manifest hygiene, but it buys nothing and costs a native-app
+  dependency edit, so the founder's call (2026-08-03) was to leave the manifest alone.
+  **If it is ever revisited**, the argument would be manifest *correctness* — a direct
+  declaration implies a deliberate choice — not cleanup. It would still not remove anything.
+  Deleting `expo-router` is the only thing that removes `expo-symbols`, and that is not on
+  the table.
+- **What's needed to resolve:** Nothing — closed as won't-do. Not actionable while
+  `expo-router` is a dependency.
+- **Owner:** App track. *(Closed.)*
+- **Cross-references:** `expo-router@56.2.8` `package.json:157` (the transitive owner — the
+  evidence that closes this); `docs/03` § Icons (its "pending removal in a later cleanup"
+  note corrected in the same PR); `docs/conventions.md` § "Lockfile diffs" (the pnpm
+  peer-key-churn rule found while attempting this); workdiary sessions 26, 27, 28, 29, 30,
+  37 (flagged as ready-to-close), **38** (attempted, abandoned, closed).
 
 ---
 

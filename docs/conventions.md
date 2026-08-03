@@ -312,6 +312,53 @@ Use **lucide-react-native** via the **`Icon`** wrapper (`@/components/ui/Icon`):
 colour, the common 18-in-36-container pairing (§4.6). Pass colour **from a token**
 (`color={colorsDark.severity.warning}`), never a raw hex. This supersedes the earlier
 `expo-symbols` direction (SF Symbols are iOS-flavoured; this build is Android-only).
+Note `expo-symbols` is still installed and always will be — `expo-router` depends on it —
+so "unused by our code" does not mean "removable" (`docs/11` § CF-22).
+
+### Dependency removal — check who else declares it first
+
+Before removing a dependency because "nothing imports it", check whether something else in
+the tree **declares** it. Grepping `src/` for imports answers "do we use it", which is a
+different question from "would removing it change anything".
+
+- **`grep` the installed tree, not just your own source.** The check that settles it is
+  whether the package appears in another package's `dependencies` — in the lockfile, look
+  for it inside *other packages'* `snapshots:` blocks, not only in the `importers:` block
+  for your workspace. `expo-symbols` looked removable for three months on an
+  imports-only check; `expo-router` declares it, so removing our direct entry changes
+  nothing about what installs (CF-22, closed won't-do).
+- **A direct declaration that duplicates a transitive one is redundant, not load-bearing.**
+  Removing it is defensible as manifest hygiene — a direct entry implies a deliberate
+  choice — but say that's the reason. Don't sell it as a cleanup that saves install size,
+  because it doesn't.
+- **In a native app, weigh a no-benefit manifest edit against its cost.** Any
+  `package.json` change in `apps/mobile` is a change to what a dev build resolves. If the
+  benefit is zero, the correct answer is usually to leave it alone and write down why.
+
+### Lockfile diffs — commit what pnpm generates, don't hand-narrow
+
+A `pnpm install` that re-resolves will often touch lines unrelated to the dependency you
+changed. Most of it is **peer-resolution bookkeeping, not version drift**: pnpm re-keys a
+snapshot (`styled-jsx@5.1.6(react@19.2.4)` → `styled-jsx@5.1.6(@babel/core@7.29.7)(react@19.2.4)`)
+or records an already-present package as an optional peer.
+
+- **Read the diff before reacting.** Distinguish a **version change** (a package resolving
+  to a different version, or a genuinely new package entering the tree) from a **peer-key
+  re-hash** (same versions, different parenthesised keys, `transitivePeerDependencies`
+  gaining names already in the tree). Only the first is a real change; the second is
+  bookkeeping.
+- **Commit the regenerated file as-is** (founder call, 2026-08-03). Hand-editing the
+  lockfile to produce a narrow diff yields a file that no longer matches what
+  `pnpm install` generates, so the churn simply reappears for the next person — and the
+  hand-edited state is unreviewable, because nobody can regenerate it to compare.
+- **Latent drift is normal and is absorbed by the next real dependency change.** pnpm
+  short-circuits (`Already up to date`) when the lockfile satisfies every `package.json`,
+  so drift can sit unreflected for months and then surface all at once — attached to an
+  unrelated PR. That is expected. Note it in the PR body rather than trying to prevent it;
+  `--force` does **not** trigger a re-resolve.
+- **Verify causation before blaming your change.** If unrelated hunks appear, re-run the
+  resolve with a trivial *non-removing* edit (change a specifier to an equivalent value).
+  If the same hunks appear, they are pre-existing drift, not your doing.
 
 ### Interaction constants
 
