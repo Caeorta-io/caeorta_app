@@ -20,6 +20,7 @@
  *   opaque `Json`, so a key mismatch would NOT be caught by the compiler.
  * ─────────────────────────────────────────────────────────────────────────────
  */
+import { encodeModifications } from '@caeorta/types';
 import type { CreateVehicleInput, Dtc, DtcGrouping } from '@caeorta/types';
 import type { Tables } from '@caeorta/supabase';
 
@@ -79,8 +80,12 @@ export const mockVehicle = {
   model: 'GR Corolla',
   year: 2023,
   vin: 'JTDBR32E720123456',
-  ecu_type: 'denso-gen4',
-  modifications: [],
+  // Must be one of ECU_TYPES — the column CHECKs against exactly that set, so the old
+  // 'denso-gen4' fixture was a value the database would have rejected outright. A
+  // non-'oem' value also keeps the fixture representative of the modified cars the
+  // agent's baselining targets.
+  ecu_type: 'haltech',
+  modifications: { notes: 'Stage 2 tune, catback exhaust' },
   created_at: '2026-05-20T08:00:00.000Z',
 } satisfies Tables<'vehicles'>;
 
@@ -869,7 +874,10 @@ export function createMockVehicle(input: CreateVehicleInput): Tables<'vehicles'>
     year: input.year,
     vin: null,
     ecu_type: input.ecu_type,
-    modifications: [],
+    // Mirror the Edge Function's encoding step exactly — it receives `modifications`
+    // as a scalar string and wraps it into the jsonb column (or leaves the `'{}'`
+    // default). Sharing `encodeModifications` is what keeps mock and live agreeing.
+    modifications: encodeModifications(input.modifications),
     created_at: new Date().toISOString(),
   } satisfies Tables<'vehicles'>;
 }

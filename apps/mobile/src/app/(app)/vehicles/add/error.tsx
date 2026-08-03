@@ -56,6 +56,7 @@ export default function AddVehicleError() {
     year?: string;
     nickname?: string;
     ecu_type?: string;
+    modifications?: string;
     fields?: string;
   }>();
 
@@ -73,7 +74,10 @@ export default function AddVehicleError() {
         model: typeof params.model === 'string' ? params.model : '',
         year: typeof params.year === 'string' ? params.year : '',
         nickname: typeof params.nickname === 'string' ? params.nickname : '',
+        // The form re-narrows ecu_type against the enum on seed; anything unrecognised
+        // lands as "unselected" rather than as an invalid selection.
         ecu_type: typeof params.ecu_type === 'string' ? params.ecu_type : '',
+        modifications: typeof params.modifications === 'string' ? params.modifications : '',
       },
     });
   const backToPairing = () => router.replace('/pair');

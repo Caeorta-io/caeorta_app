@@ -1,8 +1,13 @@
 import { useCallback, useState } from 'react';
-import { ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-import { VEHICLE_YEAR_BOUNDS } from '@caeorta/types';
+import {
+  ECU_TYPES,
+  MAX_MODIFICATIONS_LENGTH,
+  VEHICLE_YEAR_BOUNDS,
+  type EcuType,
+} from '@caeorta/types';
 
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
@@ -20,16 +25,33 @@ import { createVehicle } from '@/lib/vehicles';
  *
  * Field validation mirrors `createVehicleInputSchema` exactly (one schema, three
  * consumers) and surfaces inline on blur — required fields don't wait for submit.
+ *
+ * `ecu_type` is a required single-choice picker rather than a text input: the column
+ * carries a CHECK constraint to exactly {@link ECU_TYPES}, and the agent keys its
+ * modified-vs-stock baselining off the value from drive one. `modifications` sits
+ * directly under it as optional prose — the agent reads it as LLM context, so it is
+ * surfaced rather than buried, but never blocks submission.
  */
 
-type FieldKey = 'make' | 'model' | 'year' | 'nickname' | 'ecu_type';
+/** Free-text inputs. `ecu_type` is excluded — it's a choice, held in its own state. */
+type FieldKey = 'make' | 'model' | 'year' | 'nickname' | 'modifications';
 
 const MAX_LEN: Record<Exclude<FieldKey, 'year'>, number> = {
   make: 100,
   model: 100,
   nickname: 60,
-  ecu_type: 60,
+  modifications: MAX_MODIFICATIONS_LENGTH,
 };
+
+/** Fields that may be left blank. Everything else is required. */
+const OPTIONAL_FIELDS: ReadonlySet<FieldKey> = new Set<FieldKey>(['modifications']);
+
+/** Narrow a round-tripped navigation param back onto the enum; anything else clears. */
+function asEcuType(value: unknown): EcuType | '' {
+  return typeof value === 'string' && (ECU_TYPES as readonly string[]).includes(value)
+    ? (value as EcuType)
+    : '';
+}
 
 export default function AddVehicleForm() {
   const { t } = useTranslation();
@@ -41,6 +63,7 @@ export default function AddVehicleForm() {
     year?: string;
     nickname?: string;
     ecu_type?: string;
+    modifications?: string;
   }>();
 
   const deviceId = typeof params.device_id === 'string' ? params.device_id : '';
@@ -52,9 +75,10 @@ export default function AddVehicleForm() {
     model: typeof params.model === 'string' ? params.model : '',
     year: typeof params.year === 'string' ? params.year : '',
     nickname: typeof params.nickname === 'string' ? params.nickname : '',
-    ecu_type: typeof params.ecu_type === 'string' ? params.ecu_type : '',
+    modifications: typeof params.modifications === 'string' ? params.modifications : '',
   }));
-  const [touched, setTouched] = useState<Partial<Record<FieldKey, boolean>>>({});
+  const [ecuType, setEcuType] = useState<EcuType | ''>(() => asEcuType(params.ecu_type));
+  const [touched, setTouched] = useState<Partial<Record<FieldKey | 'ecu_type', boolean>>>({});
   const [submitting, setSubmitting] = useState(false);
 
   // Returns a localized error for a single field, or null. Mirrors the Zod rules
@@ -73,23 +97,37 @@ export default function AddVehicleForm() {
         }
         return null;
       }
-      if (value.length === 0) return t('vehicles.add.fieldRequired');
+      if (value.length === 0) return OPTIONAL_FIELDS.has(key) ? null : t('vehicles.add.fieldRequired');
       if (value.length > MAX_LEN[key]) return t('vehicles.add.fieldTooLong', { max: MAX_LEN[key] });
       return null;
     },
     [t],
   );
 
+  // `ecu_type` isn't length-validated — it's either one of the enum values or unset.
+  const ecuError = ecuType === '' ? t('vehicles.add.ecuRequired') : null;
+
   const setField = (key: FieldKey) => (value: string) =>
     setValues((prev) => ({ ...prev, [key]: value }));
-  const markTouched = (key: FieldKey) => () =>
+  const markTouched = (key: FieldKey | 'ecu_type') => () =>
     setTouched((prev) => ({ ...prev, [key]: true }));
 
-  const isValid = (Object.keys(values) as FieldKey[]).every((k) => fieldError(k, values[k]) === null);
+  const isValid =
+    ecuError === null &&
+    (Object.keys(values) as FieldKey[]).every((k) => fieldError(k, values[k]) === null);
 
   const onSubmit = useCallback(async () => {
     // Surface every field's error at once if the user submits without blurring.
-    setTouched({ make: true, model: true, year: true, nickname: true, ecu_type: true });
+    // `modifications` is included even though it's optional: an over-long note still
+    // blocks submit, and without this the button would go dead with nothing showing why.
+    setTouched({
+      make: true,
+      model: true,
+      year: true,
+      nickname: true,
+      ecu_type: true,
+      modifications: true,
+    });
     if (!isValid || submitting) return;
 
     setSubmitting(true);
@@ -98,7 +136,12 @@ export default function AddVehicleForm() {
       model: values.model,
       year: Number(values.year),
       nickname: values.nickname,
-      ecu_type: values.ecu_type,
+      // Guarded by `isValid`; the empty case never reaches here, and the orchestrator
+      // would reject it anyway.
+      ecu_type: ecuType,
+      // Omit rather than send '' — the schema treats it as optional, and an empty
+      // string would encode to an empty note instead of leaving the jsonb default.
+      ...(values.modifications.trim() ? { modifications: values.modifications } : {}),
       device_id: deviceId,
     });
 
@@ -123,12 +166,13 @@ export default function AddVehicleForm() {
         code: result.error.code,
         device_id: deviceId,
         ...values,
+        ecu_type: ecuType,
         ...(result.error.code === 'validation_error'
           ? { fields: Object.keys(result.error.fieldErrors).join(', ') }
           : {}),
       },
     });
-  }, [deviceId, isValid, router, submitting, values]);
+  }, [deviceId, ecuType, isValid, router, submitting, values]);
 
   if (!deviceId) {
     return (
@@ -197,15 +241,29 @@ export default function AddVehicleForm() {
             autoCapitalize="sentences"
             editable={!submitting}
           />
-          <Field
+          <EcuPicker
             label={t('vehicles.add.ecuLabel')}
-            placeholder={t('vehicles.add.ecuPlaceholder')}
-            value={values.ecu_type}
-            onChangeText={setField('ecu_type')}
-            onBlur={markTouched('ecu_type')}
-            error={touched.ecu_type ? fieldError('ecu_type', values.ecu_type) : null}
             hint={t('vehicles.add.ecuHint')}
-            autoCapitalize="none"
+            optionLabel={(option) => t(`vehicles.add.ecuOptions.${option}`)}
+            selected={ecuType}
+            onSelect={(option) => {
+              setEcuType(option);
+              markTouched('ecu_type')();
+            }}
+            error={touched.ecu_type ? ecuError : null}
+            disabled={submitting}
+          />
+          <Field
+            label={t('vehicles.add.modificationsLabel')}
+            placeholder={t('vehicles.add.modificationsPlaceholder')}
+            value={values.modifications}
+            onChangeText={setField('modifications')}
+            onBlur={markTouched('modifications')}
+            error={touched.modifications ? fieldError('modifications', values.modifications) : null}
+            hint={t('vehicles.add.modificationsHint')}
+            optional={t('vehicles.add.optional')}
+            autoCapitalize="sentences"
+            multiline
             editable={!submitting}
           />
         </View>
@@ -226,8 +284,11 @@ interface FieldProps {
   onBlur: () => void;
   error: string | null;
   hint?: string;
+  /** When set, renders as an "Optional" affordance beside the label. */
+  optional?: string;
   keyboardType?: 'default' | 'number-pad';
   autoCapitalize?: 'none' | 'words' | 'sentences';
+  multiline?: boolean;
   editable?: boolean;
 }
 
@@ -240,17 +301,22 @@ function Field({
   onBlur,
   error,
   hint,
+  optional,
   keyboardType = 'default',
   autoCapitalize = 'none',
+  multiline = false,
   editable = true,
 }: FieldProps) {
   return (
     <View className="mb-4">
-      <Text className="mb-2 text-sm font-medium text-neutral-700">{label}</Text>
+      <View className="mb-2 flex-row items-baseline justify-between">
+        <Text className="text-sm font-medium text-neutral-700">{label}</Text>
+        {optional ? <Text className="text-xs text-neutral-400">{optional}</Text> : null}
+      </View>
       <TextInput
         className={`rounded-xl border px-4 py-3 text-base text-neutral-900 ${
           error ? 'border-red-400' : 'border-neutral-300'
-        }`}
+        } ${multiline ? 'h-24' : ''}`}
         value={value}
         onChangeText={onChangeText}
         onBlur={onBlur}
@@ -259,10 +325,77 @@ function Field({
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
         autoCorrect={false}
+        multiline={multiline}
+        textAlignVertical={multiline ? 'top' : 'center'}
         editable={editable}
       />
       {hint && !error ? <Text className="mt-1 text-xs text-neutral-400">{hint}</Text> : null}
       {error ? <Text className="mt-1 text-sm text-red-600">{error}</Text> : null}
+    </View>
+  );
+}
+
+interface EcuPickerProps {
+  label: string;
+  hint: string;
+  optionLabel: (option: EcuType) => string;
+  selected: EcuType | '';
+  onSelect: (option: EcuType) => void;
+  error: string | null;
+  disabled?: boolean;
+}
+
+/**
+ * Required single-choice picker over {@link ECU_TYPES}, rendered as a wrapping chip
+ * row. A picker rather than a text input for two reasons: the column's CHECK
+ * constraint admits only these six values, and a typed free-text ECU name was a
+ * guaranteed insert failure post-flip. There is deliberately no default selection —
+ * a pre-selected 'oem' would silently mark every modified car stock, which is exactly
+ * the cold-start failure this field exists to prevent.
+ */
+function EcuPicker({
+  label,
+  hint,
+  optionLabel,
+  selected,
+  onSelect,
+  error,
+  disabled = false,
+}: EcuPickerProps) {
+  return (
+    <View className="mb-4">
+      <Text className="mb-2 text-sm font-medium text-neutral-700">{label}</Text>
+      <View className="flex-row flex-wrap gap-2" accessibilityRole="radiogroup">
+        {ECU_TYPES.map((option) => {
+          const isSelected = option === selected;
+          return (
+            <Pressable
+              key={option}
+              onPress={() => onSelect(option)}
+              disabled={disabled}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: isSelected, disabled }}
+              className={`rounded-full border px-4 py-2 ${
+                isSelected
+                  ? 'border-blue-600 bg-blue-600'
+                  : error
+                    ? 'border-red-400'
+                    : 'border-neutral-300'
+              } ${disabled ? 'opacity-50' : 'active:opacity-80'}`}
+            >
+              <Text
+                className={`text-sm font-medium ${
+                  isSelected ? 'text-white' : 'text-neutral-700'
+                }`}
+              >
+                {optionLabel(option)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {!error ? <Text className="mt-2 text-xs text-neutral-400">{hint}</Text> : null}
+      {error ? <Text className="mt-2 text-sm text-red-600">{error}</Text> : null}
     </View>
   );
 }

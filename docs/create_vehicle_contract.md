@@ -31,12 +31,13 @@ client does not pass `user_id`** and cannot spoof the owner.
 
 ```jsonc
 {
-  "device_id": "uuid",   // the device being linked to this vehicle (from pairing)
-  "make":      "string",
-  "model":     "string",
-  "year":      0,         // integer
-  "nickname":  "string",
-  "ecu_type":  "string"
+  "device_id":     "uuid",   // the device being linked to this vehicle (from pairing)
+  "make":          "string",
+  "model":         "string",
+  "year":          0,         // integer
+  "nickname":      "string",
+  "ecu_type":      "string",  // REQUIRED, one of the canonical ECU set (below)
+  "modifications": "string"   // OPTIONAL free text; omitted when the user left it blank
 }
 ```
 
@@ -65,7 +66,12 @@ the user sees when more than one is true.
    - `model`    — non-empty, ≤ 100 chars
    - `year`     — integer, `1980 ≤ year ≤ currentYear + 1`
    - `nickname` — non-empty, ≤ 60 chars
-   - `ecu_type` — non-empty, ≤ 60 chars (free text in v1 — see Open question)
+   - `ecu_type` — **required**, exactly one of
+     `'oem' | 'haltech' | 'aem' | 'motec' | 'link' | 'other'` (see § ECU set below).
+     **Do not default an absent or unrecognised value** — reject it. Defaulting to
+     `'oem'` is worse than rejecting: it is an affirmative claim that the car is
+     stock, and the agent's baselining trusts it from drive one.
+   - `modifications` — optional; when present, a string ≤ 500 chars
    → on any failure: `validation_error` (422) with a `fieldErrors` map.
 
 > Validate fields server-side even though the client already does. The client check
@@ -78,10 +84,24 @@ Insert with the **service-role client** (RLS blocks direct inserts — see RLS n
 stamping the owner from `auth.uid()`:
 
 ```sql
-INSERT INTO vehicles (owner_user_id, device_id, make, model, year, nickname, ecu_type)
-VALUES (auth.uid(), $device_id, $make, $model, $year, $nickname, $ecu_type)
+INSERT INTO vehicles (owner_user_id, device_id, make, model, year, nickname, ecu_type, modifications)
+VALUES (auth.uid(), $device_id, $make, $model, $year, $nickname, $ecu_type,
+        CASE WHEN $modifications IS NULL OR btrim($modifications) = ''
+             THEN '{}'::jsonb
+             ELSE jsonb_build_object('notes', btrim($modifications)) END)
 RETURNING *;
 ```
+
+**`modifications` crosses the wire as a scalar string and is encoded server-side** into
+the jsonb column as `{"notes": "..."}`, or left at the `'{}'` default when blank. The
+client never sends raw jsonb — that keeps the body flat and length-checkable, and keeps
+the encoding decision in exactly one place. The app mirrors this encoding in its mock
+seam via `encodeModifications` in `packages/types/src/vehicle.ts`; **if you change the
+persisted shape, change it there in the same PR** or mock and live will disagree in a
+way that only surfaces after the `'live'` flip.
+
+`RETURNING *` is load-bearing — see the response note above. The app hands the returned
+row straight to the success screen and types it as the full `Tables<'vehicles'>`.
 
 Respond **HTTP 201** with the inserted row:
 
@@ -147,20 +167,76 @@ client for the privileged write). Consider an `audit_log` row on success
 - **E2E verification is gated on this function landing.** Until then the App screen is
   "built, not E2E-verified" — same status as Wi-Fi provisioning.
 
-## Open question (flagged, not blocking)
+## ECU set — RESOLVED (was the "open question")
 
-**`ecu_type` is free text in v1.** The `vehicles.ecu_type` column is a plain `text`
-column with no DB enum/CHECK (`database.types.ts` shows `ecu_type: string | null`; the
-mock fixture even uses `'denso-gen4'`, which isn't in the value-set listed in
-`docs/05`). The app therefore uses `z.string().min(1).max(60)`. If the Platform/
-hardware track wants to enforce a canonical ECU set, add a `CHECK` constraint to the
-`vehicles` migration **and** update `createVehicleInputSchema` to a matching
-`z.enum([...])`. **This must be agreed before any `'live'` flip** so the client and
-the DB agree on the allowed values.
+**`ecu_type` is enum-constrained, and always has been at the database level.** The
+column carries a CHECK constraint dating from the initial schema:
+
+```sql
+-- supabase/migrations/20260602130000_initial_schema.sql
+ecu_type text CHECK (ecu_type IN ('oem','haltech','aem','motec','link','other')),
+```
+
+The previous version of this section claimed the column was "plain `text` with no DB
+enum/CHECK", and the whole "free text until the hardware track locks a canonical set"
+posture followed from that. **The claim was wrong.** It was inferred from
+`database.types.ts` showing `ecu_type: string | null`, but Supabase's type generator
+only renders true Postgres enum *types* as string unions — it does not represent CHECK
+constraints at all. A nullable `text` column with a CHECK generates exactly that type.
+
+Consequences, now fixed:
+
+- The client's `z.string().min(1).max(60)` accepted values the database would reject
+  with a `23514` check violation on insert. The `'denso-gen4'` mock fixture was one
+  such value — it could never have been written to a real `vehicles` row.
+- `packages/types/src/vehicle.ts` now exports `ECU_TYPES` and validates
+  `ecu_type: z.enum(ECU_TYPES)`, mirroring the constraint exactly. A unit test pins
+  the set to the migration so the two can't drift silently.
+
+There is no longer a canonical-set question blocking the `'live'` flip. If the hardware
+track later wants to *extend* the set, that is a new migration plus a matching
+`ECU_TYPES` change in lockstep — the ordinary schema-change path, not an open question.
+
+Note the column remains **nullable** in Postgres. Requiring `ecu_type` is an
+application-level rule enforced in the Zod schema, the form, and this function; the
+database will still accept a NULL from any other writer.
+
+---
+
+## Deployed implementation — conformance gaps (Platform track)
+
+`supabase/functions/create_vehicle/index.ts` **exists on `main`** (Platform session 12,
+`1dc0589`). It is not yet contract-conformant. Audited 2026-08-03 while requiring
+`ecu_type` App-side; every item below is a **live-flip blocker**, because the App
+orchestrator (`apps/mobile/src/lib/vehicles.ts`) is built to this contract, not to the
+function as written. None of them break anything today — `DATA_SOURCE.createVehicle` is
+still `'mock'`, so the function is unreachable from the app.
+
+| # | Contract says | Function does | Effect on the live flip |
+|---|---|---|---|
+| 1 | `ecu_type` required; reject if absent/unknown | `ecu_type: ecu_type ?? 'oem'` | **Silently marks every car stock.** Defeats the agent's whole modified-vs-stock signal — an affirmative wrong claim, worse than a NULL, which is at least detectable as unknown. |
+| 2 | `modifications` arrives as a string, server wraps to `{"notes": …}` | `modifications: modifications ?? {}` — inserts the client value verbatim | Stores a bare JSON string instead of the `{notes}` object the agent reads. |
+| 3 | `error` carries a **stable machine code** (`not_device_owner`, `device_not_claimed`, `device_not_active`, `duplicate_vehicle`) | Human strings: `'Device not found'`, `'Device does not belong to you'`, `'Device is not active'`, `'Device already has a vehicle registered'` | **Every mapped error collapses to `network`.** `PASSTHROUGH_ERROR_CODES` matches the code strings exactly, so all four specific recovery paths in `add/error.tsx` become unreachable — the user gets "check your internet" for a device-ownership failure. |
+| 4 | 201 with the **complete** `vehicles` row (`RETURNING *`) | `.select('id, make, model, year, nickname, device_id, created_at')` | Response is missing `owner_user_id`, `vin`, `ecu_type`, `modifications`. The app types this as the full `Tables<'vehicles'>`. |
+| 5 | Field length/range checks → `validation_error` (422) + `fieldErrors` | No field validation at all; no 422 path | Out-of-range years and over-long strings reach the insert; the client's inline field errors have no server counterpart. |
+| 6 | `nickname` required, non-empty | `nickname: nickname ?? \`${make} ${model}\`` | Server invents a nickname the user never chose. |
+
+Also worth noting: the HTTP statuses on the device checks differ from the table above
+(404/403/403 vs. the contract's 400/403/400).
+
+**Owner:** Platform track. This is a follow-up PR against the function, not an App-track
+change — the App side of the contract is already built and unit-tested. Item 1 is the
+one that matters most for the agent; item 3 is the one that matters most for UX.
 
 ---
 
 ## Sulaiman's Claude Code prompt — paste-ready
+
+> **Historical note:** the prompt below commissioned the original build of this
+> function, which has since landed. It is kept for provenance. Task 4 has been
+> corrected in place (it previously told the session *not* to enforce an ECU enum,
+> which followed from the mistaken "no CHECK constraint" reading). For the work that
+> remains, see **Deployed implementation — conformance gaps** above.
 
 > Paste the block below into a Platform-track Claude Code session. It is the handoff
 > artefact: this contract doc IS the spec, and the prompt points the session at it.
@@ -206,10 +282,11 @@ TASKS
 3. Update docs/05_Database_Schema.md's vehicles Platform-track note to document the
    new write-path (alongside vehicles_no_direct_insert), per the same-PR doc-update
    convention in CLAUDE.md / docs/conventions.md.
-4. Do NOT enforce an ecu_type enum/CHECK unless we have first agreed the canonical set
-   (see the contract's Open question) and updated both the migration and
-   packages/types/src/vehicle.ts in lockstep. If you think the set should be locked,
-   surface it — don't add it unilaterally.
+4. Enforce ecu_type as a required enum matching the migration's existing CHECK
+   ('oem','haltech','aem','motec','link','other'). Reject an absent or unrecognised
+   value with validation_error — do NOT default it to 'oem'. Accept modifications as
+   an optional string (≤ 500 chars) and encode it into the jsonb column as
+   {"notes": "..."} , leaving the '{}' default when blank.
 
 ASK BEFORE PROCEEDING
 - If devices.status uses values other than 'active'/'unclaimed' than the contract

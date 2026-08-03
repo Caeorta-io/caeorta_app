@@ -125,8 +125,8 @@ A car owned by a user, paired with a device.
 | year | int | e.g. 2016 |
 | vin | text | Read from OBD |
 | nickname | text | User-chosen, e.g. "My Daily" |
-| ecu_type | text | 'oem' \| 'haltech' \| 'aem' \| 'motec' \| 'link' \| 'other' |
-| modifications | jsonb | Free-form for now; itemize in v2 |
+| ecu_type | text | `CHECK (ecu_type IN ('oem','haltech','aem','motec','link','other'))` — enforced in the DB since the initial schema. Nullable in Postgres, but **required at the application layer** (Zod `z.enum(ECU_TYPES)` + the add-vehicle form). Note `database.types.ts` renders this as `string \| null`: the generator does not represent CHECK constraints, so the generated type is not evidence the column is unconstrained. |
+| modifications | jsonb | Free-form; itemize in v2. Written as `{"notes": "<user text>"}` by `create_vehicle`, or `{}` when blank. Read by the agent as LLM prose context — deterministic code keys on `ecu_type` instead. |
 | created_at | timestamptz | |
 
 > ⚠️ **Platform-track note:** a `create_vehicle` Edge Function is planned for v1. Once it lands, update this section to document the new write-path alongside `vehicles_no_direct_insert`. The App-track add-vehicle screen (Week 3) is built against this function's contract; the function itself is Sulaiman's to build.

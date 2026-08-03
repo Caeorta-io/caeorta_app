@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { ECU_TYPES } from '@caeorta/types';
 
 import { createVehicle } from '../vehicles';
 import { DATA_SOURCE } from '../data/source';
@@ -8,7 +9,7 @@ const validInput = {
   model: 'GR Corolla',
   year: 2023,
   nickname: 'Project Hachi',
-  ecu_type: 'denso-gen4',
+  ecu_type: 'haltech',
   device_id: '22222222-2222-4222-8222-222222222222',
 };
 
@@ -56,14 +57,15 @@ describe('createVehicle (orchestrator)', () => {
     expect(vehicle.model).toBe('GR Corolla');
     expect(vehicle.year).toBe(2023);
     expect(vehicle.nickname).toBe('Project Hachi');
-    expect(vehicle.ecu_type).toBe('denso-gen4');
+    expect(vehicle.ecu_type).toBe('haltech');
     expect(vehicle.device_id).toBe(validInput.device_id);
     // …and is a complete, db-shaped row.
     expect(typeof vehicle.id).toBe('string');
     expect(typeof vehicle.owner_user_id).toBe('string');
     expect(typeof vehicle.created_at).toBe('string');
     expect(vehicle.vin).toBeNull();
-    expect(vehicle.modifications).toEqual([]);
+    // Column default when no note was entered — not an empty array.
+    expect(vehicle.modifications).toEqual({});
   });
 
   it('maps a thrown seam error (live not-implemented) onto network', async () => {
@@ -72,5 +74,77 @@ describe('createVehicle (orchestrator)', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.code).toBe('network');
+  });
+
+  // ── ecu_type gate ─────────────────────────────────────────────────────────
+  // The add-vehicle screen cannot complete without a selection: the orchestrator is
+  // the single choke point every submission passes through, so rejecting here is what
+  // makes the requirement real rather than merely a UI convention.
+
+  it('refuses to create a vehicle when ecu_type is absent', async () => {
+    const withoutEcu: Record<string, unknown> = { ...validInput };
+    delete withoutEcu.ecu_type;
+
+    const result = await createVehicle(withoutEcu);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('validation_error');
+    if (result.error.code !== 'validation_error') return;
+    // The form keys its inline highlight off this field key.
+    expect(result.error.fieldErrors.ecu_type).toBeDefined();
+    expect(result.error.fieldErrors.ecu_type ?? []).not.toHaveLength(0);
+  });
+
+  it('refuses an empty-string ecu_type — the unselected picker state', async () => {
+    const result = await createVehicle({ ...validInput, ecu_type: '' });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('validation_error');
+    if (result.error.code !== 'validation_error') return;
+    expect(result.error.fieldErrors.ecu_type).toBeDefined();
+  });
+
+  it('refuses an ecu_type outside the canonical set the column CHECKs against', async () => {
+    const result = await createVehicle({ ...validInput, ecu_type: 'denso-gen4' });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('validation_error');
+  });
+
+  it('accepts every canonical ECU value end-to-end through the mock seam', async () => {
+    for (const ecuType of ECU_TYPES) {
+      const result = await createVehicle({ ...validInput, ecu_type: ecuType });
+      expect(result.ok, `expected ecu_type '${ecuType}' to be accepted`).toBe(true);
+      if (!result.ok) continue;
+      expect(result.vehicle.ecu_type).toBe(ecuType);
+    }
+  });
+
+  // ── modifications ─────────────────────────────────────────────────────────
+
+  it('creates successfully without modifications — it is optional', async () => {
+    const result = await createVehicle(validInput);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.vehicle.modifications).toEqual({});
+  });
+
+  it('carries a modifications note through as the jsonb the agent reads', async () => {
+    const result = await createVehicle({
+      ...validInput,
+      modifications: 'Stage 2 tune, catback exhaust',
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.vehicle.modifications).toEqual({ notes: 'Stage 2 tune, catback exhaust' });
+  });
+
+  it('rejects an over-long modifications note', async () => {
+    const result = await createVehicle({ ...validInput, modifications: 'a'.repeat(501) });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('validation_error');
+    if (result.error.code !== 'validation_error') return;
+    expect(result.error.fieldErrors.modifications).toBeDefined();
   });
 });
