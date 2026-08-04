@@ -2403,3 +2403,59 @@ create_vehicle
   check with gh auth status before assuming a 403 is a permissions/access problem
 - docs/create_vehicle_contract.md is the authoritative spec for this function, written
   by the App track — Platform should read it fully before touching create_vehicle again
+
+---
+
+### 2026-08-03 (continued) — remaining Platform bugs from AI agent contract review (session 15)
+
+**Goal of session:** Close the remaining 4 of 5 documented Platform bugs (P0-4 notify_agent + 3 device_sync_complete bugs + downsample cron).
+
+**Done:**
+1. notify_agent (P0-4, security): REVOKE EXECUTE FROM PUBLIC/anon/authenticated, GRANT to
+   service_role only, pinned search_path. Verified via pg_proc.proacl before/after —
+   anon and authenticated no longer present. Took 2 migrations (first REVOKE FROM PUBLIC
+   alone was insufficient — Supabase's default privileges grant anon/authenticated
+   separately at function creation, confirmed by re-checking proacl after migration 1).
+2. peak_metrics zero-seeding: fixed Math.max(x ?? 0, val) → seeds from first value per
+   key instead of hardcoded 0. Negative-peaking metrics (boost under vacuum, sub-zero
+   temps, negative fuel trims) now record correctly.
+3. sync_sessions false-complete: added driveInsertFailed tracking, session now marked
+   'failed' (not 'completed') when drive insert breaks, error_message populated,
+   agent notification skipped on failure.
+4. last_sync_at wrong table: removed the vehicles.last_sync_at write (column doesn't
+   exist there — silent no-op every time). devices.last_sync_at remains as the
+   single correct write.
+5. downsample-old-telemetry cron: root cause was bare `timestamp` selected while
+   grouping by date_trunc('minute', timestamp) — 100% failure rate since creation,
+   confirmed via cron.job_run_details. Rewrote using CTEs: capture raw row ids,
+   aggregate, insert, delete by captured ids (no more shape-guessing DELETE or
+   ON CONFLICT with no unique constraint). Manually verified the aggregation query
+   against live telemetry — 20 raw rows correctly rolled into 2 per-minute buckets.
+
+**All 5 documented Platform bugs from docs/AI_Agent_Contract/findings-from-repo-review.md
+and README.md now closed.**
+
+**Also:** pulled 16 commits from Raslan, resolved pnpm-workspace.yaml merge conflict,
+fixed GitHub CLI account mismatch (user128-debug was active instead of Caeorta-dev).
+
+**Open items rolled forward:**
+- CF-29 Pending-state schema — Raslan's session recorded founder decision for Option C1,
+  need to confirm exact spec before touching dtcs schema
+- 7 CF-03 platform artifacts confirmed absent from main (per Raslan's Aug 3 session) —
+  still need the actual list
+- AI agent contract v0.2 — work-queue design (agent_work_queue table + enqueue triggers)
+  proposed to replace notify_agent RPC entirely; not yet built, current fix is a
+  stopgap lockdown, not the final architecture
+- Deep analysis emitter — no weekly pg_cron job exists despite BUILD REQ promising one;
+  founder decision needed: build it or cut deep analysis from v1
+
+**Notes / lessons:**
+- REVOKE EXECUTE FROM PUBLIC does not remove Supabase's automatic anon/authenticated
+  grants on new functions — always verify via pg_proc.proacl after any REVOKE, don't
+  assume PUBLIC-only revoke is sufficient
+- pg_cron failures are silent by default (fail into cron.job_run_details, no alert) —
+  query cron.job_run_details directly to check real job health, don't trust that a
+  scheduled job is a working job
+- str_replace-style Python text matching needs exact whitespace verification via
+  cat -A before writing replacement patterns — assumed blank lines that weren't
+  actually present caused 2 failed attempts before the fix landed
