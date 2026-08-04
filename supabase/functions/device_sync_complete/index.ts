@@ -99,7 +99,12 @@ serve(async (req) => {
               const m = row.metrics as Record<string, number>;
               for (const [key, val] of Object.entries(m)) {
                 if (typeof val === 'number') {
-                  peakMetrics[key] = Math.max(peakMetrics[key] ?? 0, val);
+                  // Seed from the value itself on first sight, not 0 — a metric
+                  // that only ever goes negative (boost under vacuum, sub-zero
+                  // temps, negative fuel trims) must not record a false peak of 0.
+                  peakMetrics[key] = key in peakMetrics
+                    ? Math.max(peakMetrics[key], val)
+                    : val;
                   sumMetrics[key] = (sumMetrics[key] ?? 0) + val;
                   countMetrics[key] = (countMetrics[key] ?? 0) + 1;
                 }
@@ -129,6 +134,7 @@ serve(async (req) => {
 
     // Insert drives
     let drivesCreated = 0;
+    let driveInsertFailed = false;
     if (drives.length > 0) {
       const { error: drivesError } = await adminClient
         .from('drives')
@@ -136,6 +142,7 @@ serve(async (req) => {
 
       if (drivesError) {
         console.error('drives insert error:', drivesError);
+        driveInsertFailed = true;
       } else {
         drivesCreated = drives.length;
       }
@@ -147,21 +154,21 @@ serve(async (req) => {
       .select('id', { count: 'exact', head: true })
       .eq('sync_session_id', session_id);
 
-    // Mark session completed
+    // Mark session 'failed' if drive insertion broke, so the agent (or a
+    // human) can tell a genuinely empty sync from a broken one.
+    const finalStatus = driveInsertFailed ? 'failed' : 'completed';
     await adminClient
       .from('sync_sessions')
       .update({
-        status: 'completed',
+        status: finalStatus,
         completed_at: new Date().toISOString(),
+        error_message: driveInsertFailed ? 'Drive insertion failed — see function logs' : null,
       })
       .eq('id', session_id);
 
-    // Update vehicle last_sync_at
-    await adminClient
-      .from('vehicles')
-      .update({ last_sync_at: new Date().toISOString() })
-      .eq('id', session.vehicle_id);
-
+    // NOTE: last_sync_at lives on `devices`, not `vehicles` — the vehicles
+    // table has no such column, so a prior vehicles.last_sync_at write here
+    // was a silent no-op. Removed; devices below is the correct target.
     // Update device last_sync_at and last_seen_at
     await adminClient
       .from('devices')
