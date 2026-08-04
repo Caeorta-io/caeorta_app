@@ -76,3 +76,5 @@ supabase/.temp/
 *.tgz
 .cache/
 .turbo/
+.vercel
+.env*
