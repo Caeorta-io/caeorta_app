@@ -2354,3 +2354,52 @@ create_vehicle
 **Open items rolled forward:**
 - Week 6: AI agent trigger wiring — needs AI agent project coordination
 - Raslan is on Week 5 Day 1 (diagnostic card component) — will benefit from dtc_lookup for DTC detail screen (S6)
+---
+
+### 2026-08-03 — create_vehicle full contract conformance (session 14)
+
+**Goal of session:** Fix the ecu_type silent-default bug flagged in the App-track AI agent contract review; discovered full conformance audit in docs/create_vehicle_contract.md and fixed all 6 gaps.
+
+**Found:**
+- Raslan's session on 2026-08-03 audited the deployed create_vehicle function against
+  the contract and found 6 conformance gaps, all documented in docs/create_vehicle_contract.md
+- Gap #1 (ecu_type ?? 'oem') was flagged as the most consequential — it silently marks
+  every vehicle as stock, defeating the AI agent's modified-vs-stock baselining (contract §8)
+
+**Done:**
+- Rewrote supabase/functions/create_vehicle/index.ts to full contract conformance:
+  1. ecu_type required, validated against canonical set (oem/haltech/aem/motec/link/other),
+     never defaulted — rejects with validation_error if absent or invalid
+  2. modifications now encoded server-side as {notes: "..."} jsonb (was inserting raw string)
+  3. Error responses now carry stable machine codes matching the contract table exactly:
+     not_device_owner (403), device_not_claimed (400), device_not_active (400),
+     duplicate_vehicle (409) — was human-readable strings that all collapsed to 'network' app-side
+  4. Success response returns full vehicles row via select('*') — matches RETURNING *
+  5. Field validation added: make/model/nickname length checks, year range (1980-currentYear+1),
+     modifications length — returns validation_error (422) + fieldErrors map on failure
+  6. nickname now required, never auto-generated from make+model
+- Deployed (commit 16f082c)
+
+**Also this session:**
+- Pulled 16 commits from Raslan — Week 5 DTC screens, diagnostic card, AI agent contract docs
+- Resolved pnpm-workspace.yaml merge conflict (kept upstream comment, content was identical)
+- Fixed GitHub CLI account mismatch (user128-debug was active instead of Caeorta-dev) blocking push
+
+**Open items rolled forward:**
+- CF-29 Pending-state schema — Raslan's session recorded founder decision for Option C1
+  (monotone threshold + separate insufficient boolean), NOT the Option B I was steering
+  toward earlier. Need to confirm C1 spec with Raslan before touching dtcs schema.
+- 5 more Platform bugs from AI agent contract review still open: notify_agent permission
+  hole (security), downsample cron never succeeding, peak_metrics zero-seeding,
+  last_sync_at writing to nonexistent column, sync sessions marked complete on failed inserts
+- 7 CF-03 platform artifacts confirmed absent from main as of Raslan's Aug 3 session —
+  need the actual list from docs/11_Carry_Forwards.md
+
+**Notes / lessons:**
+- Bash history expansion (!) inside double-quoted python -c strings breaks silently —
+  use heredoc files (cat > /tmp/x.py << 'PYEOF') instead of inline python -c for any
+  script containing ! in TypeScript/array literals
+- gh auth status can show multiple logged-in accounts with the wrong one active —
+  check with gh auth status before assuming a 403 is a permissions/access problem
+- docs/create_vehicle_contract.md is the authoritative spec for this function, written
+  by the App track — Platform should read it fully before touching create_vehicle again
