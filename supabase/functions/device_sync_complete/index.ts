@@ -204,14 +204,10 @@ serve(async (req) => {
       })
       .eq('id', device_id);
 
-    // Notify AI agent via pg_notify
-    await adminClient.rpc('notify_agent', {
-      p_session_id: session_id,
-      p_vehicle_id: session.vehicle_id,
-    }).then(() => {}).catch((e: unknown) => {
-      // Non-fatal — agent will poll as fallback
-      console.warn('notify_agent failed:', e);
-    });
+    // Agent notification is now handled entirely by the
+    // sync_session_completed_enqueue trigger (fires atomically on the
+    // sync_sessions status update above, in the same transaction) --
+    // notify_agent RPC is retired. See migration 20260804000005.
 
     return okResponse({
       drives_created: drivesCreated,
