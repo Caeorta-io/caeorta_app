@@ -71,6 +71,9 @@ serve(async (req) => {
       summary_metrics: Record<string, number>;
       has_anomaly: boolean;
     }> = [];
+    // Parallel array, same index as `drives` — the telemetry row ids that
+    // belong to each drive. Populated below telemetry.drive_id after insert.
+    const driveTelemetryIds: string[][] = [];
 
     if (telemetry && telemetry.length > 0) {
       let driveStart = 0;
@@ -126,25 +129,48 @@ serve(async (req) => {
               summary_metrics: avgMetrics,
               has_anomaly: false,
             });
+            driveTelemetryIds.push(driveTelemetry.map((row) => row.id));
           }
           driveStart = i;
         }
       }
     }
 
-    // Insert drives
+    // Insert drives one at a time (not a batch insert) so we get each row's
+    // generated id back immediately -- needed to backfill telemetry.drive_id
+    // on the matching rows. Cost is negligible: drives per sync session is a
+    // handful at most, not hundreds.
     let drivesCreated = 0;
     let driveInsertFailed = false;
-    if (drives.length > 0) {
-      const { error: drivesError } = await adminClient
+    for (let i = 0; i < drives.length; i++) {
+      const { data: insertedDrive, error: driveError } = await adminClient
         .from('drives')
-        .insert(drives);
+        .insert(drives[i])
+        .select('id')
+        .single();
 
-      if (drivesError) {
-        console.error('drives insert error:', drivesError);
+      if (driveError || !insertedDrive) {
+        console.error('drive insert error:', driveError);
         driveInsertFailed = true;
-      } else {
-        drivesCreated = drives.length;
+        continue;
+      }
+
+      drivesCreated++;
+
+      const telemetryIds = driveTelemetryIds[i];
+      if (telemetryIds && telemetryIds.length > 0) {
+        const { error: backfillError } = await adminClient
+          .from('telemetry')
+          .update({ drive_id: insertedDrive.id })
+          .in('id', telemetryIds);
+
+        if (backfillError) {
+          // Non-fatal: the drive and its metrics are already correctly
+          // inserted. A missing drive_id only degrades get_drive_telemetry
+          // back to the older sync_session_id + timestamp-range convention
+          // for these specific rows, it does not lose or corrupt data.
+          console.error('telemetry.drive_id backfill error:', backfillError);
+        }
       }
     }
 
