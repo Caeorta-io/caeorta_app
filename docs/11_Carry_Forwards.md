@@ -880,10 +880,30 @@ original six:
   silently vanish, it stands visibly empty. It does **not** weaken the gate — the copy is
   still a stopgap for a group with no live source, and the founder decision is still what
   resolves this entry.
+- **Founder decision 2026-08-03 (Platform session 16) — RESOLVED: cut Pending from
+  v1.** Option (b) taken. Rationale: Pending is a real OBD-II hardware behaviour (ECU
+  marks a code pending after one failed drive cycle, confirms it after a second) —
+  doing it properly means the device firmware must actually distinguish and report
+  that distinction, which is unconfirmed. Adding a schema column ahead of that
+  confirmation risks a UI element that either always reads false or has to be faked,
+  which is worse than not having the group at all for a pilot of car-literate users
+  who would notice. No Platform schema work follows from this entry — the `dtcs`
+  table needs no pending/confirmed column. **CF-36 is NOT batched with a CF-29
+  migration** (there is none); CF-36's own column (seen/ack state) is unaffected and
+  proceeds on its own schedule.
+  **App-side action (not yet done — Platform cannot execute this half):** the two-edit
+  change described above — narrow `DTC_GROUPINGS` in `@caeorta/types/dtc.ts` to
+  `'active' | 'history'`, delete `MOCK_PENDING_DTC_IDS` and the `toMockDtc` overlay
+  branch in `mocks.ts`. Design §6 `S5` should be amended to two sections. Until the App
+  half lands, the mock-only Pending group keeps rendering (harmless — it is not on
+  `main`'s live path) but should be removed promptly so the codebase reflects the
+  decision. **CF-29 can be marked CLOSED once the App-side two-edit change ships** —
+  this entry stays open until then, since the decision alone doesn't change what's on
+  `main`.
 - **Cross-references:** R24 (#1); design §6 `S5`; `packages/types/src/dtc.ts`
   `TODO(dtc-pending)`; `MOCK_PENDING_DTC_IDS` in `mocks.ts`; `groupDtcs` in
   `apps/mobile/src/lib/dtc.ts`; the `fetchDtcs` live-adapter note in `source.ts`;
-  workdiary sessions 33, 34.
+  workdiary sessions 33, 34, 16 (Platform).
 
 ### CF-36 — DTC seen/ack state has no schema backing — the acknowledged-set is App-local
 

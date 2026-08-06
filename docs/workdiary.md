@@ -2459,3 +2459,37 @@ fixed GitHub CLI account mismatch (user128-debug was active instead of Caeorta-d
 - str_replace-style Python text matching needs exact whitespace verification via
   cat -A before writing replacement patterns — assumed blank lines that weren't
   actually present caused 2 failed attempts before the fix landed
+
+---
+
+### 2026-08-04 — CF-29 founder decision: cut Pending from v1 (session 16)
+
+**Goal of session:** Resolve CF-29 (Pending DTC state) — the founder decision that
+was blocking any live-flip of DATA_SOURCE.dtcs.
+
+**Decision taken:** Option (b) — cut the Pending group from v1 entirely. S5 goes from
+three sections (Active/Pending/History) to two (Active/History).
+
+**Reasoning:** Pending is a genuine OBD-II hardware behaviour, not a UI nicety — doing
+it properly requires the device firmware to distinguish and report pending-vs-confirmed,
+which is unconfirmed capability. Adding a dtcs schema column ahead of that confirmation
+risks a UI element that's either always false or faked — worse than omitting it,
+especially for a pilot of car-literate users who would notice a fake Pending state.
+
+**What this resolves:**
+- No Platform schema work needed for CF-29 — dtcs table needs no pending/confirmed column
+- CF-36 (seen/ack state) is NOT batched with a CF-29 migration, since there is none —
+  CF-36 proceeds independently
+- Recorded the decision directly in docs/11_Carry_Forwards.md CF-29 entry
+
+**Still needed (App-side, Raslan's to execute):**
+- Narrow DTC_GROUPINGS type in @caeorta/types/dtc.ts to 'active' | 'history'
+- Delete MOCK_PENDING_DTC_IDS + toMockDtc overlay branch in mocks.ts
+- Amend design §6 S5 to two sections
+- CF-29 stays open in the registry until the App-side two-edit change ships —
+  the decision alone doesn't change what's on main
+
+**Next Platform items:**
+- 7 missing CF-03 artifacts — still need to pull the list
+- AI agent work-queue architecture (replaces notify_agent RPC properly)
+- Deep analysis emitter — separate founder decision still needed (build vs cut for v1)
