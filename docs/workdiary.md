@@ -2493,3 +2493,90 @@ especially for a pilot of car-literate users who would notice a fake Pending sta
 - 7 missing CF-03 artifacts — still need to pull the list
 - AI agent work-queue architecture (replaces notify_agent RPC properly)
 - Deep analysis emitter — separate founder decision still needed (build vs cut for v1)
+
+---
+
+### 2026-08-06 — AI agent work-queue architecture (session 17)
+
+**Goal of session:** Build the full agent_work_queue architecture proposed in
+docs/AI_Agent_Contract/proposed-app-changes.md, replacing notify_agent's
+SECURITY DEFINER RPC pattern with a durable, trigger-based queue.
+
+**Context:** Following session 15/16's lockdown of notify_agent (P0-4, immediate
+stopgap: REVOKE EXECUTE), this session built the AI agent project's proposed
+structural fix — the queue design that "fixes both structurally: enqueue moves
+to a table trigger and the RPC can be dropped entirely."
+
+**Done, in dependency order:**
+
+1. **agent_role** (20260804000001) — applied the AI agent project's pre-written,
+   pre-reviewed migration (docs/AI_Agent_Contract/20260717000000_create_agent_role.sql)
+   as-is, after resolving its 2 flagged open questions as founder decisions:
+   - Q-A: confirmed vehicles.ecu_type + vehicles.modifications is the real v1
+     car-context signal (consistent with the same-day create_vehicle fix)
+   - Q-B: drives.has_anomaly is APP-derived from diagnostic_outputs severity,
+     NOT agent-written — agent's write surface stays exactly diagnostic_outputs
+     + agent_status, matching BUILD REQ §1's rigid contract
+   Verified via pg_roles (LOGIN, NOBYPASSRLS) and pg_policies (13 policies,
+   correctly no UPDATE grant on drives).
+
+2. **agent_work_queue** (20260804000002) — durable queue table, pending partial
+   index, dedupe unique partial index (vehicle_id, kind WHERE pending). RLS:
+   agent_role gets SELECT+UPDATE only, no INSERT — only triggers/cron create rows.
+
+3. **Enqueue triggers** (20260804000003) — three paths, one shared channel:
+   - sync_session_completed_enqueue: fires atomically on sync_sessions.status ->
+     'completed', same transaction as the status write
+   - dtc_active_enqueue: fires on new active DTC insert
+   - enqueue-weekly-deep-analysis: pg_cron Sunday 4am UTC — resolves
+     ai-agent-contract.md [DECISION REQUIRED #2], the weekly deep-analysis
+     emitter BUILD REQ promised but never existed (founder decision: build now)
+
+4. **telemetry.drive_id** (20260804000004 + device_sync_complete rewrite) —
+   the "nearly free" addition. device_sync_complete already groups telemetry
+   into drives in memory; changed the drives insert from batch to one-at-a-time
+   so each drive's generated id is available immediately to backfill the
+   matching telemetry rows.
+
+5. **notify_agent retired** (20260804000005) — removed the redundant RPC call
+   from device_sync_complete (the trigger already fires atomically moments
+   earlier in the same function) and DROPPED the function entirely. This
+   completes P0-4 structurally, not just the lockdown from session 15/16.
+
+**Verification — full end-to-end test against LIVE deployed functions, not
+just SQL:** mint_device_token -> device_sync_start -> device_sync_chunk (3
+telemetry rows) -> device_sync_complete, run twice.
+- First run: confirmed telemetry.drive_id correctly backfilled with the real
+  inserted drive's primary key; joined peak_metrics matched input exactly
+  (140 kPa boost, 88C coolant, 4100 rpm)
+- Also incidentally proved the dedupe index works correctly: a pending routine
+  job from an earlier manual trigger test correctly blocked a second sync's
+  enqueue (ON CONFLICT DO NOTHING, no error)
+- Marked that job 'done', ran a third sync: confirmed a NEW routine job
+  enqueued correctly once the dedupe slot was free
+
+**All 5 pieces now live and confirmed working together, not just individually
+deployed.**
+
+**Open items rolled forward:**
+- 7 missing CF-03 platform artifacts — still need the actual list
+- The AI agent project's own service code still needs to be built/updated to
+  actually claim from agent_work_queue (FOR UPDATE SKIP LOCKED pattern) and
+  connect in session mode (Supavisor 5432, not 6543) — that's the agent
+  project's side, not this repo's
+- [Q-D] from the agent_role migration: telemetry retention (30-day downsample)
+  vs diagnostic_outputs.referenced_telemetry_ids (no FK, indefinite retention)
+  — old diagnostics will cite purged telemetry rows. Not a migration blocker,
+  flagged as a product-visible data-integrity issue for later.
+
+**Notes / lessons:**
+- Cross-checking AI-agent-project-authored migrations before applying is worth
+  the time even when they look complete — this one explicitly flagged 2 open
+  questions with "DO NOT MERGE UNRESOLVED", which is exactly the discipline
+  this project needs from every contributor, not just Platform
+  ​- Renamed a cross-project migration file's timestamp (20260717 -> 20260804)
+  when it predated already-applied migrations — avoids --include-all and keeps
+  chronological migration history meaningful
+- str_replace text matching keeps failing on invisible blank-line differences
+  — cat -A before writing any multi-line replacement pattern is now the
+  default move, not a fallback after a failed attempt
