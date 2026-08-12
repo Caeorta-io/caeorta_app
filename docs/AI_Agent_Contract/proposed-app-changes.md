@@ -86,9 +86,13 @@ CREATE TABLE public.agent_work_queue (
   last_error       text
 );
 
--- the only hot query path
+-- the only hot query path. Must match the claim sort below: a plain
+-- (kind, enqueued_at) does NOT serve it — btree orders kind by text collation,
+-- putting 'routine' last. Expression index: (kind <> 'routine') is false for
+-- routine, and false sorts first, so both keys are plain ascending.
 CREATE INDEX agent_work_queue_pending
-  ON public.agent_work_queue (enqueued_at) WHERE state = 'pending';
+  ON public.agent_work_queue ((kind <> 'routine'), enqueued_at)
+  WHERE state = 'pending';
 
 -- coalescing guard: at most one pending job per vehicle per kind
 CREATE UNIQUE INDEX agent_work_queue_dedupe
@@ -101,6 +105,13 @@ CREATE POLICY agent_select_work_queue ON public.agent_work_queue
 CREATE POLICY agent_update_work_queue ON public.agent_work_queue
   FOR UPDATE TO agent_role USING (true) WITH CHECK (true);
 ```
+
+**The `has_anomaly` trigger function must be `SECURITY DEFINER` with
+`SET search_path = public, pg_temp`.** It fires on `diagnostic_outputs`
+INSERT, inside the agent's transaction, running as `agent_role` — which
+has no UPDATE grant on `drives` and must not be given one. Without
+SECURITY DEFINER the trigger raises a permission error that aborts every
+agent insert.
 
 (`text + CHECK` rather than enums, matching the existing schema convention — §3.)
 
@@ -122,12 +133,15 @@ CREATE POLICY agent_update_work_queue ON public.agent_work_queue
 **Claim query:**
 
 ```sql
+-- attempts counts FAILURES, not claims. The increment here is provisional: a job
+-- that yields the per-vehicle lock at a chunk boundary must decrement it on the
+-- way out, or a long deep run trips the 3-attempt retry cap without ever failing.
 UPDATE public.agent_work_queue q
 SET state = 'claimed', claimed_at = now(), attempts = attempts + 1
 WHERE q.id = (
   SELECT id FROM public.agent_work_queue
   WHERE state = 'pending'
-  ORDER BY enqueued_at
+  ORDER BY (kind <> 'routine'), enqueued_at
   FOR UPDATE SKIP LOCKED
   LIMIT 1
 )
@@ -381,9 +395,11 @@ Options, cheapest first:
   whose id appears in any `referenced_telemetry_ids`. Correct, but the anti-join
   makes cleanup expensive and couples retention to the agent.
 
-**Recommend (b)** — it makes each diagnostic self-contained, which is also what
-the eval loop wants: evaluating a diagnostic against feedback months later is far
-easier when the evidence travels with the row.
+**Resolved → (b).** The contract's §5 now pins the shape of
+`referenced_telemetry_snapshot` (`schema: 1`, ordered `samples`, absent-key
+semantics), because from day 31 it is the only surviving evidence for a
+diagnostic and the app renders "WHAT IT SAW" from it. That section is the single
+source of truth for the shape — it is deliberately not restated here.
 
 ---
 

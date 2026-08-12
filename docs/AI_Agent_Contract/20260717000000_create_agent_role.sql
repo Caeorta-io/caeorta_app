@@ -83,13 +83,6 @@ GRANT SELECT ON
   public.diagnostic_feedback    -- eval loop input
 TO agent_role;
 
--- vehicle_modifications: contract + BUILD REQ §1 both list it, but the schema
--- doc states it is "Empty in v1; reserved for v2 community features". The
--- actual v1 modification signal lives on vehicles (ecu_type, modifications
--- jsonb), already granted above. Granting SELECT anyway is harmless and
--- forward-compatible; the agent must not depend on it in v1. See [Q-A].
-GRANT SELECT ON public.vehicle_modifications TO agent_role;
-
 
 -- ----------------------------------------------------------------------------
 -- 3. Grants — writes
@@ -103,21 +96,9 @@ GRANT INSERT ON public.diagnostic_outputs TO agent_role;
 -- agent_status: upserted (INSERT ... ON CONFLICT (vehicle_id) DO UPDATE).
 GRANT SELECT, INSERT, UPDATE ON public.agent_status TO agent_role;
 
--- [Q-B] drives.has_anomaly — CONTRACT GAP, DO NOT MERGE UNRESOLVED.
--- The schema doc documents this column as "Flag set by agent for quick
--- filtering", but BUILD REQ §1 and the contract's write list name ONLY
--- diagnostic_outputs and agent_status, and BUILD REQ §1 states "You DO NOT
--- touch any other tables. The contract surface is rigid."
---
--- Both cannot be true. If the agent does own this flag, uncomment the
--- COLUMN-LEVEL grant below — column-scoped so the agent can never touch
--- distance_km, peak_metrics, or any other drives column:
---
---   GRANT UPDATE (has_anomaly) ON public.drives TO agent_role;
---
--- ...and the matching RLS policy in §4. If the app owns it (e.g. derived from
--- diagnostic_outputs severity), leave both commented and drop the column's
--- doc comment instead.
+-- drives.has_anomaly is APP-DERIVED (cross-project decision, 2026-07-17): a
+-- trigger sets it from diagnostic_outputs.severity. The agent does NOT write
+-- it. Write surface stays diagnostic_outputs + agent_status only. No grant.
 
 
 -- ----------------------------------------------------------------------------
@@ -153,10 +134,6 @@ DROP POLICY IF EXISTS agent_select_vehicles ON public.vehicles;
 CREATE POLICY agent_select_vehicles ON public.vehicles
   FOR SELECT TO agent_role USING (true);
 
-DROP POLICY IF EXISTS agent_select_vehicle_modifications ON public.vehicle_modifications;
-CREATE POLICY agent_select_vehicle_modifications ON public.vehicle_modifications
-  FOR SELECT TO agent_role USING (true);
-
 DROP POLICY IF EXISTS agent_select_sync_sessions ON public.sync_sessions;
 CREATE POLICY agent_select_sync_sessions ON public.sync_sessions
   FOR SELECT TO agent_role USING (true);
@@ -188,11 +165,6 @@ DROP POLICY IF EXISTS agent_update_agent_status ON public.agent_status;
 CREATE POLICY agent_update_agent_status ON public.agent_status
   FOR UPDATE TO agent_role USING (true) WITH CHECK (true);
 
--- [Q-B] If the agent owns drives.has_anomaly, also uncomment:
---   DROP POLICY IF EXISTS agent_update_drives ON public.drives;
---   CREATE POLICY agent_update_drives ON public.drives
---     FOR UPDATE TO agent_role USING (true) WITH CHECK (true);
-
 
 -- ----------------------------------------------------------------------------
 -- 5. Notes for the applying engineer
@@ -218,19 +190,20 @@ CREATE POLICY agent_update_agent_status ON public.agent_status
 
 
 -- ============================================================================
--- OPEN QUESTIONS — resolve before merge
+-- OPEN QUESTIONS — all resolved; retained as the decision record
 -- ============================================================================
---  [Q-A] vehicle_modifications is empty/v2 per the schema doc, but BUILD REQ §1
---        and the contract both tell the agent to read it for car context. The
---        real v1 signal is vehicles.ecu_type + vehicles.modifications (jsonb).
---        Confirm the agent should use vehicles.* in v1 and treat
---        vehicle_modifications as v2-only. Docs should be corrected either way.
+--  [Q-A] RESOLVED (cross-project decision, App track 2026-08-03): the v1
+--        vehicle-context signal is vehicles.ecu_type + vehicles.modifications.
+--        vehicle_modifications is empty and v2-only; the agent must not read
+--        it in v1. Its SELECT grant and RLS policy are removed below — an
+--        accidental read now raises a permission error instead of returning
+--        zero rows silently, which is the failure mode this migration exists
+--        to prevent.
 --
---  [Q-B] drives.has_anomaly — does the agent write it? Schema doc says the
---        agent sets it; BUILD REQ §1 + contract say the agent writes only
---        diagnostic_outputs and agent_status and must touch nothing else.
---        Contradiction. Ruling needed; grant + policy above are commented out
---        pending it.
+--  [Q-B] RESOLVED (cross-project decision 2026-07-17): drives.has_anomaly is
+--        APP-DERIVED via trigger on diagnostic_outputs.severity. Agent does not
+--        write it. Grant + policy removed above. Agent write surface remains
+--        diagnostic_outputs + agent_status only.
 --
 --  [Q-C] RESOLVED by reading the repo: channel is 'agent_trigger', emitted by
 --        the notify_agent() RPC (20260614000001), called by the
@@ -242,11 +215,15 @@ CREATE POLICY agent_update_agent_status ON public.agent_status
 --        authenticated user can call it via PostgREST RPC and trigger agent
 --        runs on arbitrary vehicles. See findings-from-repo-review.md P0-4.
 --
---  [Q-D] telemetry retention vs referenced_telemetry_ids. Raw telemetry is
---        purged/downsampled at 30 days; diagnostic_outputs is retained
---        indefinitely and carries referenced_telemetry_ids uuid[] (a bare
---        array — no FK, no cascade). Every diagnostic older than 30 days will
---        cite telemetry rows that no longer exist. Not a migration blocker,
---        but it is a product-visible data-integrity issue. See
---        proposed-app-changes.md.
+--  [Q-D] RESOLVED (cross-project decision 2026-07-17): app adds
+--        referenced_telemetry_snapshot jsonb to diagnostic_outputs; the agent
+--        copies cited samples inline at write time, so diagnostics survive the
+--        30-day telemetry purge self-contained. App-side migration pending.
+--
+--  ALSO PENDING APP-SIDE (agent builds against these once landed on main):
+--    - agent_work_queue + enqueue triggers (queue trigger design adopted)
+--    - telemetry.drive_id + one-time backfill
+--    - referenced_telemetry_snapshot jsonb on diagnostic_outputs
+--    - weekly deep-analysis pg_cron job (enqueues kind='deep')
+--    - notify_agent RPC dropped/replaced by the queue trigger
 -- ============================================================================

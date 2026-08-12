@@ -1,11 +1,11 @@
 # AI Agent Contract
 
-**Version:** v0.2 (draft for joint review)
-**Status:** proposed — supersedes v0.1 (`06_AI_Agent_Contract.md`), pending ratification at cross-project sync.
+**Version:** v0.3
+**Status:** ratified — supersedes v0.1 (`06_AI_Agent_Contract.md`). Both projects are bound by this document.
 **Owners:** app project (`Caeorta-io/caeorta_app`) + agent project.
 **This document is the single source of truth for the app↔agent interface.** When it changes, both projects update, and the changelog at the bottom records it.
 
-> **On v0.1 → v0.2.** v0.1 was drafted ~2026-05 and never jointly reviewed; its six "Week 1 open questions" stayed open while implementation moved ahead, so the doc drifted from what shipped (R1). v0.2 reconciles the doc with the shipped schema (verified against `20260602130000_initial_schema.sql`), records the decisions taken in agent-project design, and marks what genuinely remains open as **[DECISION REQUIRED]**. Nothing here is silently invented — every normative claim traces to the schema, a migration, or a recorded decision.
+> **On v0.1 → v0.2.** v0.1 was drafted ~2026-05 and never jointly reviewed; its six "Week 1 open questions" stayed open while implementation moved ahead, so the doc drifted from what shipped (R1). v0.2 reconciles the doc with the shipped schema (verified against `20260602130000_initial_schema.sql`), records the decisions taken in agent-project design, and flags what genuinely remains open inline. Nothing here is silently invented — every normative claim traces to the schema, a migration, or a recorded decision.
 
 ---
 
@@ -28,7 +28,7 @@ The agent authenticates as the dedicated `agent_role` Postgres role (migration `
 
 ## 2. What the agent reads
 
-`telemetry`, `current_state`, `dtcs`, `drives`, `vehicles`, `vehicle_modifications`, `sync_sessions`, `diagnostic_outputs` (continuity), `diagnostic_feedback` (evals).
+`telemetry`, `current_state`, `dtcs`, `drives`, `vehicles`, `sync_sessions`, `diagnostic_outputs` (continuity), `diagnostic_feedback` (evals).
 
 RLS is enabled on all 26 tables. `agent_role` is `NOBYPASSRLS` and has no `auth.uid()`, so it carries an explicit `FOR SELECT ... USING (true)` policy per read table (in the migration). Without those, reads return **zero rows silently** — the dominant integration failure mode.
 
@@ -64,7 +64,25 @@ Rationale: raw `NOTIFY` is fire-and-forget. A listener not connected at emit tim
 
 ### `agent_work_queue` (app project owns the migration)
 
-One row per unit of work. `kind ∈ {routine, deep, dtc}`; `state ∈ {pending, claimed, done, failed}`; `attempts int`; timestamps; `last_error`. Two partial indexes: `(enqueued_at) WHERE state='pending'` (claim path) and a **unique** `(vehicle_id, kind) WHERE state='pending'` (coalescing / cooldown). Full DDL in `proposed-app-changes.md §1`.
+One row per unit of work. `kind ∈ {routine, deep, dtc}`; `state ∈ {pending, claimed, done, failed}`; `attempts int`; timestamps; `last_error`. Two partial indexes, and the claim index **must match the claim sort** (below) or Postgres reads the whole pending set and sorts in memory:
+
+```sql
+-- claim path. Expression index: (kind <> 'routine') puts routine first
+-- (false sorts before true), so both keys are plain ascending.
+CREATE INDEX agent_work_queue_pending
+  ON public.agent_work_queue ((kind <> 'routine'), enqueued_at)
+  WHERE state = 'pending';
+
+-- coalescing / cooldown
+CREATE UNIQUE INDEX agent_work_queue_dedupe
+  ON public.agent_work_queue (vehicle_id, kind) WHERE state = 'pending';
+```
+
+A plain `(kind, enqueued_at)` index does **not** serve this sort: btree orders `kind` by text collation (`deep` → `dtc` → `routine`), placing routine last, and the planner will not derive an ordering on the expression from an ordering on the column. The `WHERE state='pending'` predicate must appear literally in the claim query for the partial index to match.
+
+**`attempts` counts failures, not claims.** The claim query increments it, so a job that yields the vehicle lock (see below) must decrement on yield — otherwise a long deep run is killed by §10's 3-attempt retry cap without ever having failed. Carry this as a column comment in the migration.
+
+Full DDL in `proposed-app-changes.md §1`.
 
 - **Enqueue** is a trigger on `sync_sessions` `AFTER UPDATE OF status` (fires atomically with the commit — cannot be skipped by a code path, cannot fire on a rolled-back commit; the v0.1 "Edge Function's last step" could). Analogous enqueues: `dtcs AFTER INSERT WHERE is_active` → `dtc`; weekly pg_cron → `deep`.
 - **Wake-up** is a single `pg_notify('agent_trigger', '')` — channel name **kept from the shipped implementation**. Payload is empty; the agent reads the queue. (Retires the v0.1 `{sync_session_id, vehicle_id, drive_ids[]}` payload, which was never built — the shipped payload was `{session_id, vehicle_id, triggered_at}`.)
@@ -77,8 +95,34 @@ One row per unit of work. `kind ∈ {routine, deep, dtc}`; `state ∈ {pending, 
 ### Cooldowns (unchanged from v0.1)
 ≤1 routine run per vehicle per hour; ≤1 deep run per vehicle per week; manual runs (v2) bypass cooldowns, rate-limited per user per day.
 
-### Deep analysis  **[DECISION REQUIRED #2]**
-v0.1/BUILD REQ promise a weekly per-vehicle deep-analysis emitter from the app project. **No such pg_cron job exists** (the cron migration schedules only downsample + two cleanups). Decide: **build the weekly `deep` enqueue**, or **cut deep analysis from v1** and document it as v2. A trigger nothing fires must not ship silently.
+### Routine vs deep: same channel, different jobs  *(resolved — build deep)*
+
+**Decision (2026-07-17): build the weekly deep emitter now** (not cut to v2). The app project adds a pg_cron job that, once a week, enqueues a `deep` row per active vehicle and fires the same `pg_notify('agent_trigger','')`.
+
+`routine` and `deep` share the wake-up channel and the claim loop, but are **not** the same job. The agent consumes them differently:
+
+- **Scope.** `routine` = the drives in one sync session (`sync_session_id` set). `deep` = the whole vehicle over a trailing window (`sync_session_id` NULL; agent derives the window — default trailing 7 days of drives). Different reads, prompt, and token budget.
+- **Enqueue shape.** `deep` rows set `kind='deep'`, `vehicle_id`, and leave `sync_session_id`/`dtc_id` NULL. The cron does one `INSERT ... SELECT` across active vehicles with `ON CONFLICT DO NOTHING` against the `(vehicle_id, kind) WHERE state='pending'` dedupe index (no doubling if a `deep` is already pending). Default cadence Sundays 02:00 UTC, **jittered** — the agent spreads claims rather than the cron enqueuing in a burst, so no app-side change is needed for this.
+
+- **"Active vehicle" means: had at least one drive in the last 14 days.**
+
+```sql
+  WHERE EXISTS (
+    SELECT 1 FROM public.drives d
+    WHERE d.vehicle_id = v.id
+      AND d.started_at > now() - interval '14 days'
+  )
+```
+
+  Not `devices.status='active'`, which measures the device's claim state rather than whether there is anything new to analyse: a car parked a month has an active device and zero new drives, so a deep run on it spends tokens to produce either `insufficient_data` or a restatement of last week. Deep analysis is trend analysis, so the predicate is drive recency. 14 days rather than 7 because a fortnight-gap driver should not fall out of trending mid-arc, and because 14 > the 7-day deep cooldown, so the two windows cannot fight at the boundary. **This predicate wants an index on `drives (vehicle_id, started_at)`; check whether one exists before shipping the cron.**
+- **Per-vehicle mutex (agent-side rule).** `agent_status` is keyed on `vehicle_id` alone (no `kind`), so a `routine` and a `deep` for the same vehicle must **not** run concurrently — they'd race on the status row. The claim loop takes a per-vehicle lock, not just per-row `SKIP LOCKED`.
+- **Priority (agent-side rule).** `deep` has no latency SLO (§10); `routine` has 60s. Under contention `routine` wins: claim ordering is `ORDER BY (kind <> 'routine'), enqueued_at`, matching the expression index above.
+
+- **Deep yields at chunk boundaries (agent-side rule).** Claim ordering decides what is claimed *next*; it does not preempt. Without more, a routine job queued behind a running deep waits out the entire deep run — a latency cliff, not a gradual slowdown. So: **a deep run releases the per-vehicle lock at a chunk boundary whenever a routine job for the same vehicle is pending.** Deep analysis is already chunked per thermal session (§9), so the boundaries exist. A routine job's wait is therefore bounded by one deep chunk, not one deep run. The yielding deep row returns to `state='pending'` on the same row (no insert, so no contention with the dedupe index), with `claimed_at` cleared and `attempts` decremented per the note above, and re-claims afterwards.
+
+  Rejected alternatives: dropping the mutex (concurrent routine + deep would race on the single `agent_status` row, which is keyed on `vehicle_id` alone and stays that way — see §6); chunking without yielding (shortens the cliff, does not remove it).
+
+None of the last two require app-side work — they're how the agent consumes the queue. Recorded here because they're contract-visible behaviour, not just implementation.
 
 ---
 
@@ -117,8 +161,37 @@ Enum-like values are **CHECK-constrained in the DB** — invalid LLM output fail
 
 **Dedup (v0.1 Q5, confirmed):** the agent writes **one row per occurrence** and uses prior outputs as continuity context (don't contradict a recent output); the **app** dedupes in the UI by category + active state. The agent does not suppress repeats.
 
-### `referenced_telemetry_ids` vs retention  **[decided — app ack needed]**
-Raw telemetry is purged at 30 days; `diagnostic_outputs` is kept indefinitely; `referenced_telemetry_ids` is a bare `uuid[]` with no FK/cascade. Every diagnostic older than 30 days will cite rows that no longer exist. **Decision (agent-priority): add `referenced_telemetry_snapshot jsonb`** to `diagnostic_outputs`; the agent copies the handful of cited samples inline at write time. Diagnostics become self-contained (also what the eval loop wants). Needs the app to add the column.
+### `referenced_telemetry_snapshot` — retention, and the shape the app can render against  **(resolved)**
+
+Raw telemetry is purged at 30 days; `diagnostic_outputs` is kept indefinitely; `referenced_telemetry_ids` is a bare `uuid[]` with no FK/cascade. Every diagnostic older than 30 days cites rows that no longer exist. **Resolution: add `referenced_telemetry_snapshot jsonb`** to `diagnostic_outputs`; the agent copies the cited samples inline at write time.
+
+From day 31 this column is the only surviving evidence for that diagnostic, so its **core shape is contract-pinned**, not agent-private. Design §5.1's expanded "WHAT IT SAW" block renders from it for the whole retained history.
+
+```json
+{
+  "schema": 1,
+  "captured_at": "2026-08-03T14:22:07.412Z",
+  "samples": [
+    { "t": "2026-08-03T14:19:02.000Z",
+      "m": { "coolant_temp_c": 104.2, "rpm": 5400, "boost_pressure_kpa": 118.0 } }
+  ]
+}
+```
+
+Guaranteed:
+
+- `samples` is an array ordered ascending by `t`. It **may be empty** — `insufficient_data` rows usually carry no samples.
+- Every key in `m` is from §3's canonical vocabulary or a declared per-car PID. Values are JSON numbers, never strings.
+- **Absent metric = absent key.** Never `null`, never `0` — the same rule as §3.
+- `schema` increments only on a breaking change to the four rules above. Additive keys do not bump it.
+
+Deliberately **not** carried, to avoid a second source of truth: units (§3 pins one unit per key permanently — derive the §5.5 Metric Tile's `unit` from the key) and display precision.
+
+Optional, additive: `"highlight": ["coolant_temp_c", "rpm", "boost_pressure_kpa"]` — the agent's nomination of which three metrics WHAT IT SAW should show. A hint only; the app must have a deterministic fallback when it is absent, so a missing key never blanks the block.
+
+The agent may extend the object freely. It will not change the pinned core without a `schema` bump and a contract change.
+
+Note that drive-detail's WHAT IT SAW derives from `drives.peak_metrics`, which is retained, so that surface already survives the purge. This column's consumer is Diagnostic detail.
 
 ---
 
@@ -132,14 +205,34 @@ Upsert on `vehicle_id` (PK). `status ∈ {idle, analyzing, error, rate_limited}`
 
 Severity (consequence), urgency (timing), category (fixed enum) — meanings unchanged from v0.1 §"Severity, urgency, and category".
 
-**`insufficient_data` splits into two cases  [DECISION REQUIRED #3]** *(new in v0.2)*
+**`insufficient_data` splits into two cases** *(new in v0.2; resolved in v0.3)*
 
 The per-vehicle capability model (§3) creates two genuinely different "can't assess" states that v0.1 collapses into one:
 
 1. **Temporary** — not enough history yet. *"We need a few more drives to learn what's normal for your car."* Resolves with driving.
 2. **Permanent** — the car doesn't report the needed metric. *"Your car doesn't report air–fuel ratio, so fuel-system analysis isn't available."* Never resolves; telling the user to "keep driving, we'll have more soon" (v0.1's boilerplate) would be a lie.
 
-Both use `category='insufficient_data'`, `confidence<0.3`, `severity='info'`, `urgency='monitor'`. Decide how to distinguish them: **(a)** a convention on `title`/`explanation` only, or **(b)** a small structured marker. Recommend (a) for v1 (no schema change; agent varies the copy), revisit if the app needs to render them differently.
+Both use `category='insufficient_data'`, `confidence<0.3`, `severity='info'`, `urgency='monitor'`.
+
+**Resolved: structured marker, not a copy convention.** v0.2 recommended (a); that is withdrawn. A copy convention forces the app to string-match agent prose to decide what to render, which couples the app to wording the agent is free to change.
+
+The marker rides in `referenced_telemetry_snapshot` (§5) — no additional schema change beyond the column already being added:
+
+```json
+{ "schema": 1, "captured_at": "...", "samples": [],
+  "insufficient_data": {
+    "kind": "temporary",
+    "missing": ["afr"],
+    "drives_seen": 3,
+    "drives_needed": 8
+  } }
+```
+
+- `kind ∈ {temporary, permanent}` — present on **every** `category='insufficient_data'` row written by an agent version shipping this.
+- `missing` — absent metric keys. Populated for `permanent`; may be empty for `temporary`.
+- `drives_seen` / `drives_needed` — `temporary` only, optional. Available if the app prefers a progress line to agent prose in the WHAT'S NEEDED note.
+
+**App-side contract:** one typed function, `deriveInsufficientDataKind(output) → 'temporary' | 'permanent' | 'unknown'`, returning `unknown` when the key is absent (rows written before this shipped, or after a rollback). `unknown` renders exactly as today — the agent's explanation verbatim, no App-authored resolution promise. Every existing row stays valid and the third state is honest rather than a guess.
 
 Otherwise the "I don't know" path is v0.1's: always write *something* after analysis; never stay silent.
 
@@ -162,7 +255,12 @@ Two tiers:
 
 ## 9. Drive semantics  *(new in v0.2 — records decision)*
 
-A **drive** is one ignition-cycle aggregate; `device_sync_complete` segments on a **5-minute** telemetry gap (`DRIVE_GAP_MS`, shipped) — **kept**. The agent does **not** merge drives at the source. "Was the engine cold?" is answered by the agent **grouping drives into thermal sessions at a 3-hour gap** at analysis time — a restart <3h is a warm start. Fine segmentation is recoverable (group at query time, free); coarse is lossy (raw telemetry gone at 30 days). `duration_seconds = ended_at − started_at`; note `distance_km`/`average_speed_kph` are **currently never computed** (always NULL) — the agent must not rely on them until they are.
+A **drive** is one ignition-cycle aggregate; `device_sync_complete` segments on a **5-minute** telemetry gap (`DRIVE_GAP_MS`, shipped) — **kept**. The agent does **not** merge drives at the source. "Was the engine cold?" is answered by the agent **grouping drives into thermal sessions at a 3-hour gap** at analysis time — a restart <3h is a warm start. Fine segmentation is recoverable (group at query time, free); coarse is lossy (raw telemetry gone at 30 days). `duration_seconds = ended_at − started_at`.
+
+**`distance_km` and `average_speed_kph` are both NULL today** (`device_sync_complete` writes only `peak_metrics` and `summary_metrics`). Resolved separately:
+
+- **`average_speed_kph` is cut.** It duplicates `summary_metrics.speed_kph`, which the same function's existing average loop already computes. Drop the column and stop documenting it.
+- **`distance_km` is computed.** It is the denominator for per-100km rate baselining (§8), and the segmentation loop already holds the samples, so `Σ(speed × Δt)` lands inside the loop that exists. Until it does, the agent must not rely on it.
 
 ---
 
@@ -177,18 +275,31 @@ A **drive** is one ignition-cycle aggregate; `device_sync_complete` segments on 
 
 ## 11. Open decisions (carried, for the review)
 
-| # | Decision | Recommendation |
+| # | Decision | Status (2026-07-17) |
 |---|---|---|
 | 1 | Trigger mechanism | **Resolved → work queue (§4).** |
-| 2 | Deep analysis: build emitter or cut from v1 | Founder call; don't ship a silent no-op. |
-| 3 | `insufficient_data` temporary vs permanent | (a) copy convention for v1. |
-| 4 | Coolant threshold single source of truth | One source; app consumes validated value. |
+| 2 | Deep analysis: build or cut | **Resolved → build the weekly emitter (§4).** |
+| — | `has_anomaly` ownership | **Resolved → app-derived** via trigger on `diagnostic_outputs.severity`. Agent write surface stays `diagnostic_outputs` + `agent_status`. |
+| — | `referenced_telemetry_ids` vs 30-day purge | **Resolved → add `referenced_telemetry_snapshot jsonb`** (§5). App-side migration pending. |
+| — | `telemetry.drive_id` | **Resolved → add column + one-time backfill** (§3). App-side migration pending. |
+| 3 | `insufficient_data` temporary vs permanent | **Resolved → structured marker in `referenced_telemetry_snapshot`** (§7). Copy convention withdrawn. |
+| — | Queue claim index vs claim sort | **Resolved → expression index `((kind <> 'routine'), enqueued_at)`** (§4). `(kind, enqueued_at)` does not serve the sort. |
+| — | Routine SLO behind a running deep | **Resolved → deep yields the vehicle lock at chunk boundaries** (§4). Mutex kept. |
+| — | "Active vehicle" for the weekly deep enqueue | **Resolved → ≥1 drive in the last 14 days** (§4). |
+| — | `referenced_telemetry_snapshot` shape | **Resolved → core pinned in §5**, `schema: 1`. Agent may extend; core changes require a bump. |
+| — | `drives.average_speed_kph` / `distance_km` | **Resolved → cut `average_speed_kph`; compute `distance_km`** (§9). |
+| 4 | Coolant threshold single source of truth | Open — one source; app consumes validated value. |
+| — | Hard safety thresholds (values) | Open — founder/domain research. Non-blocking: `unvalidated` gate keeps `critical` off until filled (§8). |
 
-**App-side changes v0.2 depends on** (all in `proposed-app-changes.md`): `agent_work_queue` + enqueue triggers; drop/replace `notify_agent` RPC; `telemetry.drive_id`; `referenced_telemetry_snapshot`; `has_anomaly` app-derived; plus the confirmed bug fixes (downsample cron, `peak_metrics` negative-seed, `vehicles.last_sync_at` write).
+**App-side changes v0.2 depends on**, routed to the Platform track, unbuilt on `main` as of 2026-07-17 (agent builds against these once landed): `agent_work_queue` + enqueue triggers; weekly `deep` pg_cron enqueue; drop/replace `notify_agent` RPC; `telemetry.drive_id` + backfill; `referenced_telemetry_snapshot`; `has_anomaly` app-derived trigger. Plus confirmed bug fixes (`findings-from-repo-review.md`): downsample cron (P0-1/2/3), `peak_metrics` negative-seed (P1-2), `vehicles.last_sync_at` write (P1-1).
+
+Until these land, the agent is built against a local Postgres with the shipped schema + these four migrations applied, and re-pinned to real DDL when Platform confirms column names/types.
 
 ---
 
 ## Changelog
 
+- **2026-08-12 (v0.3, ratified):** Status corrected from "draft/pending" to ratified — §11 already recorded five resolutions. Resolved: `insufficient_data` split via structured marker (#3, withdrawing the v0.2 copy-convention recommendation); `referenced_telemetry_snapshot` core shape pinned (§5); queue claim index corrected to an expression index matching the claim sort (§4); `attempts` defined as counting failures not claims (§4); deep runs yield the per-vehicle lock at chunk boundaries (§4); "active vehicle" defined as ≥1 drive in 14 days (§4); `average_speed_kph` cut and `distance_km` to be computed (§9). Remaining open: coolant-threshold source (#4), hard threshold values (founder, CF-08).
+- **2026-07-17 (v0.2, decisions folded in):** Cross-project review with App track. Resolved: trigger = work queue (#1); deep analysis = build weekly emitter (#2); `has_anomaly` = app-derived; `referenced_telemetry_ids` = add `referenced_telemetry_snapshot`; `telemetry.drive_id` = add + backfill. Added routine/deep consumption split (§4). Remaining open: `insufficient_data` split (#3), coolant-threshold source (#4), hard threshold values (founder). App-side migrations routed to Platform track, unbuilt on `main`.
 - **2026-07-17 (v0.2, draft):** Reconciled with shipped schema (`20260602130000`). Adopted work-queue trigger (was Option A NOTIFY-only). Added canonical metric vocabulary (closes R22 / `TODO(metric-keys)`) and per-vehicle capability model. Recorded baselining + `safety_thresholds.yaml` with unvalidated safety gate. Recorded 5-min drive / 3-hour thermal-session split. Split `insufficient_data` into temporary/permanent. Corrected vehicle-context source (`vehicles.*`, not `vehicle_modifications`). Flagged nullable `recommended_action`/`referenced_drive_id`, telemetry-retention vs `referenced_telemetry_ids`, deep-analysis missing emitter, coolant-threshold dual source. 4 decisions marked for joint review.
 - **2026-05-XX (v0.1):** Initial draft (`06_AI_Agent_Contract.md`). Never jointly reviewed; superseded.
