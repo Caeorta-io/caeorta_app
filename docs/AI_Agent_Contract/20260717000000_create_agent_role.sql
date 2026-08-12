@@ -83,13 +83,6 @@ GRANT SELECT ON
   public.diagnostic_feedback    -- eval loop input
 TO agent_role;
 
--- vehicle_modifications: contract + BUILD REQ §1 both list it, but the schema
--- doc states it is "Empty in v1; reserved for v2 community features". The
--- actual v1 modification signal lives on vehicles (ecu_type, modifications
--- jsonb), already granted above. Granting SELECT anyway is harmless and
--- forward-compatible; the agent must not depend on it in v1. See [Q-A].
-GRANT SELECT ON public.vehicle_modifications TO agent_role;
-
 
 -- ----------------------------------------------------------------------------
 -- 3. Grants — writes
@@ -139,10 +132,6 @@ CREATE POLICY agent_select_drives ON public.drives
 
 DROP POLICY IF EXISTS agent_select_vehicles ON public.vehicles;
 CREATE POLICY agent_select_vehicles ON public.vehicles
-  FOR SELECT TO agent_role USING (true);
-
-DROP POLICY IF EXISTS agent_select_vehicle_modifications ON public.vehicle_modifications;
-CREATE POLICY agent_select_vehicle_modifications ON public.vehicle_modifications
   FOR SELECT TO agent_role USING (true);
 
 DROP POLICY IF EXISTS agent_select_sync_sessions ON public.sync_sessions;
@@ -201,13 +190,15 @@ CREATE POLICY agent_update_agent_status ON public.agent_status
 
 
 -- ============================================================================
--- OPEN QUESTIONS — resolve before merge
+-- OPEN QUESTIONS — all resolved; retained as the decision record
 -- ============================================================================
---  [Q-A] vehicle_modifications is empty/v2 per the schema doc, but BUILD REQ §1
---        and the contract both tell the agent to read it for car context. The
---        real v1 signal is vehicles.ecu_type + vehicles.modifications (jsonb).
---        Confirm the agent should use vehicles.* in v1 and treat
---        vehicle_modifications as v2-only. Docs should be corrected either way.
+--  [Q-A] RESOLVED (cross-project decision, App track 2026-08-03): the v1
+--        vehicle-context signal is vehicles.ecu_type + vehicles.modifications.
+--        vehicle_modifications is empty and v2-only; the agent must not read
+--        it in v1. Its SELECT grant and RLS policy are removed below — an
+--        accidental read now raises a permission error instead of returning
+--        zero rows silently, which is the failure mode this migration exists
+--        to prevent.
 --
 --  [Q-B] RESOLVED (cross-project decision 2026-07-17): drives.has_anomaly is
 --        APP-DERIVED via trigger on diagnostic_outputs.severity. Agent does not
