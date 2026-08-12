@@ -102,7 +102,7 @@ Full DDL in `proposed-app-changes.md §1`.
 `routine` and `deep` share the wake-up channel and the claim loop, but are **not** the same job. The agent consumes them differently:
 
 - **Scope.** `routine` = the drives in one sync session (`sync_session_id` set). `deep` = the whole vehicle over a trailing window (`sync_session_id` NULL; agent derives the window — default trailing 7 days of drives). Different reads, prompt, and token budget.
-- **Enqueue shape.** `deep` rows set `kind='deep'`, `vehicle_id`, and leave `sync_session_id`/`dtc_id` NULL. The cron does one `INSERT ... SELECT` across active vehicles with `ON CONFLICT DO NOTHING` against the `(vehicle_id, kind) WHERE state='pending'` dedupe index (no doubling if a `deep` is already pending). Default cadence Sundays 02:00 UTC, **jittered** — the agent spreads claims rather than the cron enqueuing in a burst, so no app-side change is needed for this.
+- **Enqueue shape.** `deep` rows set `kind='deep'`, `vehicle_id`, and leave `sync_session_id`/`dtc_id` NULL. The cron does one `INSERT ... SELECT` across active vehicles with `ON CONFLICT DO NOTHING` against the `(vehicle_id, kind) WHERE state='pending'` dedupe index (no doubling if a `deep` is already pending). Default cadence Sundays 04:00 UTC (matches the shipped cron), **jittered** — the agent spreads claims rather than the cron enqueuing in a burst, so no app-side change is needed for this.
 
 - **"Active vehicle" means: had at least one drive in the last 14 days.**
 
@@ -297,8 +297,40 @@ Until these land, the agent is built against a local Postgres with the shipped s
 
 ---
 
+## 12. Conformance — contract vs shipped schema (as of 2026-08-12)
+
+This contract is ratified and normative. The schema on `main` does not yet match it everywhere. Divergences are recorded here rather than left implicit, because a contract that silently describes DDL that does not exist is the drift this document exists to prevent (R1).
+
+**Shipped and conformant:** `agent_role` (`20260804000001_create_agent_role.sql`); `agent_work_queue` — table, `ENABLE ROW LEVEL SECURITY`, `GRANT SELECT, UPDATE ... TO agent_role`, and both the `FOR SELECT` and `FOR UPDATE` policies are all present, so the claim loop is correctly readable (`20260804000002`); the three enqueue paths — `sync_session_completed_enqueue`, `dtc_active_enqueue`, and the `enqueue-weekly-deep-analysis` pg_cron job (`20260804000003`); `notify_agent` retired outright via `DROP FUNCTION IF EXISTS public.notify_agent(uuid, uuid)` (`20260804000005`). The `drives (vehicle_id, started_at DESC)` index §4 asks for already exists (`20260602130000_initial_schema.sql`), so the 14-day predicate below is indexed on arrival.
+
+**Divergent — schema to be corrected to match this contract:**
+
+| Item | Contract (§) | Shipped | Resolution |
+|---|---|---|---|
+| `telemetry.drive_id` | §3 — column + one-time backfill | **No migration adds the column.** `telemetry` is `(id, vehicle_id, sync_session_id, timestamp, metrics)`. `device_sync_complete` nonetheless runs `.update({ drive_id: insertedDrive.id })` and swallows the error as non-fatal | Migration adding the column + index. **Highest-priority divergence** — see the note below; this one fails silently. |
+| Queue claim index | §4 — `((kind <> 'routine'), enqueued_at) WHERE state='pending'` | `CREATE INDEX IF NOT EXISTS agent_work_queue_pending ON public.agent_work_queue (enqueued_at) WHERE state = 'pending';` | Migration corrected. Index swap only; non-breaking. |
+| Active-vehicle predicate | §4 — ≥1 drive in last 14 days | `WHERE EXISTS (SELECT 1 FROM public.drives d WHERE d.vehicle_id = v.id)` — any drive ever | Migration corrected. Unbounded predicate enqueues a weekly deep run for every vehicle that has ever driven, permanently. |
+| `attempts` semantics | §4 — counts failures, not claims | `COMMENT ON COLUMN` absent (the migration carries a `COMMENT ON TABLE` only) | `COMMENT ON COLUMN` added. Decrement-on-yield is agent-side. |
+| `vehicle_modifications` grant | §2 — v2-only, agent must not read in v1 | `GRANT SELECT ON public.vehicle_modifications TO agent_role;` plus policy `agent_select_vehicle_modifications ... FOR SELECT TO agent_role USING (true)` | Grant + policy revoked, so an accidental v1 read errors rather than returning zero rows silently. Lowest priority item here. |
+
+**On `telemetry.drive_id` specifically.** The column exists in the environment the backfill was verified against, but not in `supabase/migrations/`, so the migrations no longer fully describe the database. Any environment built from the migration set — CI, `supabase db reset`, a new dev project — gets a `telemetry` table without `drive_id`. The backfill's own error handler treats the failure as non-fatal and logs it, so the symptom is not an error but silently absent `drive_id` values, degrading `get_drive_telemetry` back to the unindexed `sync_session_id` + timestamp-range convention. There is also no index on `telemetry (drive_id)`, `(vehicle_id, drive_id)`, or `(sync_session_id)` anywhere in the migration set, so both the new and the fallback access paths are unindexed on the heaviest table in the schema.
+
+**Contract yields to shipped:** the weekly deep cron runs `'0 4 * * 0'` — Sundays 04:00 UTC — rather than the 02:00 UTC originally named in §4. An arbitrary choice where the shipped value is already live; §4 updated to match.
+
+**Not yet built, blocking app work:**
+
+- **`referenced_telemetry_snapshot jsonb` on `diagnostic_outputs`** (§5) — absent from every migration. Gates rendering of any diagnostic past the 30-day telemetry purge, and gates the §7 `insufficient_data` marker. `apps/mobile/src/lib/diagnostics.ts` already carries `deriveInsufficientDataKind`, returning `'unknown'` unconditionally and awaiting exactly this column. **Highest-value outstanding item on either track.**
+- **`drives.has_anomaly` app-derived trigger** (§11) — absent; the column is still write-once-`false`, and `20260804000001` carries only a commented-out `GRANT UPDATE (has_anomaly)`. When built it must be `SECURITY DEFINER` with `SET search_path = public, pg_temp`; it fires inside the agent's insert transaction as `agent_role`, which has no UPDATE grant on `drives` and must not be given one.
+
+No migration file with the prefix `20260804000004` exists — the sequence runs `…0001, 0002, 0003, 0005`. The gap is where these two would sit.
+
+**Superseded artifact:** `docs/AI_Agent_Contract/20260717000000_create_agent_role.sql` is the proposal; `supabase/migrations/20260804000001_create_agent_role.sql` is what applied. The proposal is not present in `supabase/migrations/`. It is retained as the decision record for [Q-A]–[Q-D] and is not to be moved into `supabase/migrations/`.
+
+---
+
 ## Changelog
 
+- **2026-08-12 (v0.3, conformance section added):** §12 records divergence between this contract and the migrations shipped 2026-08-04, and adopts the shipped weekly-cron schedule. No normative change to §§1–11.
 - **2026-08-12 (v0.3, ratified):** Status corrected from "draft/pending" to ratified — §11 already recorded five resolutions. Resolved: `insufficient_data` split via structured marker (#3, withdrawing the v0.2 copy-convention recommendation); `referenced_telemetry_snapshot` core shape pinned (§5); queue claim index corrected to an expression index matching the claim sort (§4); `attempts` defined as counting failures not claims (§4); deep runs yield the per-vehicle lock at chunk boundaries (§4); "active vehicle" defined as ≥1 drive in 14 days (§4); `average_speed_kph` cut and `distance_km` to be computed (§9). Remaining open: coolant-threshold source (#4), hard threshold values (founder, CF-08).
 - **2026-07-17 (v0.2, decisions folded in):** Cross-project review with App track. Resolved: trigger = work queue (#1); deep analysis = build weekly emitter (#2); `has_anomaly` = app-derived; `referenced_telemetry_ids` = add `referenced_telemetry_snapshot`; `telemetry.drive_id` = add + backfill. Added routine/deep consumption split (§4). Remaining open: `insufficient_data` split (#3), coolant-threshold source (#4), hard threshold values (founder). App-side migrations routed to Platform track, unbuilt on `main`.
 - **2026-07-17 (v0.2, draft):** Reconciled with shipped schema (`20260602130000`). Adopted work-queue trigger (was Option A NOTIFY-only). Added canonical metric vocabulary (closes R22 / `TODO(metric-keys)`) and per-vehicle capability model. Recorded baselining + `safety_thresholds.yaml` with unvalidated safety gate. Recorded 5-min drive / 3-hour thermal-session split. Split `insufficient_data` into temporary/permanent. Corrected vehicle-context source (`vehicles.*`, not `vehicle_modifications`). Flagged nullable `recommended_action`/`referenced_drive_id`, telemetry-retention vs `referenced_telemetry_ids`, deep-analysis missing emitter, coolant-threshold dual source. 4 decisions marked for joint review.
