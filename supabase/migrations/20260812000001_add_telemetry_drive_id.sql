@@ -35,18 +35,41 @@
 -- (c1dafc4's end-to-end test observed drive_id being written successfully).
 -- This must be a no-op there rather than an error.
 --
--- CAVEAT, and the reason the PR asks Platform how the column was created: if
--- the out-of-band column exists WITHOUT this FK, ADD COLUMN IF NOT EXISTS skips
--- the whole clause and the constraint is NOT added -- the environments then
--- differ in referential integrity while both "have the column". Verify with
--- \d public.telemetry after applying, and if the FK is absent in dev, it needs
--- a follow-up ALTER TABLE ... ADD CONSTRAINT rather than a re-run of this file.
+-- THE COLUMN AND THE CONSTRAINT ARE ADDED SEPARATELY, ON PURPOSE.
+-- ADD COLUMN IF NOT EXISTS skips the ENTIRE clause when the column already
+-- exists -- including an inline REFERENCES. Bundling them would make this file
+-- idempotent (safe to re-run) but not convergent (it would not bring a drifted
+-- environment to the intended state): against a dev database whose out-of-band
+-- column has no foreign key, the whole statement is skipped and the constraint
+-- is silently never created, leaving dev and a fresh environment differing in
+-- referential integrity while both "have drive_id". Splitting them means the
+-- named constraint lands regardless of how the column got there.
+--
+-- RESIDUAL LIMIT, stated plainly: this still cannot correct a column created
+-- with the WRONG TYPE. ADD COLUMN IF NOT EXISTS matches on name only and skips
+-- silently, so a drive_id that is (say) text rather than uuid stays text, and
+-- the FK below then fails to create against it. Checking the column's actual
+-- type in dev is a manual step that no migration can do for itself -- the
+-- read-only queries for it are in the PR body, and must be answered before
+-- this merges.
 --
 -- ON DELETE SET NULL, not CASCADE: deleting a drive must never delete telemetry
 -- rows. The drive is an aggregate over the samples, not their owner.
-ALTER TABLE public.telemetry
-  ADD COLUMN IF NOT EXISTS drive_id uuid
-  REFERENCES public.drives(id) ON DELETE SET NULL;
+ALTER TABLE public.telemetry ADD COLUMN IF NOT EXISTS drive_id uuid;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'telemetry_drive_id_fkey'
+      AND conrelid = 'public.telemetry'::regclass
+  ) THEN
+    ALTER TABLE public.telemetry
+      ADD CONSTRAINT telemetry_drive_id_fkey
+      FOREIGN KEY (drive_id) REFERENCES public.drives(id)
+      ON DELETE SET NULL;
+  END IF;
+END $$;
 
 COMMENT ON COLUMN public.telemetry.drive_id IS
   'Set by device_sync_complete during drive segmentation. NULL for rows predating the association, or where segmentation did not assign one. Consumers must tolerate NULL.';

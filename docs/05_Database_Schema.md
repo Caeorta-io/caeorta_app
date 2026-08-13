@@ -367,9 +367,11 @@ CREATE POLICY "devices_insert_own_telemetry" ON telemetry
 
 ## Indexing strategy
 
-Add indexes only when query patterns demand them. Initial set:
+Add indexes only when query patterns demand them. Indexes (kept current; add new indexes here in the same PR that creates them):
 
 - `telemetry (vehicle_id, timestamp DESC)`
+- `telemetry (drive_id) WHERE drive_id IS NOT NULL`
+- `telemetry (sync_session_id, timestamp)`
 - `diagnostic_outputs (vehicle_id, generated_at DESC)`
 - `diagnostic_outputs (vehicle_id, status)`
 - `dtcs (vehicle_id, is_active, last_seen_at DESC)`
