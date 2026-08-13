@@ -214,6 +214,7 @@ Diagnostic Trouble Codes from the ECU.
 | referenced_telemetry_ids | uuid[] | Telemetry rows this output references |
 | referenced_dtc_ids | uuid[] | |
 | referenced_drive_id | uuid | The drive being analyzed |
+| referenced_telemetry_snapshot | jsonb | Nullable. Cited telemetry samples copied inline at write time, so a diagnostic keeps its evidence after the 30-day raw-telemetry purge. Shape is contract-pinned — see `docs/AI_Agent_Contract/ai-agent-contract.md` §5. NULL means the row predates this column; an empty snapshot and an absent one are different states |
 | status | text | 'new' \| 'seen' \| 'dismissed' \| 'actioned' |
 
 Indexed on `(vehicle_id, generated_at DESC)` and `(vehicle_id, status)`.
@@ -258,7 +259,7 @@ The unit of analysis. Drive = ignition-on to ignition-off period.
 | peak_metrics | jsonb | { max_rpm: 6800, max_boost_bar: 1.4, ... } |
 | summary_metrics | jsonb | { avg_coolant_temp_c: 88, avg_afr: 14.6, ... } |
 | sync_session_id | uuid | FK |
-| has_anomaly | bool | Flag set by agent for quick filtering |
+| has_anomaly | bool | Quick-filtering flag. **App-derived, never written by the agent** — a trigger on `diagnostic_outputs` INSERT sets it true when a drive-scoped output has severity 'warning' or 'critical'. One-way: nothing ever unsets it |
 
 Indexed on `(vehicle_id, started_at DESC)`.
 
