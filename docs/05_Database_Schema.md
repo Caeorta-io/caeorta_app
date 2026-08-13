@@ -144,10 +144,11 @@ Raw OBD data. The heavy table.
 | id | uuid | PK |
 | vehicle_id | uuid | FK |
 | sync_session_id | uuid | FK |
+| drive_id | uuid | FK, nullable, `ON DELETE SET NULL`. Set by `device_sync_complete` during drive segmentation; NULL for rows predating the association. Consumers must tolerate NULL |
 | timestamp | timestamptz | When the sample was taken on the car (not when uploaded) |
 | metrics | jsonb | { rpm: 2450, coolant_temp_c: 87, ... } |
 
-Indexed on `(vehicle_id, timestamp DESC)`.
+Indexed on `(vehicle_id, timestamp DESC)`, `(drive_id) WHERE drive_id IS NOT NULL`, and `(sync_session_id, timestamp)`.
 
 **Partitioning strategy:** consider partitioning by week if volume warrants it (likely not at pilot scale). Add `pg_cron` job at Week 4 to downsample telemetry older than 30 days into per-minute aggregates.
 
@@ -366,9 +367,11 @@ CREATE POLICY "devices_insert_own_telemetry" ON telemetry
 
 ## Indexing strategy
 
-Add indexes only when query patterns demand them. Initial set:
+Add indexes only when query patterns demand them. Indexes (kept current; add new indexes here in the same PR that creates them):
 
 - `telemetry (vehicle_id, timestamp DESC)`
+- `telemetry (drive_id) WHERE drive_id IS NOT NULL`
+- `telemetry (sync_session_id, timestamp)`
 - `diagnostic_outputs (vehicle_id, generated_at DESC)`
 - `diagnostic_outputs (vehicle_id, status)`
 - `dtcs (vehicle_id, is_active, last_seen_at DESC)`
