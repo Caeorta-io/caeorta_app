@@ -1,5 +1,14 @@
 -- Caeorta dev seed data
 -- WARNING: dev only — never run against prod
+--
+-- This file runs AUTOMATICALLY on `supabase db reset` (supabase/config.toml
+-- [db.seed].sql_paths), after every migration has applied. It holds local/dev
+-- FIXTURES ONLY — never apply it to prod.
+--
+-- public.users.id REFERENCES auth.users(id) (20260602130000_initial_schema.sql),
+-- so the auth.users rows MUST be inserted before the public.users rows. A fresh
+-- local stack has an empty auth.users, and without them the whole seed aborts on
+-- users_id_fkey (SQLSTATE 23503) before any fixture below lands.
 
 -- =========================================================================
 -- Teardown — delete existing fixture rows before re-inserting, so this seed
@@ -17,7 +26,10 @@
 -- ordered child-first here too so the teardown stays correct if that changes.)
 -- =========================================================================
 DELETE FROM public.telemetry     WHERE sync_session_id = '00000000-0000-0000-0000-000000000020';
-DELETE FROM public.drives        WHERE id              = '00000000-0000-0000-0000-000000000030';
+DELETE FROM public.drives        WHERE id IN (
+  '00000000-0000-0000-0000-000000000030',
+  '00000000-0000-0000-0000-000000000031'
+);
 DELETE FROM public.sync_sessions WHERE id              = '00000000-0000-0000-0000-000000000020';
 DELETE FROM public.vehicles WHERE id = '00000000-0000-0000-0000-000000000010';
 DELETE FROM public.devices WHERE id IN (
@@ -43,6 +55,33 @@ VALUES
 INSERT INTO public.app_versions (version, platform, is_supported, force_update_below_this, release_notes, released_at)
 VALUES
   ('1.0.0', 'android', true, false, 'Initial pilot release', now());
+
+-- Test auth user — LOCAL/DEV FIXTURE ONLY. Must never be seeded into prod.
+-- Same uuid as the public.users row below (and every vehicle/drive keyed off it);
+-- do not renumber. On caeorta-dev this uuid is already a real auth account, so
+-- ON CONFLICT (id) DO NOTHING leaves it untouched there — this row only lands on a
+-- fresh local stack. Deliberately NOT in the teardown above: deleting it would
+-- CASCADE through public.users on dev.
+-- encrypted_password is a NON-SECRET placeholder: bcrypt of the literal string
+-- 'local-fixture-not-a-secret'. The token columns are '' rather than NULL because
+-- gotrue fails to load a user whose token columns are NULL.
+INSERT INTO auth.users (
+  id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change
+) VALUES (
+  '63f09c52-c7e9-4ee1-8584-623b4cf27428',
+  '00000000-0000-0000-0000-000000000000',
+  'authenticated', 'authenticated',
+  'pilot1@example.test',
+  '$2a$10$55onI4mRSZbz/yMV/qYYkuSZRnFUDfyTb3hesZ61sfC3OM3VbRrU.',
+  now(),
+  '{"provider": "email", "providers": ["email"]}'::jsonb,
+  '{}'::jsonb,
+  now(), now(),
+  '', '', '', ''
+)
+ON CONFLICT (id) DO NOTHING;
 
 -- Test user (Sulaiman's account for local testing)
 INSERT INTO public.users (id, display_name, locale)
@@ -90,6 +129,22 @@ INSERT INTO public.drives (
   jsonb_build_object('rpm', 2180, 'speed_kph', 44.8, 'coolant_temp_c', 96.0, 'boost_pressure_kpa', 22, 'engine_load_pct', 38),
   '00000000-0000-0000-0000-000000000020',
   true
+);
+
+-- A second, clean drive (has_anomaly = false) on the same vehicle — the fixture the
+-- has_anomaly trigger test (20260812000002) needs: inserting a warning/critical
+-- drive-scoped diagnostic_outputs row against it must flip the flag to true. No
+-- telemetry or sync session; it exists only to be flipped.
+INSERT INTO public.drives (
+  id, vehicle_id, started_at, ended_at, distance_km, duration_seconds,
+  average_speed_kph, has_anomaly
+) VALUES (
+  '00000000-0000-0000-0000-000000000031',
+  '00000000-0000-0000-0000-000000000010',
+  timestamptz '2026-06-26 18:00:00+00',
+  timestamptz '2026-06-26 18:20:00+00',
+  11.0, 1200, 33.0,
+  false
 );
 
 -- 361 samples at 5 s spacing across the 30-min drive (> 300, so the function's
