@@ -148,7 +148,7 @@ Raw OBD data. The heavy table.
 | timestamp | timestamptz | When the sample was taken on the car (not when uploaded) |
 | metrics | jsonb | { rpm: 2450, coolant_temp_c: 87, ... } |
 
-Indexed on `(vehicle_id, timestamp DESC)`, `(drive_id) WHERE drive_id IS NOT NULL`, and `(sync_session_id, timestamp)`.
+Indexed on `(vehicle_id, timestamp DESC)`, `(drive_id) WHERE drive_id IS NOT NULL`, `(sync_session_id, timestamp)`, and `(drive_id, timestamp)`.
 
 **Partitioning strategy:** consider partitioning by week if volume warrants it (likely not at pilot scale). Add `pg_cron` job at Week 4 to downsample telemetry older than 30 days into per-minute aggregates.
 
@@ -373,6 +373,7 @@ Add indexes only when query patterns demand them. Indexes (kept current; add new
 - `telemetry (vehicle_id, timestamp DESC)`
 - `telemetry (drive_id) WHERE drive_id IS NOT NULL`
 - `telemetry (sync_session_id, timestamp)`
+- `telemetry (drive_id, timestamp)`
 - `diagnostic_outputs (vehicle_id, generated_at DESC)`
 - `diagnostic_outputs (vehicle_id, status)`
 - `dtcs (vehicle_id, is_active, last_seen_at DESC)`
