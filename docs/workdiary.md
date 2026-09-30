@@ -2127,6 +2127,60 @@ Dev's FK matches `20260812000001` (`ON DELETE SET NULL`) — no mismatch between
 
 ---
 
+### 2026-09-30 (later) — `create_vehicle` conformance PR not needed: already fixed in `16f082c`; verified locally end to end (App track, session 46)
+
+**Goal of session:** Close the four `create_vehicle` conformance gaps (`ecu_type` defaulted to `'oem'`, `modifications` stored verbatim, human error strings, narrowed response row) in one PR for @22SHY, and update the contract doc's gaps section. The brief was written from `docs/create_vehicle_contract.md` § "Deployed implementation — conformance gaps".
+
+**Found — the premise was stale.** After `git fetch`, `origin/main` was `545c082` (PRs #63 and #64 both merged). `supabase/functions/create_vehicle/index.ts` on main contains no `?? 'oem'`: commit `16f082c` (Sulaiman, 2026-08-04, Platform session 14 — diary entry below in the Platform track) already closed all six audited gaps. The contract doc was last edited on 2026-08-03 (#51), one day before that fix, and nobody updated it afterwards. So there was no code change to make, and **no code branch, commit or PR was created.**
+
+**Done:**
+- **Read and compared** the contract, the function, `_shared/errors.ts`, `packages/types/src/vehicle.ts` and `apps/mobile/src/lib/vehicles.ts`. Contract and app agree: the four `PASSTHROUGH_ERROR_CODES` match the contract's table, and the function emits them verbatim with the contract's statuses, in the contract's validation order (1–5).
+- **Served the function as it is on main against the local stack** (`npx --offline supabase functions serve create_vehicle`) and ran the brief's eight cases with a real user JWT (password grant as `pilot1@example.test`):
+
+  | Case | HTTP | `error` / result |
+  |---|---|---|
+  | a. valid, `ecu_type: haltech` | 201 | full row (all 11 columns); `ecu_type` stored as sent |
+  | b. `ecu_type` absent | 422 | `validation_error`, `fieldErrors.ecu_type` |
+  | c. `ecu_type: denso-gen4` | 422 | `validation_error`, `fieldErrors.ecu_type` |
+  | d. `modifications: "cold air intake, catback"` | 201 | stored `{"notes": "cold air intake, catback"}`, `jsonb_typeof` = `object` |
+  | e. `modifications` absent | 201 | stored `{}` |
+  | f. `modifications` of 501 chars | 422 | `validation_error`, `fieldErrors.modifications` |
+  | g. another user's device | 403 | `not_device_owner` |
+  | h. device already has a vehicle | 409 | `duplicate_vehicle` |
+
+  The `vehicles` row count was unchanged after every rejected case (b, c, f, g, h). Rows for a and d were read back with `docker exec … psql`.
+- **Fixtures:** the seed has no second user and both seeded devices are `unclaimed`, so cases a–h could not run on the seed alone. Added for the run, then removed: one auth user + `public.users` row, five claimed `active` devices, and a temporary claim on seeded device `…0001` (case h). After cleanup the local DB matches the seed again — 2 devices (both `unclaimed`), 1 vehicle, 1 auth user, 0 `vehicle.created` audit rows. The edge-runtime container was stopped again.
+
+**Not done:**
+- Type-check and lint were not run — nothing changed.
+- `device_not_claimed` and `device_not_active` were not exercised (not in the brief's eight cases).
+- **The contract doc was not updated.** Its gaps section and its "Status: … not yet built" header are both still stale. Awaiting the founder's call on a docs-only PR (see open items).
+
+**Tools / versions touched:** Nothing installed or upgraded. `npx --offline supabase` (cached CLI) used throughout; edge-runtime image `v1.76.2` was already cached, so `functions serve` worked offline.
+
+**Files / commits:** This diary entry only — branch `docs/workdiary-session-46` off `origin/main` `545c082`, own docs PR, not merged.
+
+**Decisions taken:** None needing a Decisions-log row. Stopping instead of opening a code PR followed the brief's own "stop and report" rule.
+
+**Open items rolled forward:**
+- **`docs/create_vehicle_contract.md` needs a docs-only PR:** rewrite the gaps section to record that all six were closed by `16f082c` (keeping the table as history) with this session's verification, and correct the "not yet built" status line. Not started — needs the founder's go-ahead, including for the status line, which the brief put out of bounds.
+- **What dev is running is unverified.** Platform session 14's entry says `16f082c` was deployed; this session was local-only and did not check. If dev still serves `1dc0589`, vehicles created there carry a false `'oem'`. One `supabase functions list`/download against dev settles it — a deliberate founder step.
+- **`16f082c` has no PR.** `gh` finds none associated with it; it appears to have gone to main directly, without review.
+- **No unique constraint on `vehicles.device_id`.** The duplicate check is application code only, so two concurrent requests for one device could both insert. A fix is a new migration plus `docs/05` — Platform-area, not started.
+- **`ECU_TYPES` is duplicated in the function** as a bare literal with no comment naming `packages/types/src/vehicle.ts` as canonical. Values match today.
+- **CF-01 stays open, but its blocker changed:** the function conforms on main and is verified locally; what remains is confirming the dev deploy, wiring the live `fetch` in `source.ts`, and the flip. `DATA_SOURCE.createVehicle` is still `'mock'`. `docs/11_Carry_Forwards.md` CF-01 should be updated to say so.
+- **The Supabase CLI is linked to `caeorta-dev`** (`supabase status` reports it). Nothing run this session used the link.
+- Session 45's entry says PR #63 was open; it merged on 2026-09-30 (with #64). The push of the four migrations to dev is still the founder's separate step.
+- Carried, still open: `docs/04:116` and `docs/05` § Test fixtures describe the `--linked`-only workflow; PRs #56–#60 have no workdiary entries.
+- The local stack and Docker Desktop were left running (`npx --offline supabase stop`).
+
+**Notes / lessons:**
+- **A gaps table is a snapshot, not a status.** The brief quoted a line of code that had been gone for eight weeks, because the doc listing the gap was never updated when the gap closed. Before commissioning a fix from a doc, read the file the doc describes — `git log -- <file>` would have shown `16f082c` in one command.
+- **The other track's diary had the answer.** Platform session 14 recorded this fix in this same file. Session 45's lesson was the same shape (a Platform entry named the "unused" migration as built). Grep the Platform track before treating a cross-track item as open.
+- **A fix that lands without its doc update leaves a standing false alarm.** `16f082c` changed the function and left the contract saying the opposite; the same-PR doc rule exists for exactly this.
+
+---
+
 ## Template for future entries
 
 When starting a new entry, copy this scaffold to the bottom of the file. Keep prose tight; cross-reference the decisions log and tool inventory rather than re-describing.
