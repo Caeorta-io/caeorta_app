@@ -256,9 +256,9 @@ The unit of analysis. Drive = ignition-on to ignition-off period.
 | vehicle_id | uuid | FK |
 | started_at | timestamptz | |
 | ended_at | timestamptz | |
-| distance_km | numeric | **Always NULL today.** No writer exists: `device_sync_complete` does not compute it. Ruling 2026-10-05: **build it** (`Σ(speed × Δt)` in the segmentation loop; the per-100km denominator for agent baselining). Lands in the `device_sync_complete` PR. Contract §9 / §12 D1 |
+| distance_km | numeric | Computed by `device_sync_complete` (since 2026-10-05) by trapezoidal integration of `speed_kph` over time, 2 dp. Intervals touching a sample without `speed_kph`, and intervals longer than 30 s, are skipped, so it is a lower bound when samples are missing. **NULL = unknown** (fewer than two adjacent samples with speed), **0 = stationary**; these are different claims. Rows created before 2026-10-05 stay NULL. The per-100km denominator for agent baselining. Contract §9 / §12 D1 |
 | duration_seconds | int | |
-| average_speed_kph | numeric | **Always NULL today, never written.** Ruling 2026-10-05: **drop the column.** It duplicates `summary_metrics.speed_kph`, which `device_sync_complete` already computes. Lands in a later migration; update this row in that PR. Contract §9 / §12 D2 |
+| average_speed_kph | numeric | **Always NULL today, never written.** Ruling 2026-10-05: **drop the column.** It duplicates `summary_metrics.speed_kph`, which `device_sync_complete` already computes. Lands in a later migration, after the app stops reading it (`LastDriveCard.tsx`, `drives/[driveId].tsx`, `mocks.ts`, `conformance.test.ts`); update this row in that PR. Contract §9 / §12 D2 |
 | peak_metrics | jsonb | { max_rpm: 6800, max_boost_bar: 1.4, ... } |
 | summary_metrics | jsonb | { avg_coolant_temp_c: 88, avg_afr: 14.6, ... } |
 | sync_session_id | uuid | FK |

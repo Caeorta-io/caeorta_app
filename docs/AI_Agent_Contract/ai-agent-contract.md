@@ -50,7 +50,7 @@ The **canonical** telemetry metric vocabulary is the app's existing set. The fir
 
 **Per-vehicle capability is derived, not configured.** The device emits `jsonb_strip_nulls`'d metrics, so an unavailable metric is an **absent key**, never a null and never zero. The agent infers each vehicle's capability set from keys observed across its recent drives (over a window, not a single drive — one short/dropped drive is not loss of a sensor).
 
-**Absent ≠ zero ≠ normal.** The pre-filter must never read a missing metric as `0`. (This bug is live today in `device_sync_complete`'s `peak_metrics` seeding, `Math.max(x ?? 0, val)` — tracked separately.)
+**Absent ≠ zero ≠ normal.** The pre-filter must never read a missing metric as `0`. (`device_sync_complete`'s `peak_metrics` seeding once broke this rule with `Math.max(x ?? 0, val)`, bug P1-2. It was fixed in `3748031` on 2026-08-05: the first observed value seeds the max, whatever its sign, and a metric that never appears gets no key. *Corrected 2026-10-05; this note said "live today" until then.* `distance_km` follows the same rule, see §9.)
 
 **Additional PIDs** (`afr`, `oil_pressure_kpa`, `intake_air_temp_c`, …) are enabled per-car only where that vehicle exposes them. Categories depending on absent metrics are simply unavailable for that car — see §7.
 
@@ -259,10 +259,16 @@ Two tiers:
 
 A **drive** is one ignition-cycle aggregate; `device_sync_complete` segments on a **5-minute** telemetry gap (`DRIVE_GAP_MS`, shipped) — **kept**. The agent does **not** merge drives at the source. "Was the engine cold?" is answered by the agent **grouping drives into thermal sessions at a 3-hour gap** at analysis time — a restart <3h is a warm start. Fine segmentation is recoverable (group at query time, free); coarse is lossy (raw telemetry gone at 30 days). `duration_seconds = ended_at − started_at`.
 
-**`distance_km` and `average_speed_kph` are both NULL today** (`device_sync_complete` writes only `peak_metrics` and `summary_metrics`). Resolved separately:
+**`average_speed_kph` is NULL on every row; `distance_km` is computed as of the `device_sync_complete` correctness PR (2026-10-05).** Resolved separately:
 
 - **`average_speed_kph` is cut.** It duplicates `summary_metrics.speed_kph`, which the same function's existing average loop already computes. Drop the column and stop documenting it. — *Build status: decided 2026-08-12; **not yet shipped as of 2026-10-05**. No migration drops the column. Scheduled per the 2026-10-05 ruling (§12, D2).*
-- **`distance_km` is computed.** It is the denominator for per-100km rate baselining (§8), and the segmentation loop already holds the samples, so `Σ(speed × Δt)` lands inside the loop that exists. Until it does, the agent must not rely on it. — *Build status: decided 2026-08-12; **not yet shipped as of 2026-10-05**. `device_sync_complete` does not compute it. Scheduled per the 2026-10-05 ruling (§12, D1).*
+- **`distance_km` is computed.** It is the denominator for per-100km rate baselining (§8), and the segmentation loop already holds the samples, so `Σ(speed × Δt)` lands inside the loop that exists. — *Build status: decided 2026-08-12; **built 2026-10-05** in the `device_sync_complete` correctness PR (§12, D1).* What the agent can rely on:
+  - Trapezoidal integration of `speed_kph` between consecutive samples.
+  - Absent is never zero: a sample without `speed_kph` breaks the chain, and the intervals either side of it are skipped rather than read as 0 km/h.
+  - Intervals longer than 30 s are skipped rather than extrapolated, because they mean samples were lost.
+  - So `distance_km` is a **lower bound** when samples are missing, never an invented figure.
+  - **NULL means unknown** (no usable interval: fewer than two adjacent samples with speed). **`0` means stationary.** Rate baselining must exclude NULL drives, not treat them as zero distance.
+  - Drives created before this PR keep `distance_km` NULL; nothing backfills them.
 
 ---
 
@@ -322,7 +328,7 @@ This contract is ratified and normative. The schema on `main` does not yet match
 
 | # | Contract | What it says | What `main` actually does | Ruling (2026-10-05) |
 |---|---|---|---|---|
-| D1 | §9 | `distance_km` "is computed" (`Σ(speed × Δt)` inside the segmentation loop) | `device_sync_complete` writes `peak_metrics` and `summary_metrics` only. Nothing under `supabase/functions/` writes `drives.distance_km`; it is NULL on every row the function creates. | **Build it** — scheduled, not open. The per-100km denominator for rate baselining (§8); the segmentation loop already holds the samples. Lands in the `device_sync_complete` PR. |
+| D1 | §9 | `distance_km` "is computed" (`Σ(speed × Δt)` inside the segmentation loop) | `device_sync_complete` writes `peak_metrics` and `summary_metrics` only. Nothing under `supabase/functions/` writes `drives.distance_km`; it is NULL on every row the function creates. | **Build it.** The per-100km denominator for rate baselining (§8); the segmentation loop already holds the samples. **Resolved 2026-10-05:** the `device_sync_complete` correctness PR computes it (§9 records the NULL-when-unknown rule). |
 | D2 | §9 | `average_speed_kph` "is cut … Drop the column" | No migration drops it. The column exists from `20260602130000_initial_schema.sql` and is never written, so it is always NULL. | **Drop the column** — scheduled, not open. It duplicates `summary_metrics.speed_kph`, which the same function already computes. Lands in a migration after the D1 PR. |
 | D3 | §11 | `telemetry.drive_id` gets "add column + one-time backfill" | `20260812000001` adds the column and **deliberately refuses** a backfill (its §3). | **Recorded as deliberately refused**; §11 amended. Drive boundaries were computed in memory and never persisted, so historical telemetry cannot be reliably assigned to a drive. Pre-association rows (`drive_id IS NULL`) are served by the `sync_session_id` + `timestamp` path, which is why `telemetry_sync_session_id_timestamp_idx` is not redundant. The NULL cohort drains with the 30-day purge. |
 
@@ -346,6 +352,12 @@ The prefix `20260804000004` was long described here as an unused gap — the seq
 ---
 
 ## Changelog
+
+- **2026-10-05 (v0.3, `device_sync_complete` correctness pass):** D1 resolved, so `distance_km` is now computed (§9). §3's "live today" note on the `peak_metrics` zero-seed is corrected: `3748031` fixed it on 2026-08-05. The same PR also fixed two defects nobody had recorded:
+  - The function's telemetry read was capped at 1000 rows (`max_rows`), so every aggregate for a session over 1000 rows silently ignored the rest.
+  - The `telemetry.drive_id` association write failed with "URI too long" for large drives.
+
+  D2 is unchanged. No normative change beyond §9's `distance_km` semantics.
 
 - **2026-10-05 (v0.3, §12 divergence corrected):** §12's "Divergent: none" was wrong and is replaced with three items:
   - D1: `distance_km` is not computed. Ruling: build it, in the `device_sync_complete` PR.
