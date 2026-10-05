@@ -16,14 +16,16 @@ If a future Claude (or you) opens a fresh chat in this project, this is the map.
 | `03_Tech_Stack.md` | Tool choice questions, "should we use X" questions |
 | `04_Repository_Structure.md` | File layout, environment setup, monorepo questions |
 | `05_Database_Schema.md` | Anything about Supabase tables, RLS, migrations, data modeling |
-| `06_AI_Agent_Contract.md` | Anything about how the app talks to the AI agent (which lives in another project). **v0.1 — the ratified contract of record.** Read alongside the v0.2 draft below |
-| `AI_Agent_Contract/` | The **v0.2 draft contract** + the agent project's repo review, proposed `agent_role` migration and safety-threshold template. **Proposals awaiting joint review — nothing here is applied.** Start at its `README.md` |
+| `06_AI_Agent_Contract.md` | History only: the **superseded v0.1** contract, kept as a record. For anything about how the app talks to the AI agent, read `AI_Agent_Contract/ai-agent-contract.md` instead |
+| `AI_Agent_Contract/` | **The live app↔agent contract: `ai-agent-contract.md`, v0.3, ratified (PR #56).** Read it for anything about how the app talks to the AI agent (which lives in another project). Its §12 records where `main` does not yet match it. Also here: the agent project's repo review, the superseded `agent_role` proposal (`20260717000000_create_agent_role.sql`; what applied is `supabase/migrations/20260804000001`), and the safety-threshold template. Start at its `README.md` |
 | `07_Sync_Architecture.md` | Anything about device-to-cloud-to-app data flow |
 | `08_12_Week_Action_Plan.md` | What to build, in what order, in which week |
 | `09_Risks_And_Mitigations.md` | Things likely to go wrong, watch list |
 | `10_Out_Of_Scope.md` | "Should we add X?" — check here first |
 | `11_Carry_Forwards.md` | "What's still outstanding?" — the canonical registry of every carried-forward item across both tracks; **check before planning any new week** |
 | `workdiary.md` | Living log; read latest entry at session start, append at session end |
+
+*(Rows 06 and `AI_Agent_Contract/` corrected 2026-10-05. Until then they called v0.1 "the ratified contract of record" and the folder "the v0.2 draft… Proposals awaiting joint review — nothing here is applied". v0.3 was ratified in PR #56, and the role migration and queue work it specifies are on `main`.)*
 
 ---
 

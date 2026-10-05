@@ -159,6 +159,7 @@ The whole week is about deciding things on paper so weeks 2-12 don't get rewritt
 ### Definition of done — Week 1
 - Muhammed can run the codebase locally
 - Both Supabase projects exist with v1 schema applied — **partial:** the three Week 1 v1 migrations (`enable_extensions`, `initial_schema`, `rls_policies`) are applied to dev AND prod as of 2026-06-21 (prod verified: 4 extensions, 26 tables, 36 indexes, RLS on all 26 tables); the two Week 5 migrations (`add_notify_agent`, `add_pg_cron_jobs`) remain dev-only and are tracked as an outstanding prod promotion (see Week 2 carry below and `docs/05` § Migration discipline).
+  *Correction 2026-10-05: "two … remain dev-only" is out of date. `main` now holds 18 migrations. `notify_agent`, which `add_notify_agent` created, was dropped by `20260804000005`, so it is no longer a live object in dev. No prod promotion has been logged since 2026-06-21, so on the repo's record 15 migrations are outstanding for prod, not two. Current statement: `docs/05` § Migration promotion status.*
 - App can log in via email OTP (code-only) against dev Supabase
 - AI Agent Contract doc exists and is shared with agent project
 - CI runs green on a trivial PR
@@ -180,6 +181,7 @@ against `main`, with owner and unblock — now lives in
   three Week-1 migrations are promoted/verified on prod; the two Week-5
   migrations (`add_notify_agent` / `add_pg_cron_jobs`) stay dev-only, and the
   prod OTP config is still pending. See `docs/11_Carry_Forwards.md` § CF-17.
+  *Correction 2026-10-05: no longer "2 of 5". On the repo's record, 15 of 18 migrations are unpromoted to prod. The `notify_agent` RPC was dropped on `main` by `20260804000005`. The prod OTP config is still unrecorded. See CF-17.*
 - **`agent_role` read-only Postgres role migration** — gated on AI Agent
   Contract v0 review. See `docs/11_Carry_Forwards.md` § CF-04.
 - **`devices` column-scope follow-up migration** — now unblocked
@@ -352,6 +354,10 @@ The Week-4 carries, in summary:
   dependency. See `docs/11_Carry_Forwards.md` § CF-13.
 - **Admin dashboard drive-list-per-device** — unbuilt (Platform Week-4 item).
   See `docs/11_Carry_Forwards.md` § CF-05.
+  *Correction 2026-10-05: this was already false when written. The drive list was built
+  on 2026-07-08 (`22acf4c`, `apps/admin/app/devices/[id]/page.tsx`: the 20 most recent
+  drives per device, plus a DTC timeline). CF-05 was closed by PR #48 (`7deb6da`), which
+  cleared the page's lint errors.*
 - **Perf test — 30 days simulated data** — not run (Together item); feeds the
   Week-9 charting re-eval. See `docs/11_Carry_Forwards.md` § CF-11.
 
@@ -598,6 +604,26 @@ project's repo review. The near-misses are not exceptions: `agent_role` appears 
 one `drive_id` is `diagnostic_outputs.referenced_drive_id`, a different column on a
 different table. See `docs/11_Carry_Forwards.md` § CF-03 for the full backlog and its
 provenance.
+
+*Correction 2026-10-05: the paragraph above was accurate on 2026-08-03 and is kept as
+written; "seven files, zero of seven" no longer holds. `main` now holds 18 migrations, and
+every listed schema artifact is on it except the `telemetry.drive_id` backfill, which
+`20260812000001` deliberately refuses (contract §12, D3):*
+- *`agent_role`: `20260804000001`*
+- *the queue and enqueue triggers: `20260804000002`, `20260804000003`, conformed in
+  `20260812000003`*
+- *`telemetry.drive_id`: `20260812000001`*
+- *`referenced_telemetry_snapshot` and the `has_anomaly` trigger: `20260812000002`*
+- *the weekly deep cron: `20260804000003`, re-scoped in `20260812000003`*
+- *three of the seven repo-review bug fixes, checked against code in this pass: the
+  downsample cron (`20260803000003`), the `peak_metrics` negative-seed, and the invalid
+  `vehicles.last_sync_at` write (both in `device_sync_complete`). The other four were not
+  re-checked; see CF-03.*
+
+*All of that is on `main`; dev has not caught up. Per the 2026-09-30 audit, the three
+`20260812*` migrations are not in dev, and no push has been logged since. Integration
+against dev is therefore still gated, now on that push rather than on Platform build
+work.*
 
 **Integration day slipping to Week 7 or later is therefore the likely outcome, and this
 note records it as a scoping fact rather than a risk to be re-decided when it happens.**

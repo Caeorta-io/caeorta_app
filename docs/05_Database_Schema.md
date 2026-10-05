@@ -129,7 +129,9 @@ A car owned by a user, paired with a device.
 | modifications | jsonb | Free-form; itemize in v2. Written as `{"notes": "<user text>"}` by `create_vehicle`, or `{}` when blank. Read by the agent as LLM prose context — deterministic code keys on `ecu_type` instead. |
 | created_at | timestamptz | |
 
-> ⚠️ **Platform-track note:** a `create_vehicle` Edge Function is planned for v1. Once it lands, update this section to document the new write-path alongside `vehicles_no_direct_insert`. The App-track add-vehicle screen (Week 3) is built against this function's contract; the function itself is Sulaiman's to build.
+**Write path.** Clients cannot insert into `vehicles` directly (`vehicles_no_direct_insert`). Vehicles are created by the `create_vehicle` Edge Function using the service role. The function is **built and contract-conformant on `main`**: first version `1dc0589` (2026-07-08), brought into conformance by `16f082c` (2026-08-04), and verified end to end against a local stack on 2026-09-30. The wire contract, and what remains before the app's live flip, are in `docs/create_vehicle_contract.md`. Which build dev serves has not been checked from this repo. The app still serves a mock: `DATA_SOURCE.createVehicle` follows `ENV_DEFAULT` (`'mock'` unless `EXPO_PUBLIC_DATA_SOURCE=live`), and its `'live'` branch returns `notImplemented`.
+
+> *(Until 2026-10-05 this was a ⚠️ Platform-track note: "a `create_vehicle` Edge Function is planned for v1. Once it lands, update this section to document the new write-path alongside `vehicles_no_direct_insert`. The App-track add-vehicle screen (Week 3) is built against this function's contract; the function itself is Sulaiman's to build." The function landed on 2026-07-08 and the note was not updated.)*
 
 #### `vehicle_modifications`
 Empty in v1; reserved for v2 community features (itemized mod tracking).
@@ -254,9 +256,9 @@ The unit of analysis. Drive = ignition-on to ignition-off period.
 | vehicle_id | uuid | FK |
 | started_at | timestamptz | |
 | ended_at | timestamptz | |
-| distance_km | numeric | |
+| distance_km | numeric | **Always NULL today.** No writer exists: `device_sync_complete` does not compute it. Ruling 2026-10-05: **build it** (`Σ(speed × Δt)` in the segmentation loop; the per-100km denominator for agent baselining). Lands in the `device_sync_complete` PR. Contract §9 / §12 D1 |
 | duration_seconds | int | |
-| average_speed_kph | numeric | |
+| average_speed_kph | numeric | **Always NULL today, never written.** Ruling 2026-10-05: **drop the column.** It duplicates `summary_metrics.speed_kph`, which `device_sync_complete` already computes. Lands in a later migration; update this row in that PR. Contract §9 / §12 D2 |
 | peak_metrics | jsonb | { max_rpm: 6800, max_boost_bar: 1.4, ... } |
 | summary_metrics | jsonb | { avg_coolant_temp_c: 88, avg_afr: 14.6, ... } |
 | sync_session_id | uuid | FK |
@@ -420,7 +422,13 @@ Enable in v1:
 
 A migration applied to dev but not yet promoted to prod is "dev-only." Week N+1 work that depends on a migration must verify dev-only vs prod-promoted state. The Action Plan's week-end Definition of Done implicitly assumes prod-promoted; in practice, prod promotion has often slipped by 1-3 days. Workdiary entries should note both states for any migration touched in that session.
 
-**Migration promotion status** (updated 2026-06-21):
+**Migration promotion status — current statement (2026-10-05).** The repo cannot observe dev or prod. Everything below is either the repo's own record (migration files, workdiary) or a dated audit, and each claim says which.
+
+- **On `main`:** 18 migrations, `20260602125801` through `20260812000003` (`ls supabase/migrations/`). All 18 apply cleanly on a local `npx supabase db reset` (session 45, 2026-09-30).
+- **Dev:** the 2026-09-30 dev-drift audit compared dev with a database built from the migration set. It found zero type or nullability mismatches, and found dev's history holding `20260804000004` (applied in dev 2026-08-06; its file was recreated on `main` by PR #63). Every lag difference traced to **the three `20260812*` migrations not yet applied to dev**. That is a schema comparison, consistent with dev having everything through `20260804000005`; it is not a read of dev's full migration history. No push to dev has been recorded since. Whether dev has changed since 2026-09-30 is not knowable from the repo. The audit also did not capture `column_default`. Treat dev as three migrations behind `main` until a push is logged.
+- **Prod:** the only recorded promotion is the three Week-1 migrations (2026-06-21, block below). Step 8 of the ritual requires a workdiary entry for every promotion, and there is none since. On the repo's record, then, prod holds 3 of 18, with **15 outstanding** (`20260614000001` onward). That is inferred from the absence of a log entry, not observed. Promoting in sequence now means `notify_agent` is created by `20260614000001` and dropped again by `20260804000005`; it is not a live object anywhere the full set has been applied. See `docs/11` CF-17.
+
+**Migration promotion status — historical record** (updated 2026-06-21; superseded by the statement above on 2026-10-05, kept as written):
 
 The three Week 1 v1 migrations are applied to **both dev and prod** as of 2026-06-21:
 - Extensions migration (`20260602125801`) — dev ✓, prod ✓ (was PR #4)
@@ -604,6 +612,12 @@ The following classes of test require infrastructure that doesn't exist yet; the
 - **Device-JWT INSERT/UPSERT paths** (`telemetry`, `current_state`, `sync_sessions`, `dtcs`, `device_events`): need `mint_device_token` to issue a JWT with a `device_id` claim. Once available, test that the device JWT can write only to its own vehicle's rows and cannot cross-vehicle insert.
 - **`current_state` UPSERT semantics under device JWT**: paired INSERT-WITH-CHECK + UPDATE-USING + UPDATE-WITH-CHECK policies must all pass for `INSERT … ON CONFLICT DO UPDATE`. Testable end-to-end only when a real device JWT exists.
 - **`agent_role` read-only verification**: TODO until the AI Agent Contract v0 lands and the role is created in a follow-up migration.
+  *Status 2026-10-05: the precondition is met, but the verification has **not** been run.* The role is created by `supabase/migrations/20260804000001_create_agent_role.sql` (on `main`; in dev per the 2026-09-30 audit). The local record is narrower than "verified":
+  - Session 44 (2026-09-29) showed that the migration set, which includes `20260804000001`, applies cleanly on a local `db reset` (17 migrations; 18 from session 45).
+  - Session 44 also exercised the `has_anomaly` trigger.
+  - **No session has run a `SET ROLE agent_role` check.** That would cover reads returning rows under its `USING (true)` policies, writes refused outside `diagnostic_outputs` / `agent_status` / `agent_work_queue`, and the `vehicle_modifications` revoke from `20260812000003`.
+
+  The item stays TODO. It is runnable locally now, since no dev connection is needed.
 
 ## Test fixtures
 

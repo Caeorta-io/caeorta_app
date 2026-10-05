@@ -1,5 +1,16 @@
 # AI Agent Contract
 
+> ## ⛔ SUPERSEDED — this is the historical **v0.1** snapshot. Do not rely on it.
+>
+> The live contract is **`docs/AI_Agent_Contract/ai-agent-contract.md` (v0.3, ratified,
+> PR #56)**. Both projects are bound by v0.3, not by this file. This file is kept unedited
+> below the banners as the record of what v0.1 said. Its body is not maintained, and where
+> it disagrees with v0.3, v0.3 wins.
+>
+> *(Banner replaced 2026-10-05. The banner below dates from 2026-08-03, when v0.2 was an
+> unratified draft. It called this file "the contract of record", which stopped being
+> true when v0.3 was ratified. It is kept as written.)*
+
 > ## ℹ️ This is **v0.1**. A **v0.2 draft exists** and proposes to supersede it.
 >
 > **v0.1 (this file) remains the contract of record** — it is what both projects are

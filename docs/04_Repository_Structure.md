@@ -96,15 +96,10 @@ caeorta_app/
 │       └── package.json
 │
 ├── supabase/                       # Platform-track: migrations, Edge Functions, seed
-│   ├── migrations/                 # Timestamped SQL, immutable once applied
-│   │   ├── 20260602125801_enable_extensions.sql
-│   │   ├── 20260602130000_initial_schema.sql
-│   │   ├── 20260602150000_rls_policies.sql
-│   │   ├── 20260614000001_add_notify_agent.sql
-│   │   ├── 20260614000002_add_pg_cron_jobs.sql
-│   │   ├── 20260615000001_dtcs_add_freeze_frame_metrics.sql
-│   │   └── 20260615000002_add_dtc_lookup_table.sql
-│   ├── functions/                  # Edge Functions (Deno) — 12 + _shared/
+│   ├── migrations/                 # Timestamped SQL, immutable once applied.
+│   │                               # `ls supabase/migrations/` is the list; not
+│   │                               # enumerated here (it went stale — see below)
+│   ├── functions/                  # Edge Functions (Deno), one folder each, + _shared/
 │   │   ├── _shared/                # cors.ts, errors.ts
 │   │   ├── pair_device/   mint_device_token/   submit_wifi_credentials/
 │   │   ├── ota_check/     create_vehicle/      update_current_state/
@@ -145,6 +140,14 @@ caeorta_app/
 ├── pnpm-lock.yaml
 └── tsconfig.base.json
 ```
+
+**`supabase/migrations/` and `supabase/functions/` are not counted in the tree on purpose.**
+Until 2026-10-05 the tree listed seven migration files and said "12" Edge Functions. On
+that date the filesystem held **18** migrations (`20260602125801` … `20260812000003`) and
+**11** Edge Functions plus `_shared/`. The migration list had stopped at `20260615000002`
+and missed every migration from `20260803000001` on, and the function count had been off
+by one. A hardcoded count goes stale on the next migration, so read the folder instead.
+The function folders listed in the tree are the full set as of that date.
 
 **Workspace membership.** `pnpm-workspace.yaml` globs `apps/*` and `packages/*`, but a
 directory is only a workspace member if it has a `package.json`. `apps/marketing` has only

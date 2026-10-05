@@ -13,7 +13,15 @@ code against it; neither side changes the wire shape without editing this doc fi
 The App-track add-vehicle flow (Week 3, Day 3) is **built, not E2E-verified** against
 this contract — exactly the same carried status as the Wi-Fi provisioning flow. The
 app's data seam (`apps/mobile/src/lib/data/source.ts`, capability `createVehicle`)
-serves a mock today; flipping it to `'live'` is gated on this function shipping.
+serves a mock today. The function has shipped, so the live flip is now gated on three
+App-side and deploy steps, in order (detail under *Deployed implementation*):
+1. **confirm the dev deploy serves `16f082c`.** This cannot be checked from the repo.
+2. **wire the live `fetch`.** The `'live'` branch still returns `notImplemented`.
+3. **flip `DATA_SOURCE.createVehicle`** to `'live'`.
+
+*(Until 2026-10-05 this sentence ended "flipping it to `'live'` is gated on this function
+shipping". The function shipped on 2026-07-08 (`1dc0589`) and conformed on 2026-08-04
+(`16f082c`).)*
 
 Related: `docs/05_Database_Schema.md` § `vehicles` (the Platform-track note), the
 session-19/20/21 decisions-log rows, and the existing `pair_device` /
