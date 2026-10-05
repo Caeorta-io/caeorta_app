@@ -1660,6 +1660,21 @@ original six:
   (2026-07-08). **Blocker: a Platform prod-link session.** ⚠️ **If Platform has promoted
   these without logging it, this entry is wrong** — and the missing workdiary entry is then
   the actual defect, since the project has no other way to know prod state.
+  **Re-verified 2026-10-05 — still OPEN, still inferred, and the scope is wider than the
+  heading says.** The 2026-08-03 paragraph reasons from "seven files" in
+  `supabase/migrations/`. There are now **18**, and the scope has grown with them. On the
+  repo's record, prod holds the three Week-1 migrations, and **15 are unpromoted**
+  (`20260614000001` through `20260812000003`), not two.
+
+  No promotion has been logged in the workdiary since 2026-06-21. Neither track's entries
+  mention prod after session 15, so the inference is unchanged.
+
+  `notify_agent` is created by `20260614000001` and dropped by `20260804000005`, so an
+  in-order promotion leaves no live RPC. The prod OTP config is likewise unrecorded.
+
+  Dev is itself behind `main` by the three `20260812*` migrations (2026-09-30 audit), so a
+  promotion should follow the dev push, not precede it. The heading is left as written; the
+  "2 Week-5 migrations" in it is the 2026-06-21 scope.
 - **What's needed to resolve:** A follow-up prod-link session per the `docs/05`
   8-step ritual, once the corresponding Week-4/5 Edge Functions are confirmed
   prod-ready. **Caution:** `add_pg_cron_jobs` starts its nightly jobs the moment
@@ -1686,6 +1701,20 @@ original six:
   owner-should-not-write columns on `devices` remain protected by application code only.
   **Blocker: Platform track must author the migration.** Not App-track work, and not
   closable here despite being "unblocked" for two months.
+  **Re-verified 2026-10-05 — still OPEN; the substantive gap is unchanged, but the
+  2026-08-03 evidence no longer reads as written.**
+
+  The folder now holds 18 files, not seven, and a grep for `REVOKE` no longer returns
+  nothing. There are five uncommented `REVOKE` statements across four migrations:
+  - `EXECUTE` on `notify_agent`, from `PUBLIC`: `20260803000001`
+  - `EXECUTE` on `notify_agent`, from `anon` and `authenticated`: `20260803000002`
+  - `EXECUTE` on `set_drive_has_anomaly()`, from `PUBLIC`: `20260812000002`
+  - `SELECT` on `vehicle_modifications`, from `agent_role`: `20260812000003`
+
+  **None touches `devices`.** There is no uncommented column-scoped `GRANT UPDATE`
+  anywhere. The only `devices` policies are still the three from `20260602150000`
+  (`devices_select_own`, `devices_update_own`, `devices_no_direct_insert`).
+  Owner-should-not-write columns remain application-enforced only.
 - **What's needed to resolve:** A migration that REVOKEs UPDATE on the
   device-managed columns from `authenticated` and GRANTs the owner-writable
   subset (likely just `status`).

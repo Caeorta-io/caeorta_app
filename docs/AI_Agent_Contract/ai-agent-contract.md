@@ -22,7 +22,7 @@ The app:
 - **Displays** diagnostics with severity-appropriate UI.
 - **Writes** `diagnostic_feedback` (thumbs + comment), which the agent consumes for evals.
 
-The agent authenticates as the dedicated `agent_role` Postgres role (migration `20260717000000_create_agent_role.sql`), over a **direct, session-mode connection** (Supavisor port 5432 — transaction pooling silently breaks `LISTEN`).
+The agent authenticates as the dedicated `agent_role` Postgres role (migration `supabase/migrations/20260804000001_create_agent_role.sql` on `main`. *Until 2026-10-05 this sentence named `20260717000000_create_agent_role.sql`, which is the superseded proposal under `docs/AI_Agent_Contract/`, never applied; see §12*), over a **direct, session-mode connection** (Supavisor port 5432 — transaction pooling silently breaks `LISTEN`).
 
 ---
 
@@ -91,6 +91,8 @@ Full DDL in `proposed-app-changes.md §1`.
 **What the queue absorbs for free:** durability (no lost work), cooldowns (the unique partial index enforces §5 declaratively), retries surviving restart (`attempts`), and the DTC + weekly triggers through one path and one consumer loop.
 
 **Security:** the v1 `notify_agent` RPC is `SECURITY DEFINER` with no `REVOKE FROM PUBLIC` — any authenticated user can trigger agent runs on any vehicle. Adopting the queue moves enqueue to a table trigger and the RPC is dropped, closing this.
+
+*Status (2026-10-05): closed on `main`, and this paragraph describes the past.* `20260803000001` and `20260803000002` revoked `EXECUTE` from `PUBLIC`, `anon` and `authenticated`. `20260804000005` then dropped the function. Per the 2026-09-30 audit, dev lags `main` only by the three `20260812*` migrations, so the drop is in dev. Prod has no promotion recorded after the three Week-1 migrations (2026-06-21), so prod most likely never received `notify_agent`; that cannot be confirmed from this repo.
 
 ### Cooldowns (unchanged from v0.1)
 ≤1 routine run per vehicle per hour; ≤1 deep run per vehicle per week; manual runs (v2) bypass cooldowns, rate-limited per user per day.
@@ -259,8 +261,8 @@ A **drive** is one ignition-cycle aggregate; `device_sync_complete` segments on 
 
 **`distance_km` and `average_speed_kph` are both NULL today** (`device_sync_complete` writes only `peak_metrics` and `summary_metrics`). Resolved separately:
 
-- **`average_speed_kph` is cut.** It duplicates `summary_metrics.speed_kph`, which the same function's existing average loop already computes. Drop the column and stop documenting it.
-- **`distance_km` is computed.** It is the denominator for per-100km rate baselining (§8), and the segmentation loop already holds the samples, so `Σ(speed × Δt)` lands inside the loop that exists. Until it does, the agent must not rely on it.
+- **`average_speed_kph` is cut.** It duplicates `summary_metrics.speed_kph`, which the same function's existing average loop already computes. Drop the column and stop documenting it. — *Build status: decided 2026-08-12; **not yet shipped as of 2026-10-05**. No migration drops the column. Scheduled per the 2026-10-05 ruling (§12, D2).*
+- **`distance_km` is computed.** It is the denominator for per-100km rate baselining (§8), and the segmentation loop already holds the samples, so `Σ(speed × Δt)` lands inside the loop that exists. Until it does, the agent must not rely on it. — *Build status: decided 2026-08-12; **not yet shipped as of 2026-10-05**. `device_sync_complete` does not compute it. Scheduled per the 2026-10-05 ruling (§12, D1).*
 
 ---
 
@@ -280,20 +282,31 @@ A **drive** is one ignition-cycle aggregate; `device_sync_complete` segments on 
 | 1 | Trigger mechanism | **Resolved → work queue (§4).** |
 | 2 | Deep analysis: build or cut | **Resolved → build the weekly emitter (§4).** |
 | — | `has_anomaly` ownership | **Resolved → app-derived** via trigger on `diagnostic_outputs.severity`. Agent write surface stays `diagnostic_outputs` + `agent_status`. |
-| — | `referenced_telemetry_ids` vs 30-day purge | **Resolved → add `referenced_telemetry_snapshot jsonb`** (§5). App-side migration pending. |
-| — | `telemetry.drive_id` | **Resolved → add column + one-time backfill** (§3). App-side migration pending. |
+| — | `referenced_telemetry_ids` vs 30-day purge | **Resolved → add `referenced_telemetry_snapshot jsonb`** (§5). On `main` in `20260812000002` (PR #59); not yet in dev as of the 2026-09-30 audit. *(Read "App-side migration pending" until 2026-10-05.)* |
+| — | `telemetry.drive_id` | **Resolved → add column; no backfill** (amended 2026-10-05). Column + indexes on `main` in `20260812000001`; not yet in dev as of the 2026-09-30 audit (dev carries the column from the orphan `20260804000004`). The backfill was **deliberately refused**: drive boundaries were computed in memory and never persisted, so historical telemetry cannot be reliably assigned to a drive. Pre-association rows keep `drive_id IS NULL` and are served by the `sync_session_id` + `timestamp` path (`telemetry_sync_session_id_timestamp_idx`). See §12, D3. *(Read "**Resolved → add column + one-time backfill** (§3). App-side migration pending." until 2026-10-05.)* |
 | 3 | `insufficient_data` temporary vs permanent | **Resolved → structured marker in `referenced_telemetry_snapshot`** (§7). Copy convention withdrawn. |
 | — | Queue claim index vs claim sort | **Resolved → expression index `((kind <> 'routine'), enqueued_at)`** (§4). `(kind, enqueued_at)` does not serve the sort. |
 | — | Routine SLO behind a running deep | **Resolved → deep yields the vehicle lock at chunk boundaries** (§4). Mutex kept. |
 | — | "Active vehicle" for the weekly deep enqueue | **Resolved → ≥1 drive in the last 14 days** (§4). |
 | — | `referenced_telemetry_snapshot` shape | **Resolved → core pinned in §5**, `schema: 1`. Agent may extend; core changes require a bump. |
-| — | `drives.average_speed_kph` / `distance_km` | **Resolved → cut `average_speed_kph`; compute `distance_km`** (§9). |
+| — | `drives.average_speed_kph` / `distance_km` | **Resolved → cut `average_speed_kph`; compute `distance_km`** (§9). Neither is built as of 2026-10-05; both are scheduled (§12, D1–D2). |
 | 4 | Coolant threshold single source of truth | Open — one source; app consumes validated value. |
 | — | Hard safety thresholds (values) | Open — founder/domain research. Non-blocking: `unvalidated` gate keeps `critical` off until filled (§8). |
 
 **App-side changes v0.2 depends on**, routed to the Platform track, unbuilt on `main` as of 2026-07-17 (agent builds against these once landed): `agent_work_queue` + enqueue triggers; weekly `deep` pg_cron enqueue; drop/replace `notify_agent` RPC; `telemetry.drive_id` + backfill; `referenced_telemetry_snapshot`; `has_anomaly` app-derived trigger. Plus confirmed bug fixes (`findings-from-repo-review.md`): downsample cron (P0-1/2/3), `peak_metrics` negative-seed (P1-2), `vehicles.last_sync_at` write (P1-1).
 
 Until these land, the agent is built against a local Postgres with the shipped schema + these four migrations applied, and re-pinned to real DDL when Platform confirms column names/types.
+
+*Status (2026-10-05): the paragraph above is a 2026-07-17 record.* Every item in it is now on `main` **except the `telemetry.drive_id` backfill, which was deliberately refused** (§12, D3):
+- the queue, its enqueue triggers and the weekly `deep` cron: `20260804000002`, `20260804000003`, `20260812000003`
+- `notify_agent` dropped: `20260804000005`
+- `telemetry.drive_id`: `20260812000001`
+- `referenced_telemetry_snapshot` and the `has_anomaly` trigger: `20260812000002`
+- the downsample cron fix: `20260803000003`
+- the `peak_metrics` seed fix: `device_sync_complete`
+- P1-1: `device_sync_complete` no longer writes the nonexistent `vehicles.last_sync_at`; the column lives on `devices`, and the function updates it there
+
+**On `main` is not the same as in dev.** Per the 2026-09-30 audit, the three `20260812*` migrations are not in dev, and the repo records no push since. The agent's re-pin target is the migration set on `main`; whether a given environment matches it has to be checked against that environment.
 
 ---
 
@@ -305,7 +318,17 @@ This contract is ratified and normative. The schema on `main` does not yet match
 
 **Brought into conformance since this section was written:** `telemetry.drive_id` + its partial index and a `(sync_session_id, timestamp)` index (`20260812000001`); and, in `20260812000003`, the four queue divergences below — the claim index replaced with the expression form `((kind <> 'routine'), enqueued_at) WHERE state='pending'` that the claim sort actually needs, `attempts` documented as counting failures rather than claims, the weekly deep cron rescheduled with a 14-day active-vehicle predicate in place of "any drive ever", and `agent_role`'s `SELECT` on `vehicle_modifications` revoked along with its policy.
 
-**Divergent — schema to be corrected to match this contract:** none. As of `20260812000003` the shipped schema is conformant with §§1–11.
+**Divergent — code and schema not yet matching this contract (corrected 2026-10-05):** three items. Each is a decision §§9 and 11 record correctly; the error was in describing them as shipped state.
+
+| # | Contract | What it says | What `main` actually does | Ruling (2026-10-05) |
+|---|---|---|---|---|
+| D1 | §9 | `distance_km` "is computed" (`Σ(speed × Δt)` inside the segmentation loop) | `device_sync_complete` writes `peak_metrics` and `summary_metrics` only. Nothing under `supabase/functions/` writes `drives.distance_km`; it is NULL on every row the function creates. | **Build it** — scheduled, not open. The per-100km denominator for rate baselining (§8); the segmentation loop already holds the samples. Lands in the `device_sync_complete` PR. |
+| D2 | §9 | `average_speed_kph` "is cut … Drop the column" | No migration drops it. The column exists from `20260602130000_initial_schema.sql` and is never written, so it is always NULL. | **Drop the column** — scheduled, not open. It duplicates `summary_metrics.speed_kph`, which the same function already computes. Lands in a migration after the D1 PR. |
+| D3 | §11 | `telemetry.drive_id` gets "add column + one-time backfill" | `20260812000001` adds the column and **deliberately refuses** a backfill (its §3). | **Recorded as deliberately refused**; §11 amended. Drive boundaries were computed in memory and never persisted, so historical telemetry cannot be reliably assigned to a drive. Pre-association rows (`drive_id IS NULL`) are served by the `sync_session_id` + `timestamp` path, which is why `telemetry_sync_session_id_timestamp_idx` is not redundant. The NULL cohort drains with the 30-day purge. |
+
+D1 and D2 describe `main`. Dev's state is a separate question and cannot be read from this repo (see the dev-drift paragraph below).
+
+*(Until 2026-10-05 this paragraph read: "**Divergent — schema to be corrected to match this contract:** none. As of `20260812000003` the shipped schema is conformant with §§1–11." That was wrong from the day it was written (2026-08-12). It checked the queue divergences, but not the §9 and §11 resolutions, which still described decisions as if they had shipped. It was found in the 2026-09-30 docs reconciliation and left as written pending these rulings.)*
 
 **The `telemetry.drive_id` episode is worth keeping.** The column was written by `device_sync_complete` from `c1dafc4` onward while existing in no migration — the write's error was caught and logged as non-fatal, so an environment built from the migration set alone silently never populated it and reported nothing. `20260812000001` closes the gap. The open question it raised — the column existed in the dev database before any migration on `main` created it, so dev had drifted from `supabase/migrations/` by some unrecorded route — was audited on 2026-09-30, comparing dev against a database built from the migration set. The route was a migration, not an out-of-band edit: dev's history holds version `20260804000004` (`telemetry_drive_id`), applied 2026-08-06, whose file never reached the repo. The audit found **zero type or nullability mismatches**; **two true drift items** — that orphan history record, and the index it left behind, `telemetry_drive_id_timestamp` on `(drive_id, "timestamp")`, which no migration on `main` created — both resolved by recreating the file as `20260804000004_telemetry_drive_id.sql`; and **ten lag differences**, all of them the three `20260812*` migrations not yet applied to dev. **Still pending:** those three have not been pushed to dev, and could not be while dev's history held a version with no local file. The lag differences close when dev is pushed, which is a separate, deliberate step; until then dev remains behind `main`. **Stated plainly: as of 2026-09-30 dev has NOT been pushed. What this section says about conformance describes the migration set on `main`; it is not yet true of the dev database.** **One limit of the audit:** its column capture recorded name, type and nullability only — not `column_default` — so defaults are unverified across every column, and a default-only drift would not have shown up. The lesson stands: absence from the migration set is not evidence of absence from a live database — check both.
 
@@ -323,6 +346,13 @@ The prefix `20260804000004` was long described here as an unused gap — the seq
 ---
 
 ## Changelog
+
+- **2026-10-05 (v0.3, §12 divergence corrected):** §12's "Divergent: none" was wrong and is replaced with three items:
+  - D1: `distance_km` is not computed. Ruling: build it, in the `device_sync_complete` PR.
+  - D2: `average_speed_kph` is not dropped. Ruling: drop the column, in a later migration.
+  - D3: the `telemetry.drive_id` backfill was deliberately refused by `20260812000001`. Ruling: record the refusal; §11 amended to "no backfill".
+
+  §9's two resolutions are kept and carry their build status. Stale present-tense claims in §1 (role migration path), §4 (`notify_agent` hole) and §11 ("pending" / "unbuilt on `main`") carry dated corrections. No normative change beyond D3's amendment to §11.
 
 - **2026-09-30 (v0.3, §12 reconciled with `main`):** §12 heading re-dated; the "in flight" paragraph corrected now that `20260812000002` has merged (PR #59, 2026-09-28); the dev-drift paragraph now states outright that dev has not been pushed and that the audit did not capture `column_default`. No normative change to §§1–11.
 
