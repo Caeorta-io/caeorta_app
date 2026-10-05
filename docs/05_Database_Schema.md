@@ -399,7 +399,8 @@ Enable in v1:
 - Every schema change = one migration file.
 - File naming: `YYYYMMDDHHMMSS_descriptive_name.sql`
 - Migrations are immutable once applied. Never edit an applied migration; write a new one.
-- Apply to dev with `supabase db push --linked`
+- **Verify locally first.** `npx supabase start`, then `npx supabase db reset`, which applies every migration in `supabase/migrations/` and then loads `seed.sql` and `seed_dtc_lookup.sql`. The local stack is where a migration is verified before it goes anywhere shared. *(Added 2026-09-30. Before `supabase/config.toml` landed in PR #61 there was no local stack, and this list went straight to "apply to dev" — dev was the verification environment.)*
+- Then apply to dev with `supabase db push --linked`
 - Promote to prod manually after dev verification (see **Promoting a migration to prod** below).
 - Generate TS types after every migration: `supabase gen types typescript --linked > packages/supabase/database.types.ts`
 - Update `docs/schema.md` (this file) in the same PR
@@ -473,6 +474,8 @@ When upgraded to Supabase Pro (after pilot, before commercial launch), enable au
 ## Testing
 
 The RLS migration (PR #8) is verified against a 12-step pg-side isolation suite. Tests are currently run manually via `supabase db query --linked -f <file>` against the dev project — the Management API runs each invocation against a role that bypasses RLS, so each test impersonates a target role with `SET LOCAL ROLE` + `set_config('request.jwt.claims', …, true)` inside a transaction, captures the result into a temp table, then `RESET ROLE` and selects from the temp table at the end. The Dashboard SQL editor can run the same scripts (founder action) when the CLI path is unavailable.
+
+> **Note, 2026-09-30.** The paragraph above and the "Today:" lines below describe how the suite was run when it was written — against the dev project, because there was no local stack. A local stack now exists (`npx supabase start` + `npx supabase db reset`) and is the verification environment for migrations. **This suite has not been re-run there**, and it cannot run on the local seed as-is: `supabase/seed.sql` creates one user, not the three fixture users (`<u1>` / `<u2>` / `<u3>`) the suite assumes. Treat the results recorded here as dev results from the PR #8 era, not as a current local result.
 
 The suite assumes the fixtures from the **Test fixtures** section below (three test users with UUIDs `<u1>` / `<u2>` / `<u3>`, one vehicle each with ids `<v1>` / `<v2>` / `<v3>`). When the suite is automated (see Test fixtures → when to build), it lands as `supabase/tests/rls.sql` and runs via `supabase test db` or a CI job.
 
@@ -604,7 +607,9 @@ The following classes of test require infrastructure that doesn't exist yet; the
 
 ## Test fixtures
 
-We need a `supabase/seed.sql` file so dev can be reset to a known-good state with `supabase db reset --linked`. Until then, the dev project carries the three ad-hoc fixtures inserted during PR #8 verification (UUIDs `11111111-…` / `22222222-…` / `33333333-…`), which can drift.
+**Current state (2026-09-30):** `supabase/seed.sql` exists and loads automatically on a local `npx supabase db reset`, after all migrations, followed by `seed_dtc_lookup.sql` (both are listed in `supabase/config.toml`). That local reset is the known-good state to verify against. The seed creates its own `auth.users` row before the `public.users` row that references it (PR #61) — without that, a reset on an empty local database failed on `users_id_fkey`. What the seed holds today is narrower than the v1 plan below: one user, one vehicle, two unclaimed devices, two drives and 361 telemetry rows — not three users.
+
+*What this section said until 2026-09-30, kept because the plan below still reads against it:* "We need a `supabase/seed.sql` file so dev can be reset to a known-good state with `supabase db reset --linked`. Until then, the dev project carries the three ad-hoc fixtures inserted during PR #8 verification (UUIDs `11111111-…` / `22222222-…` / `33333333-…`), which can drift." The file has existed since 2026-06-14 (`d2471b6`); the sentence was never updated. Whether dev still carries those three ad-hoc fixtures cannot be checked from this repo.
 
 **What goes in `supabase/seed.sql` v1**:
 

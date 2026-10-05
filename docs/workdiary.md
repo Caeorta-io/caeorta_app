@@ -2,7 +2,7 @@
 
 A running log of development on the Caeorta app/web/Supabase build. Updated at the end of any session that involved meaningful work.
 
-**Read top-to-bottom for chronology.** Newest entries go at the bottom. Three living sections at the top — **Current tool inventory**, **Repository facts**, and **Decisions log** — get kept current as the project moves. Each session also writes a new dated entry under **Diary entries**.
+**Read top-to-bottom for chronology.** Newest entries go at the bottom. Four living sections at the top — **Current tool inventory**, **Repository facts**, **Decisions log**, and **Recurring pattern — doc drift** — get kept current as the project moves. Each session also writes a new dated entry under **Diary entries**.
 
 When something is installed, upgraded, or replaced, update the tool inventory row. When a non-trivial decision is taken, add a row to the decisions log AND mention it in that day's diary entry.
 
@@ -140,6 +140,19 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-08-03 (session 43) | **Three modelling calls taken as a set while reconciling CF-30 and building the S1 feed's pure rules.** (1) **The diagnostic fixtures move to the contract shape** — `category='insufficient_data'` + `severity='info'` + `urgency='monitor'` + `confidence<0.3`; the severity sentinel is gone from the app, and the either-field check in `deriveDiagnosticCardState` is **kept anyway** as a boundary guard on unvalidated live rows. (2) **`insufficient_data` sorts BELOW `info`, in both shapes** — `sortDiagnosticsByPriority` now reads `category` as well as `severity` via a shared `isInsufficientData`. This is the direction CF-30 left open: off-the-ladder is the *absence* of a finding, not the quietest one, so ranking it as `info` would let "we couldn't tell" outrank a real quiet finding. (3) **Dedup keys on the PAIR `(category, active-state)` with the newest row surviving each bucket, where active means "not `dismissed`" and `actioned` counts as ACTIVE.** The pair is what stops a dismissal hiding a live finding in the same category, and stops a live one resurrecting a dismissed one — a category holding both correctly yields two rows. `actioned` is active because it is what the critical card's "I've got it" writes, not a resolution marker. Also decided: **`deriveInsufficientDataKind` returns `'unknown'` unconditionally and will NOT string-match `title`/`explanation`** — a keyword rule would pass on today's fixtures and then mislabel the next agent version's wording, telling a driver "keep driving, we'll have more soon" about a metric their ECU will never report, which is the exact failure §7's split exists to prevent. | CF-30's own "What's needed to resolve" prescribed (1); (2) and (3) are the calls it left to whoever built the feed. The dedup rule is contract §5's sentence — *"the app dedupes in the UI by category + active state"* — read as a compound key, which is the only reading under which both named halves do work. | `apps/mobile/src/lib/diagnostics.ts` (`isInsufficientData`, `dedupeDiagnostics`, `groupDiagnosticsByDate`, `deriveInsufficientDataKind`, `isDiagnosticActive`), `lib/data/source.ts` (`DATA_SOURCE.diagnostics` + `fetchDiagnostics`), `lib/data/mocks.ts` (`mockOlderDiagnostics`, fixture …672); **`docs/11` CF-30 status line + `docs/08` Week-6 rows are founder-owned and NOT yet updated — CF-30 is partially addressed, not closed**; session 43 diary |
 | 2026-09-29 (session 44) | **Local Supabase stack is now supported, and the seed creates its own auth user — four calls taken as a set (PR #61).** (1) **`supabase/config.toml` is committed** (stock `supabase init`, `project_id = "caeorta_app"`), reversing the "no config.toml — the CLI is used `--linked`" note in `docs/04`; `--linked` remains valid for dev. (2) **`seed.sql` inserts the `auth.users` row for the existing fixture uuid `63f09c52-…` before `public.users`**, `ON CONFLICT (id) DO NOTHING` — a no-op on caeorta-dev, where that uuid is Sulaiman's real account — and is **deliberately NOT in the teardown**, because deleting it would CASCADE through `public.users` on dev. The seed is described as local + dev fixtures, never prod (the brief's "local only" wording conflicted with `docs/05`'s `db reset --linked`). (3) **A second drive `…0031` with `has_anomaly = false`** is seeded as the has_anomaly-trigger test fixture (the only prior drive was seeded `true`). (4) **`seed_dtc_lookup.sql` is wired into `[db.seed].sql_paths`** — an upsert that had never been hooked up anywhere; Claude Code's call, flagged in the PR as removable. | A fresh local stack could not start at all: no config.toml, and the seed aborted on `users_id_fkey` (23503) before any fixture landed. (1)–(3) were founder decisions at the session's ASK. | `supabase/config.toml` (new), `supabase/seed.sql`; `docs/04` line 116 + `docs/05` § Test fixtures still need the founder's edit; this row + session 44 diary |
 | 2026-09-30 (session 45) | **The orphan dev migration `20260804000004` is reconciled by recreating its file, and the index it left in dev is adopted — two calls taken as a set (PR #63). Taken by the App founder with Sulaiman unreachable; Platform-area, so recorded for his review.** (1) **Recreate `20260804000004_telemetry_drive_id.sql` at its true number rather than `supabase migration repair --status reverted`.** (2) **Adopt `telemetry_drive_id_timestamp` on `(drive_id, "timestamp")` rather than drop it, and keep the partial `telemetry_drive_id_idx` from `20260812000001` as well.** | (1) Repair would record the version as reverted. It was not — its objects are live in dev. A history claiming "reverted" over live objects is worse than an orphan record; recreating the file makes the existing record true. It also unblocks `db push`, which the CLI refuses while dev's history holds a version with no local file. (2) It is the better index for the real read path (all telemetry for a drive, in time order). Dropping a live index risks a plan regression on the largest table for no gain; keeping a possibly-redundant one costs only write overhead already being paid. Revisit on a `pg_stat_user_indexes` review, not before. | `supabase/migrations/20260804000004_telemetry_drive_id.sql` (header records both); `docs/05_Database_Schema.md` (telemetry index lists); `docs/AI_Agent_Contract/ai-agent-contract.md` §12 + changelog; PR #63 body |
+
+---
+
+## Recurring pattern — doc drift (four findings as of 2026-09-30)
+
+**A document describing code is only as good as its last verification.** Four times a doc here described a state that had already changed, and each time it cost real work:
+
+1. `docs/05` said `drives.has_anomaly` was set by the agent; nothing in the repo ever wrote it.
+2. `docs/AI_Agent_Contract/README.md` called the contract an unratified draft for seven weeks after PR #56 ratified it.
+3. Contract §12 called `20260804000004` an unused number while dev had that migration applied; its file never reached the repo.
+4. `docs/create_vehicle_contract.md` listed six conformance gaps for eight weeks after `16f082c` closed them — and session 46 was commissioned to fix them again.
+
+By the founder's tally, three of the four trace to work that reached `main` (or dev) without a PR, or without a doc update in the same PR. Two are confirmed from the repo: `16f082c` has no associated PR, and the `20260804000004` file was never committed at all. The repo already has the rule that prevents this — the same-PR doc update in `CLAUDE.md` and `docs/conventions.md` § Spec deviations — and every instance happened where it was skipped. **Before commissioning work from a doc, read the file the doc describes** (`git log -- <file>` is one command), and check the other track's diary entries.
 
 ---
 
@@ -2178,6 +2191,46 @@ Dev's FK matches `20260812000001` (`ON DELETE SET NULL`) — no mismatch between
 - **A gaps table is a snapshot, not a status.** The brief quoted a line of code that had been gone for eight weeks, because the doc listing the gap was never updated when the gap closed. Before commissioning a fix from a doc, read the file the doc describes — `git log -- <file>` would have shown `16f082c` in one command.
 - **The other track's diary had the answer.** Platform session 14 recorded this fix in this same file. Session 45's lesson was the same shape (a Platform entry named the "unused" migration as built). Grep the Platform track before treating a cross-track item as open.
 - **A fix that lands without its doc update leaves a standing false alarm.** `16f082c` changed the function and left the contract saying the opposite; the same-PR doc rule exists for exactly this.
+
+---
+
+### 2026-09-30 (later) — Docs reconciliation: six documents brought back in line with `main` (App track, session 47)
+
+**Goal of session:** After four doc-drift findings, reconcile the documentation with what is on `main` — verifying every claim against code before rewriting it, and keeping the history of what was wrong. Docs only; PR for @22SHY.
+
+**Found — the brief was itself stale in four places.** Reported before any edit:
+- The `create_vehicle` gaps table holds **six** gaps, not four. All six are closed by `16f082c`.
+- Contract §12's dev-drift paragraph and its changelog bullet **already** carried the 2026-09-30 audit result (landed in #63). Only the heading date, the "in flight" text and the `column_default` caveat were missing.
+- **The `telemetry.drive_id` backfill was deliberately not built** (`20260812000001` says why), and **`distance_km` is not computed and `average_speed_kph` not dropped**, though contract §9 resolves both. So §12's "conformant with §§1–11" is not fully supported by the code.
+- "Locally verified 2026-09-30" holds for *all 18 migrations apply cleanly* and for the `has_anomaly` trigger (exercised 2026-09-29). There is no recorded local run of the enqueue triggers, the cron or `agent_role`'s grants.
+
+**Done** (branch `docs/reconcile-with-main` off `origin/main` `4d2284b`; PR #65 had merged):
+- **`docs/create_vehicle_contract.md`** — gaps section rewritten: all six closed by `16f082c`, the session-46 eight-case local verification, what remains before the flip, and the unguarded `ECU_TYPES` duplicate. The original table is kept as a labelled historical record. The "not yet built" status line and the "E2E gated on this function landing" bullet were also corrected.
+- **`docs/AI_Agent_Contract/ai-agent-contract.md` §12** — heading re-dated; "in flight" corrected now #59 has merged; dev-not-pushed stated outright; `column_default` limit added; one changelog bullet.
+- **`docs/04`, `docs/05`** — the local-stack workflow (`npx supabase start`, `npx supabase db reset`) recorded as where migrations are verified; promotion path to dev/prod unchanged. `docs/05` § Testing and § Test fixtures now say the RLS suite has not been re-run locally and cannot run on the one-user seed.
+- **`docs/11`** — CF-01, CF-03, CF-04 updated with dated paragraphs, plus a header amendment. **All three stay open.** CF-08 untouched.
+- **`docs/AI_Agent_Contract/README.md`** — status block and Contents table rewritten (v0.3 ratified, Q-A–Q-D resolved, `.sql` is a superseded proposal); the older sections kept with dated notes.
+- **This file** — the "Recurring pattern — doc drift" section above the diary entries.
+
+**Not done / not verified:**
+- Nothing under `supabase/`, `apps/` or `packages/` was touched. No `db push`, no `link`, no connection to dev. No local stack run this session — verification was by reading code, and run-time claims cite sessions 44–46.
+- **Dev's state is unverifiable from the repo** and is said so in each doc: which `create_vehicle` build dev serves, whether dev has been pushed, whether dev still holds the PR #8 fixtures.
+- `pnpm` gate not run — no code changed.
+
+**Tools / versions touched:** None.
+
+**Files / commits:** one commit, seven files, all under `docs/`. PR opened for @22SHY, not merged.
+
+**Decisions taken:** Two founder answers at the session's ASK, neither needing a Decisions-log row: (1) leave §12's conformance statement as written and carry the `distance_km` / `average_speed_kph` / backfill items as follow-up — they are recorded in CF-03, not in §12; (2) fix the contract doc's stale status line in this PR.
+
+**Open items rolled forward:**
+- **§12 still says "Divergent: none".** The three items above contradict it. Needs a ruling with Sulaiman and the agent project: build them, or record in the contract that they are deferred.
+- **Stale claims found and deliberately left for a follow-up PR:** `docs/06` banner (v0.1 "contract of record"); `docs/00_README.md:20` ("v0.2 draft… nothing applied"); `docs/04` tree (7 migrations listed of 18; "12" functions where there are 11); `docs/05` — the `vehicles` Platform-track note (`create_vehicle` "planned"), § Testing's deferred list (`agent_role` "TODO until… the role is created"), the migration promotion status dated 2026-06-21, and the `drives` table (no note that `distance_km` / `average_speed_kph` are NULL); contract §1 (names `20260717000000` as the role migration), §4 (the `notify_agent` hole in the present tense) and §11 ("App-side migration pending", "unbuilt on `main`"); `docs/08` lines 161, 181, 353, 592; `docs/11` CF-17 and CF-18; the intro paragraph of `docs/create_vehicle_contract.md` ("gated on this function shipping").
+- Carried from session 46, unchanged: confirm dev serves `16f082c`; no unique constraint on `vehicles.device_id`; the push of the four migrations to dev; PRs #56–#60 have no workdiary entries.
+
+**Notes / lessons:**
+- **A reconciliation brief drifts too.** This one was written the same day and still miscounted the gaps and asked for an edit that had already merged. Reporting findings before editing caught both.
+- **"Built" needs its verb checked.** "`telemetry.drive_id` + backfill" was one backlog line; half of it shipped and half was deliberately refused. Recording the line as "built" would have created the fifth drift finding.
 
 ---
 

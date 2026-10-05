@@ -253,6 +253,28 @@ original six:
 > **Revised accounting: 39 entries; 6 closed (CF-12, CF-13, CF-22, CF-25, CF-07, CF-38),
 > 33 open.** The designer batch drops to **four decisions** (CF-24, CF-33, CF-34, CF-37)
 > plus CF-38's one redline.
+>
+> ---
+>
+> ### Amendment 2026-09-30 (docs reconciliation) — CF-01, CF-03, CF-04 caught up with `main`
+>
+> **Three entries had gone stale against work that merged weeks earlier.** Each was
+> re-verified against `origin/main` `4d2284b` by reading the code it names, and updated
+> in place with a dated paragraph; the older text is kept above each update as the record.
+>
+> - **CF-01** — the six `create_vehicle` gaps were closed by `16f082c` on 2026-08-04.
+>   **Still open**: the blocker is now the dev-deploy confirmation plus the live flip.
+> - **CF-03** — the Platform backlog it listed as "none of this exists on `main`" is built
+>   and merged, and the contract is ratified at v0.3. **Still open**: the dev push, three
+>   items not built as listed, and the founder-side track.
+> - **CF-04** — `agent_role` shipped as `20260804000001`. **Still open**: the read-only
+>   verification test and the `docs/05` TODO.
+>
+> **Deliberately left untouched:** **CF-08** stays open on the threshold values — nothing
+> in the repo changes it. No other entry was re-checked this pass; **CF-17** and **CF-18**
+> in particular cite a seven-file `supabase/migrations/` and are due a re-read.
+>
+> **Accounting unchanged: 39 entries; 6 closed, 33 open.** Nothing closed in this pass.
 
 ---
 
@@ -296,17 +318,32 @@ original six:
      codes, so all four device-specific error paths would collapse to `network`. The
      full table is in `docs/create_vehicle_contract.md` § *Deployed implementation —
      conformance gaps*. Treat the Platform half as **built but not contract-conformant.**
-- **What's needed to resolve:** Platform brings `create_vehicle` into conformance with
-  the contract (the six-gap table above); then App flips
-  `DATA_SOURCE.createVehicle` → `'live'` in `source.ts`, wires
-  the live `fetch`, and runs the add-vehicle flow on-device with a claimed
-  `device_id`, confirming a `vehicles` row with correct `owner_user_id` /
-  `device_id` / `ecu_type` / `modifications` / fields.
-- **Owner:** Platform track (Edge Function) + App track (live-branch wiring +
-  E2E run).
+
+  **Updated 2026-09-30 (session 46 + the docs reconciliation) — the six gaps are closed,
+  and had been for eight weeks. STILL OPEN; the blocker has changed.** Re-verified against
+  `origin/main` `4d2284b` by reading `supabase/functions/create_vehicle/index.ts`: all six
+  gaps were closed by **`16f082c`** (Platform session 14, committed 2026-08-04) — the day
+  after point 2 above was written. Nobody updated this entry or the contract doc, so both
+  went on describing the Platform half as non-conformant until a session was commissioned
+  to fix gaps that no longer existed. The function was then **verified end to end against
+  a local stack on 2026-09-30** — eight cases passing, no row inserted on any rejection
+  (detail in the contract doc). `DATA_SOURCE.createVehicle` still reads `ENV_DEFAULT`
+  (`'mock'`) and the live branch in `source.ts` still returns `notImplemented`.
+  **The Platform half is now done on `main`. What blocks the flip is no longer
+  conformance:** it is (a) confirming the dev deploy actually serves `16f082c` — recorded
+  as deployed in Platform session 14, not checked since, and **not checkable from this
+  repo**; then (b) the App-side live wiring and the flip.
+- **What's needed to resolve:** ~~Platform brings `create_vehicle` into conformance with
+  the contract (the six-gap table above)~~ *(done — `16f082c`, 2026-08-04)*. Remaining:
+  confirm dev serves `16f082c`; then App wires the live `fetch`, flips
+  `DATA_SOURCE.createVehicle` → `'live'` in `source.ts`, and runs the add-vehicle flow
+  on-device with a claimed `device_id`, confirming a `vehicles` row with correct
+  `owner_user_id` / `device_id` / `ecu_type` / `modifications` / fields.
+- **Owner:** Platform track (confirm the dev deploy) + App track (live-branch wiring +
+  E2E run). *(Was "Platform track (Edge Function)" until 2026-09-30.)*
 - **Cross-references:** `docs/08` Week-3 close table; `docs/05` `vehicles`
   Platform-track note; `docs/create_vehicle_contract.md`; workdiary sessions
-  19, 21, 24, 29, 30.
+  19, 21, 24, 29, 30, 46 and Platform session 14.
 
 ---
 
@@ -344,7 +381,7 @@ original six:
   `currentStateSubscription` live-branch comment in `source.ts`; workdiary
   sessions 23, 24, 27, 28, 29, 30.
 
-### CF-03 — AI Agent Contract: six open questions unacknowledged + not shared (R1)  *(v0.2 proposal received — substantially de-risked, every artifact still unbuilt)*
+### CF-03 — AI Agent Contract: six open questions unacknowledged + not shared (R1)  *(contract ratified v0.3; Platform backlog built on `main` 2026-09-30 — open on the dev push and the founder items)*
 
 - **Category:** Cross-track dependency / flag
 - **Origin:** Week 1, contract v0 authored session 12 (`docs/ai-agent-contract.md`);
@@ -424,11 +461,63 @@ original six:
   **Why this stays open:** the proposal is a large de-risking — four of six questions
   resolved, a concrete architecture, and CF-07 closed — but **every concrete artifact is
   still unbuilt**, and the agreement is currently one-directional.
+
+  **Updated 2026-09-30 (docs reconciliation) — the Platform backlog is BUILT on `main`.
+  Everything above this paragraph is the 2026-08-03 status and is kept as the record; its
+  "unbuilt", "not built", "none fixed yet" and "v0.2 is a proposal" statements are no
+  longer true.** Re-verified against `origin/main` `4d2284b` by reading
+  `supabase/migrations/` (18 files) and `supabase/functions/`:
+
+  | Backlog item (as listed 2026-08-03) | On `main` as |
+  |---|---|
+  | `agent_role` | `20260804000001_create_agent_role.sql` |
+  | `agent_work_queue` | `20260804000002_create_agent_work_queue.sql` |
+  | Enqueue triggers | `20260804000003_agent_enqueue_triggers.sql` — `sync_session_completed_enqueue`, `dtc_active_enqueue` |
+  | Weekly deep-analysis cron | same file — `enqueue-weekly-deep-analysis`; rescheduled with a 14-day active-vehicle predicate in `20260812000003_agent_queue_conformance.sql` |
+  | `telemetry.drive_id` | `20260804000004_telemetry_drive_id.sql` (recreated 2026-09-30, PR #63) + `20260812000001_add_telemetry_drive_id.sql` (PR #58) |
+  | `referenced_telemetry_snapshot` | `20260812000002_add_diagnostic_snapshot_and_anomaly_trigger.sql` (PR #59) |
+  | `has_anomaly` trigger | same file — `diagnostic_output_sets_has_anomaly` |
+  | `notify_agent` (P0-4) | locked down in `20260803000001` / `…0002`, then dropped in `20260804000005_drop_notify_agent.sql` |
+  | Downsample cron (P0-1/2/3) | `20260803000003_fix_downsample_cron.sql` |
+  | `peak_metrics` zero-seed (P1-2), `vehicles.last_sync_at` write (P1-1) | fixed in `supabase/functions/device_sync_complete/index.ts` |
+
+  The contract itself is **ratified at v0.3** (PR #56, merged 2026-08-12) — it is no
+  longer a proposal, and `docs/AI_Agent_Contract/ai-agent-contract.md` supersedes
+  `docs/06`.
+
+  **What "locally verified" covers, precisely.** On 2026-09-30 two consecutive
+  `supabase db reset` runs on the local stack applied all 18 migrations in order and
+  loaded both seeds, exit 0 (session 45). The `has_anomaly` trigger was exercised on
+  2026-09-29 — a `warning` diagnostic flipped a seeded drive to `true` (session 44). The
+  record holds **no** local run that exercised the enqueue triggers, the weekly cron or
+  `agent_role`'s grants; for those, "verified" means "applies cleanly", not "observed
+  working". Platform session 17 (2026-08-06) records an end-to-end sync run against the
+  live deployed functions.
+
+  **Three things from the 2026-08-03 list that were NOT built as listed** — found by
+  reading the code, recorded here rather than silently dropped:
+  - **The `telemetry.drive_id` backfill was deliberately not done.** `20260812000001`
+    adds the column and says why there is no backfill `UPDATE`: drive boundaries are not
+    recoverable from the database. `device_sync_complete` populates the column for new
+    syncs; older rows stay NULL until the 30-day purge drains them.
+  - **`drives.distance_km` is still not computed**, and **`drives.average_speed_kph` is
+    still not dropped.** Contract §9 resolves both (compute one, cut the other); neither
+    `device_sync_complete` nor any migration does it yet.
+
+  **Not in dev yet.** The three `20260812*` migrations have not been pushed to dev —
+  that is a deliberate founder step still to take (contract §12). Dev's state cannot be
+  read from this repo.
+
+  **Why this still stays open:** the dev push; the three unbuilt items above; and track
+  (b) below, which this reconciliation did not touch and could not verify.
 - **What's needed to resolve — two tracks:**
-  - **(a) Platform (Sulaiman) — review + build. None of this exists on `main`:** the
+  - **(a) Platform (Sulaiman) — review + build.** ~~**None of this exists on `main`:** the
     `agent_role` migration (CF-04), `agent_work_queue` + its enqueue triggers,
     `telemetry.drive_id` + backfill, `referenced_telemetry_snapshot`, the `has_anomaly`
-    trigger, the weekly deep-analysis pg_cron emitter, and the 7 bug fixes.
+    trigger, the weekly deep-analysis pg_cron emitter, and the 7 bug fixes.~~ *(Built and
+    merged — see the 2026-09-30 table above.)* Remaining: push the three `20260812*`
+    migrations to dev; compute `distance_km` and drop `average_speed_kph` per contract §9,
+    or record in the contract that they are deferred.
   - **(b) Founder — communicate the four decisions back into the AI-agent project's own
     context**, so both sides hold the same agreement. **R1's doc-drift risk applies to
     silence in *either* direction, not just this side's.** The v0.2 draft still lists
@@ -473,11 +562,31 @@ original six:
   a trigger, so that grant should stay out and the agent's write surface stays at two
   tables. Whoever reviews the draft should reconcile it against all four decisions before
   applying it.
-- **What's needed to resolve:** Sulaiman reviews the drafted migration, reconciles it
+
+  **Updated 2026-09-30 (docs reconciliation) — the migration is BUILT and on `main`; the
+  two paragraphs above are the 2026-08-03 record and no longer describe the repo.**
+  Re-verified against `origin/main` `4d2284b`: `agent_role` ships as
+  **`supabase/migrations/20260804000001_create_agent_role.sql`** (Platform session 17),
+  under a new timestamp as this entry anticipated. It records Q-A and Q-B as resolved, and
+  the `GRANT UPDATE (has_anomaly)` stays commented out — `has_anomaly` is app-derived by
+  the trigger in `20260812000002`. `20260812000003_agent_queue_conformance.sql` then
+  revoked the role's `SELECT` on `vehicle_modifications` and dropped that policy.
+  `supabase/migrations/` now holds 18 files, not seven. The draft under
+  `docs/AI_Agent_Contract/` is a **superseded proposal** and must not be moved into
+  `supabase/migrations/`.
+
+  **Verified locally only to this extent:** all 18 migrations apply cleanly on a local
+  `supabase db reset` (2026-09-30, session 45). Platform session 17 records checking the
+  role in dev via `pg_roles` and `pg_policies`. `20260812000003` has not been pushed to
+  dev, so dev's copy of the role still holds the `vehicle_modifications` read.
+
+  **Why it stays open:** the deferred RLS read-only verification test has not been
+  written, and `docs/05` § Testing still carries the TODO ("until… the role is created").
+- **What's needed to resolve:** ~~Sulaiman reviews the drafted migration, reconciles it
   against the four founder decisions of 2026-08-03 and the agent project's confirmed read
   scope, then lands it **in `supabase/migrations/`** (a new timestamp if the drafted one
-  has been overtaken); then add the deferred RLS read-only verification test and clear the
-  `docs/05` TODO.
+  has been overtaken)~~ *(done — `20260804000001`, amended by `20260812000003`)*; then
+  add the deferred RLS read-only verification test and clear the `docs/05` TODO.
 - **Owner:** Platform track (review + apply the migration) + AI-agent team (read-scope
   confirmation as part of ratifying v0.2).
 - **Cross-references:** CF-03; R1; `docs/AI_Agent_Contract/20260717000000_create_agent_role.sql`

@@ -111,9 +111,12 @@ caeorta_app/
 │   │   ├── device_sync_start/   device_sync_chunk/   device_sync_complete/
 │   │   ├── get_drive_telemetry/
 │   │   └── send_diagnostic_notification/
-│   ├── seed.sql                    # Dev fixtures (users, vehicles, devices, telemetry)
+│   ├── config.toml                 # Local-stack config (added 2026-09-29, PR #61)
+│   ├── seed.sql                    # Local/dev fixtures (auth user, users, vehicles, devices, telemetry)
 │   ├── seed_dtc_lookup.sql         # 52 common P0xxx codes
-│   └── .gitignore                  # NOTE: no config.toml — the CLI is used --linked
+│   └── .gitignore                  # Until 2026-09-29 this line read "no config.toml — the
+│                                   # CLI is used --linked". That was true then; see
+│                                   # "Local development" below for the workflow now.
 │
 ├── docs/
 │   ├── 00_README.md … 11_Carry_Forwards.md   # the numbered canon (00–11)
@@ -241,9 +244,23 @@ Three environments. Strictly separated.
 
 ### Local development
 - Muhammed runs Expo Go on his phone (or simulator/emulator) hitting his local machine
-- Local machine connects to **dev Supabase**
-- Edge Functions tested locally via `supabase functions serve`
-- Migrations applied to dev Supabase via `supabase db push`
+- The app on the local machine connects to **dev Supabase**
+- **Migrations are verified on a local Supabase stack first, not on dev.** With Docker
+  Desktop running, `npx supabase start` brings the stack up and `npx supabase db reset`
+  rebuilds the database from `supabase/migrations/` and then loads `seed.sql` and
+  `seed_dtc_lookup.sql`. A migration that does not survive a local reset is not ready for
+  dev.
+- Edge Functions tested locally via `supabase functions serve`, against that local stack
+- Migrations are then applied to dev Supabase via `supabase db push` — the promotion
+  step, taken deliberately after local verification (see `docs/05` § Migration discipline)
+
+*Changed 2026-09-30.* Until `supabase/config.toml` landed (PR #61, 2026-09-29) the repo
+had no local-stack config: the CLI was only ever used `--linked`, and the shared dev
+project was both the first place a migration ran and the place it was verified. That is
+how dev came to hold a migration whose file never reached the repo (`20260804000004`; see
+`docs/AI_Agent_Contract/ai-agent-contract.md` §12). Machine-specific notes — Docker is
+not auto-started, and `npx --offline supabase …` when the registry fetch fails — are in
+the workdiary's tool inventory.
 
 ### Preview
 - EAS preview builds (TestFlight internal-internal use, ad-hoc Android APKs)

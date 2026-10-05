@@ -1,6 +1,11 @@
 # `create_vehicle` Edge Function — cross-track contract
 
-**Status:** contract agreed App-side; Platform-side function **not yet built**.
+**Status:** contract agreed; Platform-side function **built and contract-conformant on
+`main`** (`16f082c`, 2026-08-04), verified against a local stack on 2026-09-30. The app
+still serves a mock — see *Deployed implementation* below for what remains before the
+live flip. *(This line read "Platform-side function **not yet built**" until 2026-09-30.
+That stopped being true on 2026-07-08, when `1dc0589` landed the first version, and the
+line was not updated then or when `16f082c` brought the function into conformance.)*
 **Owners:** App track (Muhammed) consumes it; Platform track (Sulaiman) builds it.
 **Source of truth:** this document, until the function lands on `main`. Both sides
 code against it; neither side changes the wire shape without editing this doc first.
@@ -164,8 +169,12 @@ client for the privileged write). Consider an `audit_log` row on success
   `/functions/v1/create_vehicle`, Bearer access token, parse `{ vehicle }` on 201,
   throw an error carrying the `error` code on non-2xx) and flips
   `DATA_SOURCE.createVehicle` to `'live'` (or sets `EXPO_PUBLIC_DATA_SOURCE=live`).
-- **E2E verification is gated on this function landing.** Until then the App screen is
-  "built, not E2E-verified" — same status as Wi-Fi provisioning.
+- **E2E verification is no longer gated on the function landing** — it landed
+  (`1dc0589`, 2026-07-08) and was brought into conformance (`16f082c`, 2026-08-04). It is
+  now gated on the three App-side and deploy steps listed under *Deployed implementation*
+  below. Until those are done the App screen is still "built, not E2E-verified" — same
+  status as Wi-Fi provisioning. *(This bullet read "E2E verification is gated on this
+  function landing" until 2026-09-30.)*
 
 ## ECU set — RESOLVED (was the "open question")
 
@@ -203,7 +212,58 @@ database will still accept a NULL from any other writer.
 
 ---
 
-## Deployed implementation — conformance gaps (Platform track)
+## Deployed implementation — conformance gaps (Platform track) — ALL CLOSED 2026-08-04
+
+**Current state (re-verified against `origin/main` `4d2284b`, 2026-09-30): the function
+on `main` is contract-conformant. All six gaps in the table below, and the HTTP-status
+mismatch noted under it, were closed by `16f082c`** (Sulaiman, Platform session 14,
+committed 2026-08-04) — one day after the table was written.
+
+**What was wrong with this section.** It was written on 2026-08-03 and never updated when
+the fix landed, so for two months it described six live-flip blockers that no longer
+existed. It was cited as authority for a fix that had already shipped (App-track session
+46, 2026-09-30, which found the premise stale and made no code change). The table is kept
+below as the record of what the first version (`1dc0589`) did; **it does not describe the
+function today.**
+
+**Verified end to end against a local stack on 2026-09-30** (session 46 — the function as
+it is on `main`, served with `supabase functions serve`, called with a real user JWT).
+Eight cases, all passing:
+
+| Case | Result |
+|---|---|
+| Valid create | 201, full `vehicles` row, `ecu_type` stored as sent |
+| `ecu_type` absent | 422 `validation_error`, `fieldErrors.ecu_type` |
+| `ecu_type` invalid (`denso-gen4`) | 422 `validation_error`, `fieldErrors.ecu_type` |
+| `modifications` present | 201, stored as `{"notes": "…"}` (a jsonb object) |
+| `modifications` absent | 201, stored as `{}` |
+| `modifications` over 500 chars | 422 `validation_error`, `fieldErrors.modifications` |
+| Another user's device | 403 `not_device_owner` |
+| Device already has a vehicle | 409 `duplicate_vehicle` |
+
+No row was inserted on any rejection — the `vehicles` count was unchanged after each of
+the five rejected cases. `device_not_claimed` and `device_not_active` were not exercised
+in that run; they are confirmed by reading the code only.
+
+**What remains before the live flip**, in order:
+
+1. **Confirm the dev deploy serves `16f082c`.** Platform session 14's diary entry says it
+   was deployed; that has not been checked since, and it cannot be checked from this repo.
+   If dev still serves `1dc0589`, vehicles created there are silently marked `'oem'`.
+2. **Wire the live `fetch`** in `apps/mobile/src/lib/data/source.ts` — the `createVehicle`
+   live branch still returns `notImplemented`.
+3. **Flip `DATA_SOURCE.createVehicle` to `'live'`** and run the add-vehicle flow on-device.
+
+**One thing nothing enforces.** `ECU_TYPES` is duplicated in the function as a bare
+literal (`index.ts` line 6) with no comment naming `packages/types/src/vehicle.ts` as
+canonical. The values match today. The unit test that pins the set to the migration covers
+the package's copy, not the function's, so a change to one would not fail anything in the
+other.
+
+### Historical record — the six gaps as audited 2026-08-03 (closed by `16f082c`)
+
+*Everything from here to the end of this section is the original audit text, unchanged.
+It describes `1dc0589`, the first version of the function.*
 
 `supabase/functions/create_vehicle/index.ts` **exists on `main`** (Platform session 12,
 `1dc0589`). It is not yet contract-conformant. Audited 2026-08-03 while requiring
