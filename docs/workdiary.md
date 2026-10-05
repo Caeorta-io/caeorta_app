@@ -140,6 +140,7 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-08-03 (session 43) | **Three modelling calls taken as a set while reconciling CF-30 and building the S1 feed's pure rules.** (1) **The diagnostic fixtures move to the contract shape** — `category='insufficient_data'` + `severity='info'` + `urgency='monitor'` + `confidence<0.3`; the severity sentinel is gone from the app, and the either-field check in `deriveDiagnosticCardState` is **kept anyway** as a boundary guard on unvalidated live rows. (2) **`insufficient_data` sorts BELOW `info`, in both shapes** — `sortDiagnosticsByPriority` now reads `category` as well as `severity` via a shared `isInsufficientData`. This is the direction CF-30 left open: off-the-ladder is the *absence* of a finding, not the quietest one, so ranking it as `info` would let "we couldn't tell" outrank a real quiet finding. (3) **Dedup keys on the PAIR `(category, active-state)` with the newest row surviving each bucket, where active means "not `dismissed`" and `actioned` counts as ACTIVE.** The pair is what stops a dismissal hiding a live finding in the same category, and stops a live one resurrecting a dismissed one — a category holding both correctly yields two rows. `actioned` is active because it is what the critical card's "I've got it" writes, not a resolution marker. Also decided: **`deriveInsufficientDataKind` returns `'unknown'` unconditionally and will NOT string-match `title`/`explanation`** — a keyword rule would pass on today's fixtures and then mislabel the next agent version's wording, telling a driver "keep driving, we'll have more soon" about a metric their ECU will never report, which is the exact failure §7's split exists to prevent. | CF-30's own "What's needed to resolve" prescribed (1); (2) and (3) are the calls it left to whoever built the feed. The dedup rule is contract §5's sentence — *"the app dedupes in the UI by category + active state"* — read as a compound key, which is the only reading under which both named halves do work. | `apps/mobile/src/lib/diagnostics.ts` (`isInsufficientData`, `dedupeDiagnostics`, `groupDiagnosticsByDate`, `deriveInsufficientDataKind`, `isDiagnosticActive`), `lib/data/source.ts` (`DATA_SOURCE.diagnostics` + `fetchDiagnostics`), `lib/data/mocks.ts` (`mockOlderDiagnostics`, fixture …672); **`docs/11` CF-30 status line + `docs/08` Week-6 rows are founder-owned and NOT yet updated — CF-30 is partially addressed, not closed**; session 43 diary |
 | 2026-09-29 (session 44) | **Local Supabase stack is now supported, and the seed creates its own auth user — four calls taken as a set (PR #61).** (1) **`supabase/config.toml` is committed** (stock `supabase init`, `project_id = "caeorta_app"`), reversing the "no config.toml — the CLI is used `--linked`" note in `docs/04`; `--linked` remains valid for dev. (2) **`seed.sql` inserts the `auth.users` row for the existing fixture uuid `63f09c52-…` before `public.users`**, `ON CONFLICT (id) DO NOTHING` — a no-op on caeorta-dev, where that uuid is Sulaiman's real account — and is **deliberately NOT in the teardown**, because deleting it would CASCADE through `public.users` on dev. The seed is described as local + dev fixtures, never prod (the brief's "local only" wording conflicted with `docs/05`'s `db reset --linked`). (3) **A second drive `…0031` with `has_anomaly = false`** is seeded as the has_anomaly-trigger test fixture (the only prior drive was seeded `true`). (4) **`seed_dtc_lookup.sql` is wired into `[db.seed].sql_paths`** — an upsert that had never been hooked up anywhere; Claude Code's call, flagged in the PR as removable. | A fresh local stack could not start at all: no config.toml, and the seed aborted on `users_id_fkey` (23503) before any fixture landed. (1)–(3) were founder decisions at the session's ASK. | `supabase/config.toml` (new), `supabase/seed.sql`; `docs/04` line 116 + `docs/05` § Test fixtures still need the founder's edit; this row + session 44 diary |
 | 2026-09-30 (session 45) | **The orphan dev migration `20260804000004` is reconciled by recreating its file, and the index it left in dev is adopted — two calls taken as a set (PR #63). Taken by the App founder with Sulaiman unreachable; Platform-area, so recorded for his review.** (1) **Recreate `20260804000004_telemetry_drive_id.sql` at its true number rather than `supabase migration repair --status reverted`.** (2) **Adopt `telemetry_drive_id_timestamp` on `(drive_id, "timestamp")` rather than drop it, and keep the partial `telemetry_drive_id_idx` from `20260812000001` as well.** | (1) Repair would record the version as reverted. It was not — its objects are live in dev. A history claiming "reverted" over live objects is worse than an orphan record; recreating the file makes the existing record true. It also unblocks `db push`, which the CLI refuses while dev's history holds a version with no local file. (2) It is the better index for the real read path (all telemetry for a drive, in time order). Dropping a live index risks a plan regression on the largest table for no gain; keeping a possibly-redundant one costs only write overhead already being paid. Revisit on a `pg_stat_user_indexes` review, not before. | `supabase/migrations/20260804000004_telemetry_drive_id.sql` (header records both); `docs/05_Database_Schema.md` (telemetry index lists); `docs/AI_Agent_Contract/ai-agent-contract.md` §12 + changelog; PR #63 body |
+| 2026-10-05 (session 48) | **The three contract §12 divergences are ruled on.** (1) **`drives.distance_km`: build it** in the `device_sync_complete` PR. (2) **`drives.average_speed_kph`: drop the column** in a later migration. (3) **The `telemetry.drive_id` backfill is recorded as deliberately refused**, and contract §11 is amended to "no backfill". | (1) It is the per-100km denominator for agent rate baselining, and the segmentation loop already holds the samples. (2) It duplicates `summary_metrics.speed_kph`, which the same function computes. (3) Drive boundaries were computed in memory and never persisted, so history cannot be reliably assigned to a drive. Pre-association rows use the `sync_session_id` + `timestamp` path (`telemetry_sync_session_id_timestamp_idx`), and the NULL cohort drains with the 30-day purge. | `docs/AI_Agent_Contract/ai-agent-contract.md` §9, §11, §12 (D1–D3) + changelog; `docs/05` drives table; PR #67 |
 
 ---
 
@@ -2231,6 +2232,67 @@ Dev's FK matches `20260812000001` (`ON DELETE SET NULL`) — no mismatch between
 **Notes / lessons:**
 - **A reconciliation brief drifts too.** This one was written the same day and still miscounted the gaps and asked for an edit that had already merged. Reporting findings before editing caught both.
 - **"Built" needs its verb checked.** "`telemetry.drive_id` + backfill" was one backlog line; half of it shipped and half was deliberately refused. Recording the line as "built" would have created the fifth drift finding.
+
+---
+
+### 2026-10-05 — Contract §12 divergence corrected + remaining stale claims (App track, session 48)
+
+**Goal of session:** PR 2 of 2 of the docs reconciliation. Correct contract §12's "Divergent: none" using the founder's three 2026-10-05 rulings, and fix the stale claims session 47 listed and left (B1–B8). Docs only; PR for @22SHY.
+
+**Setup.** PR #66 had merged (`f9cd056`), so the branch was cut fresh off `origin/main` rather than stacked on `docs/reconcile-with-main`.
+
+**Found: the brief differed from the code in two places.** Both were reported, and the docs follow the code:
+- **`agent_role` verification never ran.** The brief said it ran locally on 2026-09-29 (session 44). Session 44 only shows that the migration set, including `20260804000001`, *applies*. No session has run a `SET ROLE agent_role` check. `docs/05` records exactly that, and the TODO stays open.
+- **`docs/08:353` was false.** It said the admin drive-list-per-device was "unbuilt". It was built in `22acf4c` on 2026-07-08, and CF-05 was closed by #48.
+
+**Verified against code before editing:**
+- Nothing in `supabase/functions/` writes `distance_km` or `average_speed_kph`, and no migration drops either.
+- `20260812000001` §3 refuses the backfill.
+- The `supabase/` folder holds 18 migrations and 11 Edge Functions.
+- Five uncommented `REVOKE`s exist on `main`, none on `devices`.
+- The `peak_metrics` seed fix and the `last_sync_at` fix are in `device_sync_complete`.
+- No prod promotion has been logged since 2026-06-21.
+
+**Done:** branch `docs/reconcile-remaining`, one commit `59b59c8`, 8 files under `docs/`, +146/−23. **PR #67, open, not merged.**
+- **Contract:** §12 now has the D1–D3 divergence table, and the old sentence is quoted. §11 is amended to "no backfill"; §9 carries build status. §1, §4 and §11 got dated corrections. One changelog bullet.
+- **`docs/06`:** new SUPERSEDED banner. The old banner and the v0.1 body are untouched.
+- **`docs/00`:** rows 19–20 corrected. Row 19 was stale too, beyond the brief's line 20.
+- **`docs/04`:** the migration enumeration and the function count are removed from the tree.
+- **`docs/05`:** the `create_vehicle` write path; the drives NULL notes; a current promotion statement, with the 2026-06-21 block kept as history; the `agent_role` TODO status.
+- **`docs/08`:** dated corrections at 161, 181, 353 and 592.
+- **`docs/11`:** CF-17 and CF-18 re-verified. Both stay open.
+- **`create_vehicle_contract.md`:** the intro now states the real three-step gate.
+
+**Not done / not verified:**
+- Nothing under `supabase/`, `apps/` or `packages/` was touched. No `db push`, no `link`, and no connection to dev.
+- Dev's and prod's applied sets are stated as unknowable from the repo.
+
+**Tools / versions touched:** None.
+
+**Decisions taken:** one Decisions-log row (2026-10-05, session 48): the three §12 rulings.
+
+**Open items rolled forward:**
+- **D1:** build `distance_km` in `device_sync_complete` (next session).
+- **D2:** a migration to drop `average_speed_kph` (the session after). It needs app changes in the same PR or the one before it: `LastDriveCard.tsx`, `drives/[driveId].tsx`, `mocks.ts` and `conformance.test.ts` all read the column. Regenerate `database.types.ts` and update the `docs/05` drives row.
+- **Stale claims found and left (listed in the PR #67 body):**
+  - contract §3:53 (the `peak_metrics` bug is called "live today"; it is fixed)
+  - contract §2 ("26 tables"; there are 28)
+  - contract §4 ("Full DDL in `proposed-app-changes.md`", and the cron-index check)
+  - `docs/08:183` (`agent_role` "gated on contract v0 review")
+  - `docs/00_README.md:35,38` (TestFlight; "Pre-week-1")
+  - `create_vehicle_contract.md:10` (the "source of truth until it lands" condition)
+- **`agent_role` read-only verification:** runnable locally now; never run.
+- Carried, unchanged:
+  - push the three `20260812*` migrations to dev
+  - confirm dev serves `16f082c`
+  - prod promotion (CF-17)
+  - `devices` column scope (CF-18)
+  - no unique constraint on `vehicles.device_id`
+  - PRs #56–#60 have no workdiary entries
+
+**Notes / lessons:**
+- **Write "applies" or "verified" exactly as the record supports.** "The migration that creates the role applies cleanly" got paraphrased upstream into "the verification ran". A doc that repeats the paraphrase invents a test nobody ran.
+- **A "VERIFY — may still be true" flag is worth honouring.** The `docs/08:353` claim was already false the day it was written.
 
 ---
 
