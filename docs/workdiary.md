@@ -143,6 +143,7 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-09-30 (session 45) | **The orphan dev migration `20260804000004` is reconciled by recreating its file, and the index it left in dev is adopted — two calls taken as a set (PR #63). Taken by the App founder with Sulaiman unreachable; Platform-area, so recorded for his review.** (1) **Recreate `20260804000004_telemetry_drive_id.sql` at its true number rather than `supabase migration repair --status reverted`.** (2) **Adopt `telemetry_drive_id_timestamp` on `(drive_id, "timestamp")` rather than drop it, and keep the partial `telemetry_drive_id_idx` from `20260812000001` as well.** | (1) Repair would record the version as reverted. It was not — its objects are live in dev. A history claiming "reverted" over live objects is worse than an orphan record; recreating the file makes the existing record true. It also unblocks `db push`, which the CLI refuses while dev's history holds a version with no local file. (2) It is the better index for the real read path (all telemetry for a drive, in time order). Dropping a live index risks a plan regression on the largest table for no gain; keeping a possibly-redundant one costs only write overhead already being paid. Revisit on a `pg_stat_user_indexes` review, not before. | `supabase/migrations/20260804000004_telemetry_drive_id.sql` (header records both); `docs/05_Database_Schema.md` (telemetry index lists); `docs/AI_Agent_Contract/ai-agent-contract.md` §12 + changelog; PR #63 body |
 | 2026-10-05 (session 48) | **The three contract §12 divergences are ruled on.** (1) **`drives.distance_km`: build it** in the `device_sync_complete` PR. (2) **`drives.average_speed_kph`: drop the column** in a later migration. (3) **The `telemetry.drive_id` backfill is recorded as deliberately refused**, and contract §11 is amended to "no backfill". | (1) It is the per-100km denominator for agent rate baselining, and the segmentation loop already holds the samples. (2) It duplicates `summary_metrics.speed_kph`, which the same function computes. (3) Drive boundaries were computed in memory and never persisted, so history cannot be reliably assigned to a drive. Pre-association rows use the `sync_session_id` + `timestamp` path (`telemetry_sync_session_id_timestamp_idx`), and the NULL cohort drains with the 30-day purge. | `docs/AI_Agent_Contract/ai-agent-contract.md` §9, §11, §12 (D1–D3) + changelog; `docs/05` drives table; PR #67 |
 | 2026-10-05 (session 49) | **`device_sync_complete` correctness scope** (PR #69). (1) **The unchecked `sync_sessions` and `devices` writes are left untouched** in this PR and recorded as known unchecked writes. (2) **The 1000-row telemetry fetch cap is fixed in the same PR** (paged `.range()`). (3) **`distance_km` semantics:** trapezoidal integration; absent speed breaks the chain; intervals > 30 s are skipped; NULL = unknown, 0 = stationary. | (1) Founder ruling: B6 keeps those statements out of scope. (2) Computing `distance_km` over truncated data would write a wrong number where the column had been honestly NULL. (3) Absent ≠ zero (contract §3). A gap > 30 s inside a drive means samples were lost (seed spacing is 5 s), and bridging it invents distance. NULL and 0 make different claims. | `supabase/functions/device_sync_complete/index.ts`; contract §9, §12 D1, changelog; `docs/05` drives; PR #69 |
+| 2026-10-07 (session 50) | **The large seed drive is seeded in two states.** One copy is **processed**: completed session `…0021`, drive `…0032` with computed columns NULL / `'{}'`, and `drive_id` set. The other is **unprocessed**: session `…0022` stays `streaming` with no drive, on active device `…0005`. Both carry the same 2,520-row profile. | `device_sync_complete` returns early on a completed session and computes `distance_km` / `peak_metrics` only when it creates the drive. A pre-seeded drive with NULL computed columns is never recomputed, so on its own it cannot catch a write-path regression. The processed copy covers read paths at volume, and the unprocessed copy is the write-path test. Founder choice (`AskUserQuestion`). | `supabase/seed.sql`; `docs/05` Test fixtures; PR #71 |
 
 ---
 
@@ -2348,6 +2349,60 @@ Dev's FK matches `20260812000001` (`ON DELETE SET NULL`) — no mismatch between
 
 **Notes / lessons:**
 - **Test at realistic volume.** Both new defects (row cap, URI length) only appear past ~1000 rows. The seed has 361, and the original c1dafc4 end-to-end test used 3. A 17-minute drive at 1 Hz is enough to hit both.
+
+---
+
+### 2026-10-07 — Realistic seed fixtures for the sync and agent paths (App track, session 50)
+
+**Goal of session:** extend `supabase/seed.sql` so the fixtures can catch the session-49 defects, which only appear past ~1000 rows. Also make the `agent_role` and `create_vehicle` checks runnable without hand-built fixtures. Local only; PR for @22SHY.
+
+**Setup.** #69 and #70 had merged (`origin/main` = `3c158e2`). Branch `feat/seed-realistic-fixtures` was cut fresh off it.
+
+**Part A (reported before editing):**
+- seed.sql matched the brief.
+- **Device `…0001` is `unclaimed` but holds vehicle `…0010`.** `mint_device_token` refuses it. Kept as-is.
+- `create_vehicle` returns `device_not_claimed` only for a nonexistent id.
+- `dtc_active_enqueue` is `AFTER INSERT`, so seeded active DTCs enqueue. `sync_session_completed_enqueue` is `AFTER UPDATE` only, so seeded completed sessions do not.
+
+**Founder ruling:** the large drive is seeded processed and unprocessed (Decisions log, session 50).
+
+**Done:** PR #71, commit `d52bf9c`, **open, not merged**.
+- Added user 2 (`…0102`).
+- Added devices `…0003–…0005`, one per `create_vehicle` branch.
+- Added vehicle `…0011`.
+- Added two 2,520-row 1 Hz sessions (`…0021` processed, `…0022` streaming) and drive `…0032`.
+- Seeded `current_state` ×2, `dtcs` ×5, `diagnostic_outputs` ×3 and `diagnostic_feedback` ×3.
+- Extended the teardown so it also removes rows that tests create.
+- Updated the docs/05 Test fixtures section, the RLS-suite note and the agent_role item.
+
+**Verified (local stack):**
+- **Two resets** with `db reset --local` produced byte-identical output.
+- **Two direct re-applies of `seed.sql` on a populated DB** left counts identical. A reset recreates the DB, so it never exercises the teardown on its own.
+- **Telemetry:** 5,401 rows. Boost reaches −75 kPa, and `speed_kph` is absent for 300 rows per large session.
+- **has_anomaly:** true only on `…0030`, from its INSERT literal. No flag is flipped by the seed.
+- **Expected `distance_km` for `…0022`:** 29.41.
+- **agent_role reads (as `supabase_admin`, since `postgres` has `set_option = f`):** all ten readable tables matched the superuser counts, with no silent zeros. This closes the read half of the item open since session 44.
+
+**Not done / not verified:**
+- `device_sync_complete` was not run against `…0022`. The fixture and its expected value are in place.
+- `agent_status` is still unseeded, so its read is unproven.
+- The RLS suite was not run. The three-user assumption is still unmet: there are two users now.
+- No `db push`, `link` or deploy.
+
+**Tools / versions touched:** none. Supabase CLI 2.118.0 (2.120.0 available, not upgraded).
+
+**Decisions taken:** one Decisions-log row (2026-10-07, session 50).
+
+**Open items rolled forward:**
+- **Run `device_sync_complete` against `…0022` locally** and assert one drive, `distance_km` = 29.41, and `drive_id` on all 2,520 rows. This is the regression test the fixture exists for.
+- The rest of agent_role verification: write refusals outside the three writable tables, the `vehicle_modifications` revoke, and seeding `agent_status`.
+- The RLS suite needs a third fixture user and vehicle, and its expected values re-pointed at the real nicknames.
+- Device `…0001`'s unclaimed-but-paired inconsistency. Decide whether to fix it in a later seed PR; it would change a frozen fixture.
+- Carried from session 49, unchanged: the unchecked `sync_sessions` / `devices` writes; D2 (drop `average_speed_kph`); deploying `device_sync_complete` to dev; the `20260812000001` header; and the session-48 carry list minus the agent_role read check.
+
+**Notes / lessons:**
+- **`db reset` does not test idempotency.** It recreates the database, so the teardown never runs against existing rows. Prove re-runnability by applying `seed.sql` directly to a populated DB.
+- **Docker Desktop is at `%LOCALAPPDATA%\Programs\DockerDesktop`**, not Program Files. Locally, `supabase_admin` connects over TCP (`-h 127.0.0.1`) with password `postgres`; the socket rejects it.
 
 ---
 
