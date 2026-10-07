@@ -144,18 +144,21 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-10-05 (session 48) | **The three contract §12 divergences are ruled on.** (1) **`drives.distance_km`: build it** in the `device_sync_complete` PR. (2) **`drives.average_speed_kph`: drop the column** in a later migration. (3) **The `telemetry.drive_id` backfill is recorded as deliberately refused**, and contract §11 is amended to "no backfill". | (1) It is the per-100km denominator for agent rate baselining, and the segmentation loop already holds the samples. (2) It duplicates `summary_metrics.speed_kph`, which the same function computes. (3) Drive boundaries were computed in memory and never persisted, so history cannot be reliably assigned to a drive. Pre-association rows use the `sync_session_id` + `timestamp` path (`telemetry_sync_session_id_timestamp_idx`), and the NULL cohort drains with the 30-day purge. | `docs/AI_Agent_Contract/ai-agent-contract.md` §9, §11, §12 (D1–D3) + changelog; `docs/05` drives table; PR #67 |
 | 2026-10-05 (session 49) | **`device_sync_complete` correctness scope** (PR #69). (1) **The unchecked `sync_sessions` and `devices` writes are left untouched** in this PR and recorded as known unchecked writes. (2) **The 1000-row telemetry fetch cap is fixed in the same PR** (paged `.range()`). (3) **`distance_km` semantics:** trapezoidal integration; absent speed breaks the chain; intervals > 30 s are skipped; NULL = unknown, 0 = stationary. | (1) Founder ruling: B6 keeps those statements out of scope. (2) Computing `distance_km` over truncated data would write a wrong number where the column had been honestly NULL. (3) Absent ≠ zero (contract §3). A gap > 30 s inside a drive means samples were lost (seed spacing is 5 s), and bridging it invents distance. NULL and 0 make different claims. | `supabase/functions/device_sync_complete/index.ts`; contract §9, §12 D1, changelog; `docs/05` drives; PR #69 |
 | 2026-10-07 (session 50) | **The large seed drive is seeded in two states.** One copy is **processed**: completed session `…0021`, drive `…0032` with computed columns NULL / `'{}'`, and `drive_id` set. The other is **unprocessed**: session `…0022` stays `streaming` with no drive, on active device `…0005`. Both carry the same 2,520-row profile. | `device_sync_complete` returns early on a completed session and computes `distance_km` / `peak_metrics` only when it creates the drive. A pre-seeded drive with NULL computed columns is never recomputed, so on its own it cannot catch a write-path regression. The processed copy covers read paths at volume, and the unprocessed copy is the write-path test. Founder choice (`AskUserQuestion`). | `supabase/seed.sql`; `docs/05` Test fixtures; PR #71 |
+| 2026-10-07 (session 52) | **`device_sync_complete` completes through one transactional RPC** (`complete_sync_session`, migration `20261007000001`, PR #73). That is Option 3 of session 51's four. After a rollback the handler writes `failed` best-effort, never over `completed` (variant (a)). **Option 1's unique `(sync_session_id, started_at)` index is deferred.** | Checking `.error` alone leaves two duplicate paths: a partial failure followed by a retry, and overlapping retries. Only a single transaction with a row lock removes both, and it also makes the `drive_id` backfill all-or-nothing. The app's failure banner reads `failed`, hence variant (a). The index's dev/prod data risk is unknown until dev is read for existing duplicates, and the RPC already makes duplicates unreachable through the only insert path. | `supabase/migrations/20261007000001_complete_sync_session_rpc.sql`; `supabase/functions/device_sync_complete/index.ts`; `docs/07` § `device_sync_complete`; `docs/05` `sync_sessions` / `drives`; PR #73 |
+| 2026-10-07 (session 52) | **`dtcs_added` keeps its name for now.** The query's error is checked and its meaning is commented: it counts DTC rows tagged with the session, not new ones. The rename to a key like `dtcs_in_session` waits on the hardware project. | `docs/07` documents the key as part of the firmware-facing response, and the firmware cannot be checked from this repo. No app code reads it. A response-shape change is not free. Founder choice (`AskUserQuestion`). | `docs/11` CF-41; PR #73 |
 
 ---
 
-## Recurring pattern — doc drift (five findings as of 2026-10-05)
+## Recurring pattern — doc drift (six findings as of 2026-10-07)
 
-**A document describing code is only as good as its last verification.** Five times a doc here described a state that had already changed, and each time it cost real work:
+**A document describing code is only as good as its last verification.** Six times a doc here described a state that had already changed, and each time it cost real work:
 
 1. `docs/05` said `drives.has_anomaly` was set by the agent; nothing in the repo ever wrote it.
 2. `docs/AI_Agent_Contract/README.md` called the contract an unratified draft for seven weeks after PR #56 ratified it.
 3. Contract §12 called `20260804000004` an unused number while dev had that migration applied; its file never reached the repo.
 4. `docs/create_vehicle_contract.md` listed six conformance gaps for eight weeks after `16f082c` closed them — and session 46 was commissioned to fix them again.
 5. Contract §3 called the `peak_metrics` zero-seed "live today" for two months after `3748031` fixed it. That commit, which also removed the `vehicles.last_sync_at` write, has no PR. Session 49's brief scoped both as fixes and found them already done.
+6. `docs/07` said `device_sync_chunk` ignores duplicate `sequence_number`s and that a chunk retry is idempotent. The code never checks `sequence_number`; it only echoes it, so a retried chunk inserts its telemetry again. The same section also listed `device_sync_complete`'s status update first (the code does it last, correctly) and still said the agent was triggered "via NOTIFY or webhook". Found in session 51 and corrected in docs/07 in PR #73. The code gap is tracked as `docs/11` CF-40, unfixed.
 
 By the founder's tally, three of the four trace to work that reached `main` (or dev) without a PR, or without a doc update in the same PR. Two are confirmed from the repo: `16f082c` has no associated PR, and the `20260804000004` file was never committed at all. The repo already has the rule that prevents this — the same-PR doc update in `CLAUDE.md` and `docs/conventions.md` § Spec deviations — and every instance happened where it was skipped. **Before commissioning work from a doc, read the file the doc describes** (`git log -- <file>` is one command), and check the other track's diary entries.
 
@@ -2403,6 +2406,80 @@ Dev's FK matches `20260812000001` (`ON DELETE SET NULL`) — no mismatch between
 **Notes / lessons:**
 - **`db reset` does not test idempotency.** It recreates the database, so the teardown never runs against existing rows. Prove re-runnability by applying `seed.sql` directly to a populated DB.
 - **Docker Desktop is at `%LOCALAPPDATA%\Programs\DockerDesktop`**, not Program Files. Locally, `supabase_admin` connects over TCP (`-h 127.0.0.1`) with password `postgres`; the socket rejects it.
+
+---
+
+### 2026-10-07 — Sync regression test run, then `device_sync_complete` retry-safety investigation (App track, session 51)
+
+**Goal of session:** two verification-only briefs, with no file changes, no PR and local only.
+1. Run the …0022 regression test from #71.
+2. Investigate the unchecked `sync_sessions` write and retry idempotency, then report options without implementing anything.
+
+**Regression run** (`origin/main` = `249b8d9`; #71 and #72 merged):
+- Called `device_sync_complete` for …0022 with a device JWT minted for …0005. It returned HTTP 200 `{"drives_created":1,"dtcs_added":1}`.
+- `distance_km` 29.41, `duration_seconds` 2519, `summary_metrics.speed_kph` 47.73. 42.05 would have meant absent speed was read as 0.
+- Peak boost 120. 2,520 of 2,520 rows backfilled. A routine queue row was created.
+- The truncation fix from #69 holds.
+- Two findings: the seed could not catch a peak zero-seed regression, because every metric's true maximum is positive; and `dtcs_added` counts DTCs tagged with the session, not new ones.
+
+**Investigation findings:**
+- The status write and the devices write were both unchecked.
+- `drives` has no UNIQUE constraint, only `drives_pkey`.
+- A session stuck in `streaming` is touched by nothing; the cleanup cron only deletes `failed` and `pending`.
+- A partial failure followed by a retry re-inserts drives, because the guard only skips `completed` and `device_sync_chunk` returns 409 on a failed session.
+- Overlapping calls both insert every drive.
+- The enqueue trigger *does* fire on a later `streaming → completed` repair, but nothing ever performs that repair.
+- docs/07 drift: chunk idempotency, the order of the complete-handler steps, and NOTIFY. This became doc drift #6.
+- Four options were reported; the founder picked Option 3 (session 52).
+
+**Not done:** nothing was written. That was by design.
+
+---
+
+### 2026-10-07 — `device_sync_complete` made transactional: `complete_sync_session` RPC (App track, session 52)
+
+**Goal of session:** implement Option 3 (variant (a)) from session 51. Local only; PR for @22SHY.
+
+**Setup.** `origin/main` = `249b8d9`. Branch `feat/sync-complete-transactional-rpc` was cut fresh off it; session 51's empty branch was deleted. No open PRs. The next free migration number was `20261007000001`.
+
+**Founder ruling during the session:** defer the `dtcs_added` rename, because docs/07 lists the key as firmware-facing (Decisions log, session 52).
+
+**Done:** PR #73, commit `725f2e1`, **open, not merged**. Six files:
+- **The migration.** It locks the session `FOR UPDATE`, returns early if already completed, inserts the drives, backfills per drive time range, and sets `completed`, all in one transaction. It asserts that drives are ordered, do not overlap and each match telemetry.
+- **Its grants.** It is `SECURITY DEFINER` with a pinned `search_path`. EXECUTE is revoked from PUBLIC, anon and authenticated, and granted to `service_role` only.
+- **The handler.** It now makes one RPC call. A failure returns 500 plus a best-effort `failed` write that is never written over `completed`. The devices write and the DTC count are checked but not fatal.
+- **The seed.** Vacuum-only session …0023 (180 samples).
+- **The docs.** docs/07 (handler order, transactional and retry behaviour, chunk gap), docs/05 (the RPC, and no UNIQUE on `drives`), docs/11 CF-40 and CF-41.
+
+**Verified (local stack):**
+- **V1:** the reset applies all 19 migrations and both seeds. The grants were checked in the catalog.
+- **V2:** `deno check` / `deno lint` exit 0. The pnpm typecheck, lint and test gate exits 0 (59 + 266 tests).
+- **V5:** a temporary local-only trigger made the status write raise *after* the insert and the 2,520-row backfill. The result was HTTP 500, 0 drives, 0 `drive_id`, and `failed` with its message. Direct RPC calls rejected a non-array payload, overlapping drives (a partway rollback after drive 1 was inserted) and a no-match drive. anon got `permission denied`.
+- **V3:** the retry from `failed` matched every value: 29.41, 2519, 47.73, 2,520 rows backfilled, a routine row, `completed`, and `error_message` cleared. `completed_at` equalled `enqueued_at` to the microsecond, so the trigger ran inside the same transaction.
+- **V4:** a second call returned "Already completed", with 1 drive before and after. Three concurrent calls produced 1 drive. A held transaction in connection A blocked B's identical RPC for 3.2 s, then B returned `already_completed`, which proves the lock path.
+- **V6:** …0023's `peak_metrics.boost_pressure_kpa` was −58, not 0.
+- **V7:** a reset restored the fixtures, and two direct `seed.sql` re-applies left the counts identical.
+
+**Not done / not verified:**
+- Not deployed to dev. No `db push`, no `link`.
+- The hosted `verify_jwt` setting for the `device_sync_*` functions is not recorded in the repo. Locally the functions were served with `--no-verify-jwt`.
+- Known edge: the telemetry fetch happens before the lock, so a chunk landing in that window is backfilled but missing from that drive's metrics.
+
+**Tools / versions touched:** none.
+
+**Decisions taken:** two Decisions-log rows (session 52).
+
+**Open items rolled forward:**
+- **Deploy `complete_sync_session` and `device_sync_complete` to dev together** once #73 merges. The function depends on the migration. Confirm the hosted `verify_jwt` setting at the same time.
+- **Read dev for existing duplicate drives,** read-only, before reconsidering Option 1's unique index.
+- **CF-40:** chunk `sequence_number` idempotency, the unchecked chunk status write and the `row_count` lost update.
+- **CF-41:** confirm with the hardware project before renaming `dtcs_added`.
+- **Hardware project:** docs/07 now tells firmware to retry `device_sync_complete` on a non-200 or a timeout.
+- Carried from session 50, unchanged: the agent_role write-refusal checks and `agent_status` seeding; a third RLS fixture user; device …0001's inconsistency; D2 (`average_speed_kph`); the session-48 carry list.
+
+**Notes / lessons:**
+- **A sequential retry test does not prove concurrency safety.** The outer guard answers it. Prove the lock deterministically: hold the first transaction open and time the second call.
+- **The best-effort failure write needs `.neq('status','completed')`.** Without it, a lost response after a successful commit would flip the session back to `failed` and let a retry duplicate everything. That is the same bug class the PR removes.
 
 ---
 
