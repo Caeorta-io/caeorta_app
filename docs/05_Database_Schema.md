@@ -178,6 +178,32 @@ A single sync attempt from device to cloud.
 | row_count | int | |
 | error_message | text | Null on success |
 
+**Completion is transactional (since 2026-10-07, migration `20261007000001`).** `device_sync_complete` no longer writes `drives`, `telemetry.drive_id` and `status` as separate requests. It calls **`public.complete_sync_session(p_session_id uuid, p_device_id uuid, p_drives jsonb) RETURNS jsonb`**.
+
+In one transaction, that function:
+1. locks the session row (`FOR UPDATE`, scoped to the device);
+2. returns `{outcome: 'already_completed'}` if the session is already completed;
+3. inserts the drives, taking `vehicle_id` / `sync_session_id` from the locked row and `has_anomaly = false`;
+4. backfills `telemetry.drive_id` with one `UPDATE … WHERE sync_session_id = … AND timestamp BETWEEN started_at AND ended_at` per drive;
+5. sets `status = 'completed'`, `completed_at = now()` and `error_message = NULL`;
+6. returns `{outcome: 'completed', drives_created}`. An unknown session or device returns `{outcome: 'not_found'}`.
+
+It **raises, rolling everything back**, if:
+- `p_drives` is not an array;
+- a drive's time range is invalid;
+- drives overlap or are out of order;
+- a drive matches no telemetry.
+
+The overlap and no-match checks are what keep the per-range backfill exact.
+
+What this guarantees:
+- `sync_session_completed_enqueue` fires inside the same transaction, so a routine agent job exists **iff** the drives committed.
+- Overlapping calls are serialised by the lock, and only one inserts.
+
+Security: `SECURITY DEFINER`, `search_path = public, pg_temp`, EXECUTE revoked from PUBLIC, `anon` and `authenticated` explicitly, and granted to **`service_role` only**. Verified locally: anon gets `permission denied`.
+
+After a rolled-back call, the Edge Function writes `status = 'failed'` best-effort (never over `completed`) for the app's failure banner. See `docs/07` § `device_sync_complete`.
+
 ### Diagnostics
 
 #### `dtcs`
@@ -265,6 +291,8 @@ The unit of analysis. Drive = ignition-on to ignition-off period.
 | has_anomaly | bool | Quick-filtering flag. **App-derived, never written by the agent** — a trigger on `diagnostic_outputs` INSERT sets it true when a drive-scoped output has severity 'warning' or 'critical'. One-way: nothing ever unsets it |
 
 Indexed on `(vehicle_id, started_at DESC)`.
+
+Inserted only through `complete_sync_session()` (see `sync_sessions` above), which makes a duplicate drive unreachable through the sync path. **There is no UNIQUE constraint** besides the PK. A unique `(sync_session_id, started_at)` index was considered and deferred on 2026-10-07: dev and prod may already hold duplicates from the pre-RPC handler, and that must be checked read-only before such an index could be added.
 
 ### Community (empty in v1, schema ready for v2)
 
@@ -649,9 +677,9 @@ The following classes of test require infrastructure that doesn't exist yet; the
 | `auth.users` / `users` | 2 / 2 | User 1 `63f09c52-…` (`pilot1@example.test`, the real dev uuid). User 2 `…0102` (`pilot2@example.test`). Both have `ON CONFLICT DO NOTHING` and stay out of the teardown. |
 | `devices` | 5 | One `create_vehicle` branch each (see below). |
 | `vehicles` | 2 | `…0010` user 1 on device `…0001`. `…0011` user 2 on device `…0005`. |
-| `sync_sessions` | 3 | `…0020` completed, 361 rows. `…0021` completed, 2,520 rows. `…0022` **streaming**, 2,520 rows, unprocessed. |
+| `sync_sessions` | 4 | `…0020` completed, 361 rows. `…0021` completed, 2,520 rows. `…0022` **streaming**, 2,520 rows, unprocessed. `…0023` **streaming**, 180 rows, unprocessed, vacuum-only (added session 52). |
 | `drives` | 3 | `…0030` has_anomaly true. `…0031` clean; it is the has_anomaly trigger test's flip target. `…0032` is the large drive, with `distance_km` / `average_speed_kph` NULL and `peak_metrics` `'{}'`. |
-| `telemetry` | 5,401 | 361 at 5 s, plus 2 × 2,520 at 1 Hz (42 min). |
+| `telemetry` | 5,581 | 361 at 5 s, plus 2 × 2,520 at 1 Hz (42 min), plus 180 at 1 Hz (…0023). |
 | `current_state` | 2 | One per vehicle. |
 | `dtcs` | 5 | Active critical / active `WARN` / history-cleared `info` / history-inactive NULL severity (user 1), plus active critical (user 2). All are real `dtc_lookup` codes. Three carry `freeze_frame_metrics` in the contract §3 keys. |
 | `diagnostic_outputs` | 3 | Warning on `…0030`, info on `…0032`, vehicle-scoped critical on `…0011`. |
@@ -677,7 +705,9 @@ The following classes of test require infrastructure that doesn't exist yet; the
 Boost is negative in 1,130 samples per session.
 - `…0021` / `…0032` is the **processed** state, with `drive_id` set on all rows. Use it for read paths at volume.
 - `…0022` is the **unprocessed** state. Running `device_sync_complete` against it, with device `…0005`, is the regression test for the write path.
-- Expected result for `…0022`: one drive and a `distance_km` of **29.41**. That is trapezoidal integration over 2,218 intervals, with the absent stretch contributing nothing. A truncated fetch reports far less.
+- Expected result for `…0022`: one drive and a `distance_km` of **29.41**. That is trapezoidal integration over 2,218 intervals, with the absent stretch contributing nothing. A truncated fetch reports far less. The function's actual output, confirmed in sessions 50 and 52: `distance_km` 29.41, `duration_seconds` 2519, `summary_metrics.speed_kph` 47.73 (42.05 would mean absent speed read as 0), peak boost 120, and all 2,520 rows backfilled.
+
+**Vacuum-only drive `…0023` (session 52)** catches a peak zero-seed regression. In the large drives every metric's true maximum is positive, so a running max seeded with 0 still reports correctly. In `…0023`, `boost_pressure_kpa` stays between −65.0 and −58.0 for all 180 samples (3 min of warm idle, device `…0005`). After `device_sync_complete`, `peak_metrics.boost_pressure_kpa` must be **−58**, not 0. Confirmed in session 52.
 - The teardown deletes drives by `sync_session_id` as well as by id, so a re-seed removes whatever the function created.
 
 **`has_anomaly`.** Inserting `diagnostic_outputs` fires `diagnostic_output_sets_has_anomaly`. The fixtures are chosen so that the seed flips **no** flag, and each drive's `has_anomaly` equals its INSERT literal:

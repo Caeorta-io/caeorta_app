@@ -18,9 +18,32 @@ const TELEMETRY_PAGE_SIZE = 1000;
 // DRIVE_GAP_MS never reach here -- they split the drive instead.
 const MAX_DISTANCE_INTERVAL_MS = 30 * 1000;
 
-// Telemetry ids per drive_id backfill request. Each UUID costs ~40 bytes of
-// URL once encoded, so 100 keeps the query string near 4 KB.
-const BACKFILL_BATCH_SIZE = 100;
+// A drive as handed to complete_sync_session(). vehicle_id, sync_session_id
+// and has_anomaly are deliberately absent: the function takes the first two
+// from the locked session row and always inserts has_anomaly = false.
+type SegmentedDrive = {
+  started_at: string;
+  ended_at: string;
+  duration_seconds: number;
+  distance_km: number | null;
+  peak_metrics: Record<string, number>;
+  summary_metrics: Record<string, number>;
+};
+
+// complete_sync_session()'s return value (migration 20261007000001).
+type CompleteSyncResult = {
+  outcome: 'completed' | 'already_completed' | 'not_found';
+  drives_created: number;
+};
+
+function isCompleteSyncResult(value: unknown): value is CompleteSyncResult {
+  if (typeof value !== 'object' || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    (v.outcome === 'completed' || v.outcome === 'already_completed' || v.outcome === 'not_found') &&
+    typeof v.drives_created === 'number'
+  );
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -62,6 +85,9 @@ serve(async (req) => {
       return errorResponse('Sync session not found', 404);
     }
 
+    // Cheap pre-check only — an OPTIMISATION, not the correctness boundary.
+    // Two overlapping calls can both pass it; the authoritative check is the
+    // one complete_sync_session() makes under the session row lock.
     if (session.status === 'completed') {
       return okResponse({ message: 'Already completed' });
     }
@@ -89,20 +115,7 @@ serve(async (req) => {
     }
 
     // Drive boundary detection
-    const drives: Array<{
-      vehicle_id: string;
-      sync_session_id: string;
-      started_at: string;
-      ended_at: string;
-      duration_seconds: number;
-      distance_km: number | null;
-      peak_metrics: Record<string, number>;
-      summary_metrics: Record<string, number>;
-      has_anomaly: boolean;
-    }> = [];
-    // Parallel array, same index as `drives` — the telemetry row ids that
-    // belong to each drive. Populated below telemetry.drive_id after insert.
-    const driveTelemetryIds: string[][] = [];
+    const drives: SegmentedDrive[] = [];
 
     if (telemetry.length > 0) {
       let driveStart = 0;
@@ -150,87 +163,81 @@ serve(async (req) => {
               avgMetrics[key] = Math.round((sumMetrics[key] / countMetrics[key]) * 100) / 100;
             }
 
+            // started_at / ended_at are passed through as the exact strings
+            // PostgREST returned, so the RPC's BETWEEN backfill matches the
+            // stored timestamps without any precision loss.
             drives.push({
-              vehicle_id: session.vehicle_id,
-              sync_session_id: session_id,
               started_at: startedAt,
               ended_at: endedAt,
               duration_seconds: durationSeconds,
               distance_km: computeDistanceKm(driveTelemetry),
               peak_metrics: peakMetrics,
               summary_metrics: avgMetrics,
-              has_anomaly: false,
             });
-            driveTelemetryIds.push(driveTelemetry.map((row) => row.id));
           }
           driveStart = i;
         }
       }
     }
 
-    // Insert drives one at a time (not a batch insert) so we get each row's
-    // generated id back immediately -- needed to backfill telemetry.drive_id
-    // on the matching rows. Cost is negligible: drives per sync session is a
-    // handful at most, not hundreds.
-    let drivesCreated = 0;
-    let driveInsertFailed = false;
-    for (let i = 0; i < drives.length; i++) {
-      const { data: insertedDrive, error: driveError } = await adminClient
-        .from('drives')
-        .insert(drives[i])
-        .select('id')
-        .single();
+    // Persist everything in ONE transaction: insert the drives, backfill
+    // telemetry.drive_id, set the session 'completed'. The three used to be
+    // separate requests that could diverge (an unchecked status write left
+    // drives with no agent run; a retry re-inserted every drive). See
+    // migration 20261007000001. The agent is enqueued by
+    // sync_session_completed_enqueue, which fires on the status update inside
+    // that same transaction — so it is enqueued iff the drives committed.
+    const { data: rpcData, error: rpcError } = await adminClient.rpc('complete_sync_session', {
+      p_session_id: session_id,
+      p_device_id: device_id,
+      p_drives: drives,
+    });
 
-      if (driveError || !insertedDrive) {
-        console.error('drive insert error:', driveError);
-        driveInsertFailed = true;
-        continue;
+    if (rpcError || !isCompleteSyncResult(rpcData)) {
+      console.error('complete_sync_session failed:', rpcError ?? rpcData);
+
+      // Best-effort and COSMETIC ONLY: the authoritative state is that nothing
+      // committed — no drives, no drive_id, session not completed — and the
+      // 500 below makes the device retry. 'failed' exists so the app's
+      // failure banner (docs/07 § Sync failure handling) has something to
+      // show. `.neq('completed')` matters: if the RPC actually committed and
+      // only the response was lost, flipping the session back to 'failed'
+      // would let a retry process it a second time.
+      const { error: failedWriteError } = await adminClient
+        .from('sync_sessions')
+        .update({
+          status: 'failed',
+          error_message: `Completion failed and was rolled back: ${rpcError?.message ?? 'unexpected RPC result'}`,
+        })
+        .eq('id', session_id)
+        .neq('status', 'completed');
+
+      if (failedWriteError) {
+        console.error('sync_sessions failed-status write error (cosmetic):', failedWriteError);
       }
 
-      drivesCreated++;
-
-      // Batched: the id list travels in the URL query string, and a full
-      // drive's worth (1500 ids) was rejected locally with "URI too long".
-      const telemetryIds = driveTelemetryIds[i] ?? [];
-      for (let b = 0; b < telemetryIds.length; b += BACKFILL_BATCH_SIZE) {
-        const { error: backfillError } = await adminClient
-          .from('telemetry')
-          .update({ drive_id: insertedDrive.id })
-          .in('id', telemetryIds.slice(b, b + BACKFILL_BATCH_SIZE));
-
-        if (backfillError) {
-          // Non-fatal: the drive and its metrics are already correctly
-          // inserted. A missing drive_id only degrades get_drive_telemetry
-          // back to the older sync_session_id + timestamp-range convention
-          // for these specific rows, it does not lose or corrupt data.
-          console.error('telemetry.drive_id backfill error:', backfillError);
-        }
-      }
+      return errorResponse('Failed to complete sync session', 500);
     }
 
-    // Count new DTCs
-    const { count: dtcsAdded } = await adminClient
-      .from('dtcs')
-      .select('id', { count: 'exact', head: true })
-      .eq('sync_session_id', session_id);
+    if (rpcData.outcome === 'not_found') {
+      // Only reachable if the session was deleted between the read above and
+      // the RPC's lock.
+      return errorResponse('Sync session not found', 404);
+    }
 
-    // Mark session 'failed' if drive insertion broke, so the agent (or a
-    // human) can tell a genuinely empty sync from a broken one.
-    const finalStatus = driveInsertFailed ? 'failed' : 'completed';
-    await adminClient
-      .from('sync_sessions')
-      .update({
-        status: finalStatus,
-        completed_at: new Date().toISOString(),
-        error_message: driveInsertFailed ? 'Drive insertion failed — see function logs' : null,
-      })
-      .eq('id', session_id);
+    if (rpcData.outcome === 'already_completed') {
+      // A concurrent call completed it while this one was waiting on the lock.
+      return okResponse({ message: 'Already completed' });
+    }
 
     // NOTE: last_sync_at lives on `devices`, not `vehicles` — the vehicles
     // table has no such column, so a prior vehicles.last_sync_at write here
     // was a silent no-op. Removed; devices below is the correct target.
-    // Update device last_sync_at and last_seen_at
-    await adminClient
+    //
+    // Checked but deliberately NOT fatal: the session has already committed
+    // as 'completed', so failing here would only make the device retry into
+    // "Already completed". A stale last_sync_at / last_seen_at loses no data.
+    const { error: deviceError } = await adminClient
       .from('devices')
       .update({
         last_sync_at: new Date().toISOString(),
@@ -238,14 +245,27 @@ serve(async (req) => {
       })
       .eq('id', device_id);
 
-    // Agent notification is now handled entirely by the
-    // sync_session_completed_enqueue trigger (fires atomically on the
-    // sync_sessions status update above, in the same transaction) --
-    // notify_agent RPC is retired. See migration 20260804000005.
+    if (deviceError) {
+      console.error('devices last_sync_at update error (non-fatal):', deviceError);
+    }
+
+    // `dtcs_added` counts DTC rows TAGGED WITH THIS SESSION, not DTCs newly
+    // created by it (a re-reported active code is tagged too). The key is
+    // kept as-is because it is part of the documented firmware contract
+    // (docs/07); renaming it waits on confirmation from the hardware project
+    // (docs/11). Non-fatal for the same reason as the devices write.
+    const { count: dtcsInSession, error: dtcCountError } = await adminClient
+      .from('dtcs')
+      .select('id', { count: 'exact', head: true })
+      .eq('sync_session_id', session_id);
+
+    if (dtcCountError) {
+      console.error('dtcs count error (non-fatal, reporting 0):', dtcCountError);
+    }
 
     return okResponse({
-      drives_created: drivesCreated,
-      dtcs_added: dtcsAdded ?? 0,
+      drives_created: rpcData.drives_created,
+      dtcs_added: dtcsInSession ?? 0,
     });
 
   } catch (err) {

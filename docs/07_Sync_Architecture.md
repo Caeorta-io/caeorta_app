@@ -48,7 +48,7 @@ Owned here. These Edge Functions implement the device-facing API.
 **Auth:** Device JWT (must match the device that started the session)
 **Logic:**
 - Verify session belongs to this device
-- Verify sequence_number is the next expected (idempotency: duplicate sequence numbers ignored)
+- ~~Verify sequence_number is the next expected (idempotency: duplicate sequence numbers ignored)~~ **Not implemented (2026-10-07).** `sequence_number` is required and echoed back in the response, but the code never checks it, so a retried chunk inserts its telemetry rows a second time. This is tracked as `docs/11` CF-40, and the code is deliberately not changed yet.
 - Insert telemetry rows in a single batch
 - Insert new DTCs (deduplicating against active DTCs)
 - Update sync_sessions: `status = 'streaming'`, increment `bytes_uploaded` and `row_count`
@@ -57,12 +57,28 @@ Owned here. These Edge Functions implement the device-facing API.
 ### `device_sync_complete`
 **Input:** `{ session_id }`
 **Auth:** Device JWT
-**Logic:**
-- Update sync_sessions: `status = 'completed'`, `completed_at = now()`
-- Run drive boundary detection on inserted telemetry → create `drives` rows
-- Update the device's `last_sync_at` (`devices`; `vehicles` has no such column)
-- Trigger the AI agent (via NOTIFY or webhook per agent contract)
-- Return: `{ drives_created: int, dtcs_added: int }`
+**Logic** (in execution order; corrected 2026-10-07):
+1. Verify the session belongs to this device. If it is already `completed`, return 200 `{ message: 'Already completed' }`. This outer check is only an optimisation; step 4's locked check is the authoritative one.
+2. Fetch the session's telemetry, paged past PostgREST's 1000-row cap.
+3. Run drive boundary detection and compute each drive's metrics in TypeScript (see § Drive boundary detection).
+4. Call **`complete_sync_session(session, device, drives)`** (RPC, migration `20261007000001`). In **one transaction** it:
+   - locks the session row (`FOR UPDATE`);
+   - returns early if the session is already `completed`;
+   - inserts the drives;
+   - sets `telemetry.drive_id` for each drive's time range;
+   - sets `status = 'completed'`, `completed_at = now()` and `error_message = NULL`.
+5. The AI agent is enqueued by the `sync_session_completed_enqueue` trigger on that status change, inside the same transaction. There is no NOTIFY call or webhook from the function. The agent is therefore enqueued **if and only if** the drives committed.
+6. Update the device's `last_sync_at` / `last_seen_at` (`devices`; `vehicles` has no such column). The error is checked and logged but **not fatal**, because the session has already committed.
+7. Return `{ drives_created: int, dtcs_added: int }`. `dtcs_added` counts DTC rows tagged with this session, not newly created ones. The key is kept for the firmware contract and the rename is pending (`docs/11` CF-41).
+
+**The status update is deliberately last.** Setting `completed` first, as this section used to list it, would fire the enqueue trigger before any drive existed, so the agent could claim a sync with nothing to analyse.
+
+**Failure and retry behaviour:**
+- If the RPC fails, the whole transaction rolls back: no drives, no `drive_id`, and the session is not `completed`. The function returns **500** so the device retries.
+- It then makes a separate, best-effort write of `status = 'failed'` with the error message, so the app's failure banner (§ Sync failure handling) has something to show. That write never overwrites a `completed` session.
+- A retry processes a `failed` session normally, and the `failed → completed` transition fires the enqueue trigger.
+- Overlapping calls for one session are serialised by the row lock. Only one inserts; the others return "Already completed".
+- Before 2026-10-07 the inserts, backfill and status write were separate requests that could diverge. An unchecked status write left a sync permanently unanalysed, and a retry duplicated every drive.
 
 ### `ota_check`
 **Input:** `{ current_firmware_version }`
@@ -165,7 +181,8 @@ This is the contract the firmware must follow:
 - Each chunk contains at most 1000 telemetry rows or 100 KB, whichever is smaller
 - Chunks are sent in order via sequence_number starting at 0
 - Server acks each chunk; device only sends next after ack
-- On timeout (10 seconds with no ack), retry with same sequence_number (idempotent)
+- On timeout (10 seconds with no ack), retry with same sequence_number. **The server does not deduplicate this yet** (2026-10-07). A retried chunk is inserted again, so the "idempotent" guarantee this line used to state does not hold until `docs/11` CF-40 is resolved.
+- `device_sync_complete` *is* safe to retry, including overlapping retries (see § `device_sync_complete`). Firmware should retry it on a non-200 or a timeout.
 
 ### Resumability
 - Device tracks `last_acked_sequence` per session in non-volatile storage
