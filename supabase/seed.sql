@@ -28,6 +28,7 @@
 --   vehicles   …0010 (user 1) · …0011 (user 2)
 --   sessions   …0020 (361 rows, completed) · …0021 (2,520, completed)
 --              …0022 (2,520, STREAMING — unprocessed, for device_sync_complete)
+--              …0023 (180, STREAMING — unprocessed, vacuum-only: boost max < 0)
 --   drives     …0030 (anomaly) · …0031 (clean, flip target) · …0032 (large)
 --   dtcs       …0040–…0044 · diagnostic_outputs …0050–…0052
 --   diagnostic_feedback …0060–…0062
@@ -78,22 +79,25 @@ DELETE FROM public.current_state WHERE vehicle_id IN (
 DELETE FROM public.telemetry     WHERE sync_session_id IN (
   '00000000-0000-0000-0000-000000000020',
   '00000000-0000-0000-0000-000000000021',
-  '00000000-0000-0000-0000-000000000022'
+  '00000000-0000-0000-0000-000000000022',
+  '00000000-0000-0000-0000-000000000023'
 );
 -- The sync_session_id arm catches the drive(s) device_sync_complete creates (with
--- random ids) when a test runs it against the unprocessed session …0022.
+-- random ids) when a test runs it against the unprocessed sessions …0022 / …0023.
 DELETE FROM public.drives        WHERE id IN (
   '00000000-0000-0000-0000-000000000030',
   '00000000-0000-0000-0000-000000000031',
   '00000000-0000-0000-0000-000000000032'
 ) OR sync_session_id IN (
   '00000000-0000-0000-0000-000000000021',
-  '00000000-0000-0000-0000-000000000022'
+  '00000000-0000-0000-0000-000000000022',
+  '00000000-0000-0000-0000-000000000023'
 );
 DELETE FROM public.sync_sessions WHERE id IN (
   '00000000-0000-0000-0000-000000000020',
   '00000000-0000-0000-0000-000000000021',
-  '00000000-0000-0000-0000-000000000022'
+  '00000000-0000-0000-0000-000000000022',
+  '00000000-0000-0000-0000-000000000023'
 );
 -- The device_id arm catches a vehicle a test created through create_vehicle on a
 -- fixture device (e.g. the happy path on …0003). Without it, the devices DELETE
@@ -448,6 +452,43 @@ CROSS JOIN LATERAL (SELECT
     ELSE 15 + 0.2 * s.speed
   END)::double precision AS load
 ) m;
+
+-- =========================================================================
+-- Vacuum-only drive — session …0023, STREAMING, unprocessed (device …0005,
+-- vehicle …0011, same as …0022). 180 samples at 1 Hz (3 min) of warm idle in
+-- which boost_pressure_kpa NEVER goes positive: −65.0 … −58.0 kPa, so its
+-- true peak is NEGATIVE.
+--
+-- Why it exists: every metric in the large drives has a positive maximum, so
+-- a peak_metrics regression that seeds the running max with 0 (Math.max(0, …))
+-- still reports the right peaks there. On this drive it would report 0. After
+-- device_sync_complete processes …0023, peak_metrics.boost_pressure_kpa must
+-- be −58.0 (the sample at t = 90, where sin peaks), not 0.
+-- =========================================================================
+INSERT INTO public.sync_sessions (id, device_id, vehicle_id, started_at, completed_at, status, row_count)
+VALUES (
+  '00000000-0000-0000-0000-000000000023',
+  '00000000-0000-0000-0000-000000000005',
+  '00000000-0000-0000-0000-000000000011',
+  timestamptz '2026-06-29 07:00:00+00', NULL,
+  'streaming', 180
+);
+
+INSERT INTO public.telemetry (vehicle_id, sync_session_id, timestamp, metrics)
+SELECT
+  '00000000-0000-0000-0000-000000000011',
+  '00000000-0000-0000-0000-000000000023',
+  timestamptz '2026-06-29 07:00:00+00' + (t * interval '1 second'),
+  jsonb_build_object(
+    'speed_kph',          0,
+    'rpm',                round(800 + 25 * sin(t / 11.0)),
+    'coolant_temp_c',     round((88 + 0.5 * sin(t / 40.0))::numeric, 1),
+    -- −65 + 7·sin over half a period: min −65.0 at t = 0, max −58.0 at
+    -- t = 90 (sin(π/2) = 1). Never ≥ 0.
+    'boost_pressure_kpa', round((-65 + 7 * sin(t * pi() / 180.0))::numeric, 1),
+    'engine_load_pct',    round((18 + 3 * sin(t / 13.0))::numeric, 0)
+  )
+FROM generate_series(0, 179) AS g(t);
 
 -- =========================================================================
 -- current_state — one row per vehicle (the table's PK is vehicle_id). The

@@ -798,6 +798,37 @@ original six:
 - **Owner:** Both tracks (coordination); Platform owns the file.
 - **Cross-references:** workdiary sessions 28, 29, 30.
 
+### CF-40 — `device_sync_chunk` does not implement the chunk idempotency `docs/07` promises
+
+- **Category:** Cross-track dependency / flag
+- **Origin:** Session 51 (2026-10-07), found while investigating `device_sync_complete` retry safety.
+- **Current status:** Open. Re-verified 2026-10-07 by reading `supabase/functions/device_sync_chunk/index.ts` on `main` (`249b8d9`).
+  - The function reads `sequence_number` (lines 17–20) and echoes it back in the response (lines 117–118), but **never compares it with anything**. There is no stored "last acked sequence" on the session.
+  - A retried chunk, the case `docs/07` § Chunking describes ("On timeout … retry with same sequence_number (idempotent)"), therefore **inserts its telemetry rows a second time**. `docs/07` previously stated "duplicate sequence numbers ignored"; it now states the gap (session 52).
+  - Duplicate telemetry inside a session does not create duplicate drives, but it skews `row_count`, `summary_metrics` averages and the drive-detail charts.
+  - The function's `sync_sessions` update (line 108) is also unchecked, and it is a read-modify-write on `row_count` / `bytes_uploaded`, so it loses increments under concurrent calls.
+- **What's needed to resolve:**
+  - Persist the next expected sequence per session, for example a `sync_sessions.next_sequence` column, which needs a migration.
+  - Reject or ignore any chunk whose `sequence_number` is not the expected one, atomically with the insert. The `complete_sync_session` RPC pattern (`20261007000001`) is the template.
+  - Confirm with the hardware project how firmware treats the response to a duplicate chunk.
+- **Owner:** Platform track (function and migration); hardware team (firmware expectations).
+- **Cross-references:** `docs/07` § `device_sync_chunk` and § Chunking; workdiary Recurring pattern doc drift #6; workdiary sessions 51–52.
+
+### CF-41 — `device_sync_complete`'s `dtcs_added` overstates what it counts
+
+- **Category:** Cross-track dependency / flag
+- **Origin:** Session 50 verification run (2026-10-07). The response reported `dtcs_added: 1` for a sync that added no DTC; it was counting the seeded P0300 already tagged with the session.
+- **Current status:** Open; the rename is deliberately deferred.
+  - The value is a count of `dtcs` rows whose `sync_session_id` is this session, not DTCs newly created by the sync.
+  - Session 52 checked the count query's error and commented the semantics, but **kept the key** because `docs/07` documents `{ drives_created, dtcs_added }` as the firmware-facing response. The firmware lives in the hardware project, so it cannot be checked from this repo. No app code reads the key (grep, 2026-10-07).
+  - Founder ruling, session 52: defer the rename.
+- **What's needed to resolve:**
+  - Confirm with the hardware project whether firmware reads `dtcs_added`.
+  - If it does not, rename the key to what it measures (for example `dtcs_in_session`) and update `docs/07`.
+  - If it does, coordinate the change, for example by returning both keys for one firmware release.
+- **Owner:** Platform track, after the hardware team confirms.
+- **Cross-references:** `docs/07` § `device_sync_complete`; workdiary sessions 50 and 52.
+
 ---
 
 ## Provisional-value-reconciliation
