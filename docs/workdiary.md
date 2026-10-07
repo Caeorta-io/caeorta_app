@@ -21,6 +21,7 @@ When something is installed, upgraded, or replaced, update the tool inventory ro
 | GitHub CLI (`gh`) | 2.92.0 | `C:\Program Files\GitHub CLI\gh.exe` | Authenticated as `MuhammedRaslan`; scopes: gist, read:org, repo, workflow |
 | Supabase CLI | 2.98.2 | `C:\Users\muham\scoop\shims\supabase.exe` | Installed via scoop (Supabase's recommended Windows path; no winget package). **Note (2026-09-29, session 44):** `npx supabase` resolves to **2.118.0** from the npx cache (not a repo dependency) — the local-stack reset was verified with that one. Two CLIs on the machine; upgrade scoop at convenience. **Note (2026-09-30, session 45):** if `npx supabase` dies with `ERR_SSL_CIPHER_OPERATION_FAILED` on the registry fetch, `npx --offline supabase …` runs the cached copy |
 | Docker Desktop | 4.92.0 (engine 29.8.0) | `C:\Users\muham\AppData\Local\Programs\DockerDesktop\` | Per-user install, pre-existing — first recorded 2026-09-29 (session 44). Not auto-started; launch it before `supabase start`. Local stack images: `supabase/postgres:17.6.1.121`, `gotrue:v2.190.0` |
+| Deno (Docker image) | `denoland/deno:2.1.4` | Docker image, plus volume `caeorta_deno_cache` | Added 2026-10-05 (session 49). There is no host Deno, and the pnpm gate does not cover `supabase/functions/`. Run `MSYS_NO_PATHCONV=1 docker run --rm -v caeorta_deno_cache:/deno-dir -v "$(pwd -W)/supabase/functions:/fn" -w /fn denoland/deno:2.1.4 deno check <fn>/index.ts` (same for `deno lint`). 2.1.4 matches the local edge runtime. An esm.sh TLS read error on the first run cleared on retry |
 | scoop | 0.5.3 | `C:\Users\muham\scoop\shims\scoop.ps1` | Added to provide Supabase CLI |
 | 7-Zip | 26.01 | `C:\Users\muham\scoop\apps\7zip\current\` | Pulled in as scoop dep for Supabase CLI extraction |
 | OpenJDK (Microsoft) | 17.0.19 LTS | `C:\Program Files\Microsoft\jdk-17.0.19.10-hotspot\` | `JAVA_HOME` set machine-scope |
@@ -141,17 +142,19 @@ Sortable by date. Every non-trivial decision goes here AND is described in the d
 | 2026-09-29 (session 44) | **Local Supabase stack is now supported, and the seed creates its own auth user — four calls taken as a set (PR #61).** (1) **`supabase/config.toml` is committed** (stock `supabase init`, `project_id = "caeorta_app"`), reversing the "no config.toml — the CLI is used `--linked`" note in `docs/04`; `--linked` remains valid for dev. (2) **`seed.sql` inserts the `auth.users` row for the existing fixture uuid `63f09c52-…` before `public.users`**, `ON CONFLICT (id) DO NOTHING` — a no-op on caeorta-dev, where that uuid is Sulaiman's real account — and is **deliberately NOT in the teardown**, because deleting it would CASCADE through `public.users` on dev. The seed is described as local + dev fixtures, never prod (the brief's "local only" wording conflicted with `docs/05`'s `db reset --linked`). (3) **A second drive `…0031` with `has_anomaly = false`** is seeded as the has_anomaly-trigger test fixture (the only prior drive was seeded `true`). (4) **`seed_dtc_lookup.sql` is wired into `[db.seed].sql_paths`** — an upsert that had never been hooked up anywhere; Claude Code's call, flagged in the PR as removable. | A fresh local stack could not start at all: no config.toml, and the seed aborted on `users_id_fkey` (23503) before any fixture landed. (1)–(3) were founder decisions at the session's ASK. | `supabase/config.toml` (new), `supabase/seed.sql`; `docs/04` line 116 + `docs/05` § Test fixtures still need the founder's edit; this row + session 44 diary |
 | 2026-09-30 (session 45) | **The orphan dev migration `20260804000004` is reconciled by recreating its file, and the index it left in dev is adopted — two calls taken as a set (PR #63). Taken by the App founder with Sulaiman unreachable; Platform-area, so recorded for his review.** (1) **Recreate `20260804000004_telemetry_drive_id.sql` at its true number rather than `supabase migration repair --status reverted`.** (2) **Adopt `telemetry_drive_id_timestamp` on `(drive_id, "timestamp")` rather than drop it, and keep the partial `telemetry_drive_id_idx` from `20260812000001` as well.** | (1) Repair would record the version as reverted. It was not — its objects are live in dev. A history claiming "reverted" over live objects is worse than an orphan record; recreating the file makes the existing record true. It also unblocks `db push`, which the CLI refuses while dev's history holds a version with no local file. (2) It is the better index for the real read path (all telemetry for a drive, in time order). Dropping a live index risks a plan regression on the largest table for no gain; keeping a possibly-redundant one costs only write overhead already being paid. Revisit on a `pg_stat_user_indexes` review, not before. | `supabase/migrations/20260804000004_telemetry_drive_id.sql` (header records both); `docs/05_Database_Schema.md` (telemetry index lists); `docs/AI_Agent_Contract/ai-agent-contract.md` §12 + changelog; PR #63 body |
 | 2026-10-05 (session 48) | **The three contract §12 divergences are ruled on.** (1) **`drives.distance_km`: build it** in the `device_sync_complete` PR. (2) **`drives.average_speed_kph`: drop the column** in a later migration. (3) **The `telemetry.drive_id` backfill is recorded as deliberately refused**, and contract §11 is amended to "no backfill". | (1) It is the per-100km denominator for agent rate baselining, and the segmentation loop already holds the samples. (2) It duplicates `summary_metrics.speed_kph`, which the same function computes. (3) Drive boundaries were computed in memory and never persisted, so history cannot be reliably assigned to a drive. Pre-association rows use the `sync_session_id` + `timestamp` path (`telemetry_sync_session_id_timestamp_idx`), and the NULL cohort drains with the 30-day purge. | `docs/AI_Agent_Contract/ai-agent-contract.md` §9, §11, §12 (D1–D3) + changelog; `docs/05` drives table; PR #67 |
+| 2026-10-05 (session 49) | **`device_sync_complete` correctness scope** (PR #69). (1) **The unchecked `sync_sessions` and `devices` writes are left untouched** in this PR and recorded as known unchecked writes. (2) **The 1000-row telemetry fetch cap is fixed in the same PR** (paged `.range()`). (3) **`distance_km` semantics:** trapezoidal integration; absent speed breaks the chain; intervals > 30 s are skipped; NULL = unknown, 0 = stationary. | (1) Founder ruling: B6 keeps those statements out of scope. (2) Computing `distance_km` over truncated data would write a wrong number where the column had been honestly NULL. (3) Absent ≠ zero (contract §3). A gap > 30 s inside a drive means samples were lost (seed spacing is 5 s), and bridging it invents distance. NULL and 0 make different claims. | `supabase/functions/device_sync_complete/index.ts`; contract §9, §12 D1, changelog; `docs/05` drives; PR #69 |
 
 ---
 
-## Recurring pattern — doc drift (four findings as of 2026-09-30)
+## Recurring pattern — doc drift (five findings as of 2026-10-05)
 
-**A document describing code is only as good as its last verification.** Four times a doc here described a state that had already changed, and each time it cost real work:
+**A document describing code is only as good as its last verification.** Five times a doc here described a state that had already changed, and each time it cost real work:
 
 1. `docs/05` said `drives.has_anomaly` was set by the agent; nothing in the repo ever wrote it.
 2. `docs/AI_Agent_Contract/README.md` called the contract an unratified draft for seven weeks after PR #56 ratified it.
 3. Contract §12 called `20260804000004` an unused number while dev had that migration applied; its file never reached the repo.
 4. `docs/create_vehicle_contract.md` listed six conformance gaps for eight weeks after `16f082c` closed them — and session 46 was commissioned to fix them again.
+5. Contract §3 called the `peak_metrics` zero-seed "live today" for two months after `3748031` fixed it. That commit, which also removed the `vehicles.last_sync_at` write, has no PR. Session 49's brief scoped both as fixes and found them already done.
 
 By the founder's tally, three of the four trace to work that reached `main` (or dev) without a PR, or without a doc update in the same PR. Two are confirmed from the repo: `16f082c` has no associated PR, and the `20260804000004` file was never committed at all. The repo already has the rule that prevents this — the same-PR doc update in `CLAUDE.md` and `docs/conventions.md` § Spec deviations — and every instance happened where it was skipped. **Before commissioning work from a doc, read the file the doc describes** (`git log -- <file>` is one command), and check the other track's diary entries.
 
@@ -2293,6 +2296,58 @@ Dev's FK matches `20260812000001` (`ON DELETE SET NULL`) — no mismatch between
 **Notes / lessons:**
 - **Write "applies" or "verified" exactly as the record supports.** "The migration that creates the role applies cleanly" got paraphrased upstream into "the verification ran". A doc that repeats the paraphrase invents a test nobody ran.
 - **A "VERIFY — may still be true" flag is worth honouring.** The `docs/08:353` claim was already false the day it was written.
+
+---
+
+### 2026-10-05 (later) — `device_sync_complete` correctness pass: `distance_km` built, two silent truncations fixed (App track, session 49)
+
+**Goal of session:** establish the current state of `device_sync_complete` before changing anything, then fix only what is still broken. Build `distance_km` (D1). Do not touch `average_speed_kph` (D2). Local only; PR for @22SHY.
+
+**Setup.** #67 and #68 had merged (`origin/main` = `fe945b4`). Branch `fix/device-sync-complete-correctness` was cut fresh off it.
+
+**Part A (reported, then stopped for scope):**
+- **Already fixed in `3748031`** (2026-08-05, no PR): the `peak_metrics` zero-seed (P1-2) and the `vehicles.last_sync_at` write (P1-1). `vehicles` has no such column. Both skipped.
+- **Slice `isLast ? i : i`:** vestigial, not an off-by-one. `slice(driveStart, i)` is correct on both paths. Simplified, with no behaviour change.
+- **Unchecked writes:** the `sync_sessions` status update and the `devices` update. The `dtcs` count is an unchecked read.
+- **Found beyond the brief:** the telemetry fetch had no paging, so `max_rows = 1000` silently truncated any session over 1000 rows. Every aggregate ignored the rest.
+
+**Founder rulings:** leave the two unchecked writes untouched; page the fetch in this PR (Decisions-log row, session 49).
+
+**Done:** PR #69, commit `b8bcbca`, **open, not merged**.
+- `distance_km` computed: trapezoidal integration, a 30 s interval cap, absent speed breaks the chain, NULL when unknown.
+- Telemetry paged with `.range()` ordered `(timestamp, id)`, stopping on an empty page.
+- **`drive_id` backfill batched at 100 ids.** In testing, a 1500-row drive failed with `URI too long` and was logged non-fatal. This is the same silent-failure shape as the missing-column episode.
+- Docs updated: contract §3, §9, §12 D1 and changelog; the `docs/05` drives rows; `docs/07` `last_sync_at` target and distance source.
+
+**Verified (local stack, after `db reset --local`):**
+- `deno check` and `deno lint` exit 0 (Docker, see tool inventory).
+- The pnpm typecheck/lint gate exits 0.
+- C2, all values matching the hand calculation:
+  - normal 1500-row drive: 29.98 km
+  - missing-speed drive: 0.70 km
+  - single sample, and three samples with one speed: NULL
+  - stationary control: 0
+  - boost peak: −33 kPa, with an absent `rpm` key not present in `peak_metrics`
+- C3: `drive_id` populated on every processed row after batching.
+- Test rows removed by a second `db reset --local`.
+
+**Not done / not verified:**
+- Not deployed to dev. No `db push`, no `link`.
+- The 100-id batch size was verified locally only, not against the hosted gateway.
+
+**Tools / versions touched:** `denoland/deno:2.1.4` Docker image (inventory row added).
+
+**Decisions taken:** one Decisions-log row (2026-10-05, session 49).
+
+**Open items rolled forward:**
+- **Unchecked `sync_sessions` / `devices` writes in `device_sync_complete`.** A failed status update returns 200, never enqueues the agent, and lets a retry duplicate every drive. Needs its own PR and a decision on retry idempotency.
+- **D2:** drop `average_speed_kph`. App readers change first (`LastDriveCard.tsx`, `drives/[driveId].tsx`, `mocks.ts`, `conformance.test.ts`), then regenerate `database.types.ts`.
+- Deploy `device_sync_complete` to dev once #69 merges. This is a deliberate step, not part of the PR.
+- `20260812000001`'s header still calls `vehicles.last_sync_at` a live bug. It is immutable, so it is left as written.
+- Carried from session 48, unchanged: the stale-claims list in the PR #67 body; the `agent_role` read-only verification; the push of the three `20260812*` migrations to dev; confirming dev serves `16f082c`; CF-17; CF-18; no unique constraint on `vehicles.device_id`; PRs #56–#60 have no workdiary entries.
+
+**Notes / lessons:**
+- **Test at realistic volume.** Both new defects (row cap, URI length) only appear past ~1000 rows. The seed has 361, and the original c1dafc4 end-to-end test used 3. A 17-minute drive at 1 Hz is enough to hit both.
 
 ---
 
