@@ -484,6 +484,8 @@ When upgraded to Supabase Pro (after pilot, before commercial launch), enable au
 The RLS migration (PR #8) is verified against a 12-step pg-side isolation suite. Tests are currently run manually via `supabase db query --linked -f <file>` against the dev project — the Management API runs each invocation against a role that bypasses RLS, so each test impersonates a target role with `SET LOCAL ROLE` + `set_config('request.jwt.claims', …, true)` inside a transaction, captures the result into a temp table, then `RESET ROLE` and selects from the temp table at the end. The Dashboard SQL editor can run the same scripts (founder action) when the CLI path is unavailable.
 
 > **Note, 2026-09-30.** The paragraph above and the "Today:" lines below describe how the suite was run when it was written — against the dev project, because there was no local stack. A local stack now exists (`npx supabase start` + `npx supabase db reset`) and is the verification environment for migrations. **This suite has not been re-run there**, and it cannot run on the local seed as-is: `supabase/seed.sql` creates one user, not the three fixture users (`<u1>` / `<u2>` / `<u3>`) the suite assumes. Treat the results recorded here as dev results from the PR #8 era, not as a current local result.
+>
+> **Update, 2026-10-07 (session 50).** The local seed now has **two** users, each with one vehicle (see Test fixtures). The three-user assumption is **still not satisfiable**. Tests 1–3 can be run in substance with `<u1>` = `63f09c52-…`, `<u2>` = `…0102`, but the expected values must be re-pointed: the nicknames are `Test Swift` / `Fixture i20`, not `user1 car` / `user2 car`. Test 12 would see 2 vehicles, not 3. A `<u3>` would need a third fixture user and vehicle. The suite has still not been run or rewritten.
 
 The suite assumes the fixtures from the **Test fixtures** section below (three test users with UUIDs `<u1>` / `<u2>` / `<u3>`, one vehicle each with ids `<v1>` / `<v2>` / `<v3>`). When the suite is automated (see Test fixtures → when to build), it lands as `supabase/tests/rls.sql` and runs via `supabase test db` or a CI job.
 
@@ -619,9 +621,73 @@ The following classes of test require infrastructure that doesn't exist yet; the
 
   The item stays TODO. It is runnable locally now, since no dev connection is needed.
 
+  *Update 2026-10-07 (session 50): the **read half** has now run locally.* The run used `supabase_admin` over TCP, because `postgres` holds `agent_role` with `set_option = f` and cannot `SET ROLE` to it. Inside `BEGIN; SET LOCAL ROLE agent_role; … COMMIT;`, the counts matched the superuser exactly on every table agent_role reads:
+
+  | Table | Count |
+  |---|---|
+  | `telemetry` | 5401 |
+  | `drives` | 3 |
+  | `vehicles` | 2 |
+  | `sync_sessions` | 3 |
+  | `current_state` | 2 |
+  | `dtcs` | 5 |
+  | `diagnostic_outputs` | 3 |
+  | `diagnostic_feedback` | 3 |
+  | `agent_work_queue` | 2 |
+  | `agent_status` | 0 |
+
+  There were no silent zeros. `current_state`, `dtcs` and `diagnostic_feedback` were empty until the session-50 seed, which is why this could not be proven earlier. `agent_status` is still unseeded, so its read remains unproven (0 = 0). **Still not run:** the write refusals outside `diagnostic_outputs` / `agent_status` / `agent_work_queue`, and the `vehicle_modifications` revoke.
+
 ## Test fixtures
 
-**Current state (2026-09-30):** `supabase/seed.sql` exists and loads automatically on a local `npx supabase db reset`, after all migrations, followed by `seed_dtc_lookup.sql` (both are listed in `supabase/config.toml`). That local reset is the known-good state to verify against. The seed creates its own `auth.users` row before the `public.users` row that references it (PR #61) — without that, a reset on an empty local database failed on `users_id_fkey`. What the seed holds today is narrower than the v1 plan below: one user, one vehicle, two unclaimed devices, two drives and 361 telemetry rows — not three users.
+**Current state (2026-09-30):** `supabase/seed.sql` exists and loads automatically on a local `npx supabase db reset`, after all migrations, followed by `seed_dtc_lookup.sql` (both are listed in `supabase/config.toml`). That local reset is the known-good state to verify against. The seed creates its own `auth.users` row before the `public.users` row that references it (PR #61) — without that, a reset on an empty local database failed on `users_id_fkey`. *Contents until 2026-10-07:* one user, one vehicle, two unclaimed devices, two drives and 361 telemetry rows.
+
+**Current contents (2026-10-07, session 50).** These are row counts after `npx supabase db reset --local`. They were verified identical across two resets and across two direct re-applies of `seed.sql` on a populated database. Fixture ids are fixed `00000000-0000-0000-0000-0000000000NN`, banded by table. Docs and sessions cite them by number, so never renumber them.
+
+| Table | Rows | What they are |
+|---|---|---|
+| `auth.users` / `users` | 2 / 2 | User 1 `63f09c52-…` (`pilot1@example.test`, the real dev uuid). User 2 `…0102` (`pilot2@example.test`). Both have `ON CONFLICT DO NOTHING` and stay out of the teardown. |
+| `devices` | 5 | One `create_vehicle` branch each (see below). |
+| `vehicles` | 2 | `…0010` user 1 on device `…0001`. `…0011` user 2 on device `…0005`. |
+| `sync_sessions` | 3 | `…0020` completed, 361 rows. `…0021` completed, 2,520 rows. `…0022` **streaming**, 2,520 rows, unprocessed. |
+| `drives` | 3 | `…0030` has_anomaly true. `…0031` clean; it is the has_anomaly trigger test's flip target. `…0032` is the large drive, with `distance_km` / `average_speed_kph` NULL and `peak_metrics` `'{}'`. |
+| `telemetry` | 5,401 | 361 at 5 s, plus 2 × 2,520 at 1 Hz (42 min). |
+| `current_state` | 2 | One per vehicle. |
+| `dtcs` | 5 | Active critical / active `WARN` / history-cleared `info` / history-inactive NULL severity (user 1), plus active critical (user 2). All are real `dtc_lookup` codes. Three carry `freeze_frame_metrics` in the contract §3 keys. |
+| `diagnostic_outputs` | 3 | Warning on `…0030`, info on `…0032`, vehicle-scoped critical on `…0011`. |
+| `diagnostic_feedback` | 3 | One per output, both ratings, both users. |
+| `agent_work_queue` | 2 | Trigger side effect, not seeded directly. `dtc_active_enqueue` fires on the 3 active DTCs and dedupes to one pending `dtc` job per vehicle. |
+| `dtc_lookup` | 52 | From `seed_dtc_lookup.sql`. |
+| `firmware_versions` / `app_versions` | 2 / 1 | Unchanged. |
+
+**Devices.** `create_vehicle` checks in order: exists, owner, active, no existing vehicle.
+- `…0001`: unclaimed, but holds `…0010`. This is a pre-existing inconsistency kept as-is, and `mint_device_token` refuses it.
+- `…0002`: unclaimed and free, for the `pair_device` happy path. Through `create_vehicle` it returns `not_device_owner`. `device_not_claimed` is returned only for an id that does not exist.
+- `…0003`: user 1, active, free. Returns 201 as user 1 and `not_device_owner` as user 2.
+- `…0004`: user 1, `disabled`. Returns `device_not_active`.
+- `…0005`: user 2, active, holds `…0011`. Returns `duplicate_vehicle` as user 2 and `not_device_owner` as user 1.
+
+**The large drives exist to defeat row-count caps.** Both session-49 defects only appear past ~1,000 rows: the `max_rows = 1000` fetch truncation and the `drive_id` backfill `URI too long`. Both large sessions share one generated profile:
+- a cold start, with coolant rising from 24 °C to ~91 °C and boost at ≈ −68 kPa vacuum;
+- stop-and-go city driving;
+- 300 samples with `speed_kph` **absent**, with timestamps still contiguous;
+- highway driving with a wide-open-throttle pull (boost to 120 kPa, rpm to 6,100);
+- a coast down to idle.
+
+Boost is negative in 1,130 samples per session.
+- `…0021` / `…0032` is the **processed** state, with `drive_id` set on all rows. Use it for read paths at volume.
+- `…0022` is the **unprocessed** state. Running `device_sync_complete` against it, with device `…0005`, is the regression test for the write path.
+- Expected result for `…0022`: one drive and a `distance_km` of **29.41**. That is trapezoidal integration over 2,218 intervals, with the absent stretch contributing nothing. A truncated fetch reports far less.
+- The teardown deletes drives by `sync_session_id` as well as by id, so a re-seed removes whatever the function created.
+
+**`has_anomaly`.** Inserting `diagnostic_outputs` fires `diagnostic_output_sets_has_anomaly`. The fixtures are chosen so that the seed flips **no** flag, and each drive's `has_anomaly` equals its INSERT literal:
+- the only drive-scoped warning targets `…0030`, which is already true;
+- `…0032` gets only an `info` output;
+- the critical output is vehicle-scoped.
+
+**Teardown.** The teardown deletes child before parent, and it also catches rows that tests create. It deletes agent queue rows by vehicle, drives by `sync_session_id`, and vehicles by fixture `device_id` (for example a `create_vehicle` happy-path run on `…0003`). Without the last of these, the `ON DELETE RESTRICT` FK would block the devices delete on the next re-seed.
+
+**Local only.** This seed must never be `db push`ed or applied to dev or prod. The local CLI is linked to caeorta-dev, so always pass `--local` to `db reset`.
 
 *What this section said until 2026-09-30, kept because the plan below still reads against it:* "We need a `supabase/seed.sql` file so dev can be reset to a known-good state with `supabase db reset --linked`. Until then, the dev project carries the three ad-hoc fixtures inserted during PR #8 verification (UUIDs `11111111-…` / `22222222-…` / `33333333-…`), which can drift." The file has existed since 2026-06-14 (`d2471b6`); the sentence was never updated. Whether dev still carries those three ad-hoc fixtures cannot be checked from this repo.
 
@@ -631,7 +697,7 @@ The following classes of test require infrastructure that doesn't exist yet; the
 - 3 test vehicles, one per user, each paired with a device.
 - 1 unclaimed device (to test pairing flow).
 - A handful of fake telemetry rows per vehicle (enough to exercise the per-vehicle index path).
-- **No diagnostic outputs.** The AI Agent Contract v0 isn't finalized; seeding diagnostics now would lock in a shape we'd churn later.
+- **No diagnostic outputs.** The AI Agent Contract v0 isn't finalized; seeding diagnostics now would lock in a shape we'd churn later. *(Superseded 2026-10-07: the contract table and its `has_anomaly` trigger are on `main`, and `diagnostic_feedback` needs outputs to reference. Three fixture outputs are now seeded — see Current contents above.)*
 
 Make the seed file safe to re-run. **As of PR #37 (`9d453ca`, merged 2026-07-05) it genuinely is:** the file opens with a single **child → parent DELETE teardown block** (the reverse of the INSERT order) that removes the fixture rows before re-inserting them. This ordering is required because `vehicles.device_id REFERENCES devices(id) ON DELETE RESTRICT` (in `20260602130000_initial_schema.sql`) is the only `ON DELETE RESTRICT` FK among the seeded tables — a second apply would otherwise fail with `update or delete on table "devices" violates RESTRICT setting`. The re-runnability was verified empirically idempotent over 3 applies (row counts stable, telemetry 361). `ON CONFLICT DO NOTHING` alone was **not** sufficient (it does not resolve the RESTRICT FK on re-delete), which is why the earlier "ON CONFLICT everywhere" plan in this doc was superseded by the teardown-order fix.
 
