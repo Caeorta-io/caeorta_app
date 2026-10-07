@@ -5,6 +5,23 @@ import { errorResponse, okResponse } from '../_shared/errors.ts';
 
 const DRIVE_GAP_MS = 5 * 60 * 1000; // 5 minutes gap = new drive
 
+// Page size for the telemetry fetch. PostgREST caps every response at
+// max_rows (1000 in config.toml), and a session spans many 1000-row chunks
+// (docs/07 § Chunking), so a single unpaged select silently truncates.
+const TELEMETRY_PAGE_SIZE = 1000;
+
+// Longest gap between two samples that distance integration will bridge.
+// Samples arrive every few seconds (the dev seed uses 5 s), so a gap past
+// 30 s inside a drive means samples were lost; assuming constant speed across
+// it would invent distance (~0.8 km at 100 km/h). Such intervals are skipped,
+// which makes distance_km a lower bound rather than a guess. Gaps past
+// DRIVE_GAP_MS never reach here -- they split the drive instead.
+const MAX_DISTANCE_INTERVAL_MS = 30 * 1000;
+
+// Telemetry ids per drive_id backfill request. Each UUID costs ~40 bytes of
+// URL once encoded, so 100 keeps the query string near 4 KB.
+const BACKFILL_BATCH_SIZE = 100;
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -49,15 +66,26 @@ serve(async (req) => {
       return okResponse({ message: 'Already completed' });
     }
 
-    // Get all telemetry for this session sorted by timestamp
-    const { data: telemetry, error: telemetryError } = await adminClient
-      .from('telemetry')
-      .select('id, timestamp, metrics')
-      .eq('sync_session_id', session_id)
-      .order('timestamp', { ascending: true });
+    // Get all telemetry for this session sorted by timestamp, paged past the
+    // max_rows cap. `id` breaks timestamp ties so page boundaries are stable
+    // (no row skipped or repeated). Paging stops on an EMPTY page, not a short
+    // one, so it stays correct even if a server's max_rows is below the page
+    // size.
+    const telemetry: Array<{ id: string; timestamp: string; metrics: unknown }> = [];
+    for (;;) {
+      const { data: page, error: telemetryError } = await adminClient
+        .from('telemetry')
+        .select('id, timestamp, metrics')
+        .eq('sync_session_id', session_id)
+        .order('timestamp', { ascending: true })
+        .order('id', { ascending: true })
+        .range(telemetry.length, telemetry.length + TELEMETRY_PAGE_SIZE - 1);
 
-    if (telemetryError) {
-      return errorResponse('Failed to fetch telemetry', 500);
+      if (telemetryError) {
+        return errorResponse('Failed to fetch telemetry', 500);
+      }
+      if (!page || page.length === 0) break;
+      telemetry.push(...page);
     }
 
     // Drive boundary detection
@@ -67,6 +95,7 @@ serve(async (req) => {
       started_at: string;
       ended_at: string;
       duration_seconds: number;
+      distance_km: number | null;
       peak_metrics: Record<string, number>;
       summary_metrics: Record<string, number>;
       has_anomaly: boolean;
@@ -75,7 +104,7 @@ serve(async (req) => {
     // belong to each drive. Populated below telemetry.drive_id after insert.
     const driveTelemetryIds: string[][] = [];
 
-    if (telemetry && telemetry.length > 0) {
+    if (telemetry.length > 0) {
       let driveStart = 0;
 
       for (let i = 1; i <= telemetry.length; i++) {
@@ -85,7 +114,9 @@ serve(async (req) => {
           new Date(telemetry[i - 1].timestamp).getTime();
 
         if (gap > DRIVE_GAP_MS || isLast) {
-          const driveTelemetry = telemetry.slice(driveStart, isLast ? i : i);
+          // Rows driveStart..i-1: on a gap, row i opens the next drive; on the
+          // last pass i === telemetry.length, so the final row is included.
+          const driveTelemetry = telemetry.slice(driveStart, i);
           if (driveTelemetry.length > 0) {
             const startedAt = driveTelemetry[0].timestamp;
             const endedAt = driveTelemetry[driveTelemetry.length - 1].timestamp;
@@ -125,6 +156,7 @@ serve(async (req) => {
               started_at: startedAt,
               ended_at: endedAt,
               duration_seconds: durationSeconds,
+              distance_km: computeDistanceKm(driveTelemetry),
               peak_metrics: peakMetrics,
               summary_metrics: avgMetrics,
               has_anomaly: false,
@@ -157,12 +189,14 @@ serve(async (req) => {
 
       drivesCreated++;
 
-      const telemetryIds = driveTelemetryIds[i];
-      if (telemetryIds && telemetryIds.length > 0) {
+      // Batched: the id list travels in the URL query string, and a full
+      // drive's worth (1500 ids) was rejected locally with "URI too long".
+      const telemetryIds = driveTelemetryIds[i] ?? [];
+      for (let b = 0; b < telemetryIds.length; b += BACKFILL_BATCH_SIZE) {
         const { error: backfillError } = await adminClient
           .from('telemetry')
           .update({ drive_id: insertedDrive.id })
-          .in('id', telemetryIds);
+          .in('id', telemetryIds.slice(b, b + BACKFILL_BATCH_SIZE));
 
         if (backfillError) {
           // Non-fatal: the drive and its metrics are already correctly
@@ -219,6 +253,35 @@ serve(async (req) => {
     return errorResponse('Internal server error', 500);
   }
 });
+
+// Distance by trapezoidal integration of speed_kph over time. Absent is never
+// zero: a sample without a numeric speed_kph breaks the chain, so the
+// intervals either side of it are skipped rather than read as 0 km/h. NULL
+// when no interval could be used (fewer than 2 usable adjacent samples) --
+// NULL means unknown, 0 means stationary, and those are different claims.
+function computeDistanceKm(
+  rows: Array<{ timestamp: string; metrics: unknown }>,
+): number | null {
+  let distanceKm = 0;
+  let intervalsUsed = 0;
+  let prev: { t: number; speed: number } | null = null;
+
+  for (const row of rows) {
+    const speed = (row.metrics as Record<string, unknown> | null)?.speed_kph;
+    if (typeof speed !== 'number' || !Number.isFinite(speed) || speed < 0) {
+      prev = null;
+      continue;
+    }
+    const t = new Date(row.timestamp).getTime();
+    if (prev && t - prev.t <= MAX_DISTANCE_INTERVAL_MS) {
+      distanceKm += ((prev.speed + speed) / 2) * ((t - prev.t) / 3_600_000);
+      intervalsUsed++;
+    }
+    prev = { t, speed };
+  }
+
+  return intervalsUsed > 0 ? Math.round(distanceKm * 100) / 100 : null;
+}
 
 async function verifyDeviceJwt(token: string, secret: string): Promise<string | null> {
   try {

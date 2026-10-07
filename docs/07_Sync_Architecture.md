@@ -60,7 +60,7 @@ Owned here. These Edge Functions implement the device-facing API.
 **Logic:**
 - Update sync_sessions: `status = 'completed'`, `completed_at = now()`
 - Run drive boundary detection on inserted telemetry → create `drives` rows
-- Update vehicle's `last_sync_at`
+- Update the device's `last_sync_at` (`devices`; `vehicles` has no such column)
 - Trigger the AI agent (via NOTIFY or webhook per agent contract)
 - Return: `{ drives_created: int, dtcs_added: int }`
 
@@ -202,7 +202,7 @@ When a sync completes, the platform must split the synced telemetry into "drives
 4. For each drive, compute:
    - started_at = first row's timestamp
    - ended_at = last row's timestamp
-   - distance_km from GPS if available, else from speed×time integration
+   - distance_km from speed×time integration (NULL when unknown; see `docs/05` drives). No GPS key exists yet
    - peak_metrics (max rpm, max boost, max coolant temp, etc.)
    - summary_metrics (averages, std devs)
 5. Insert `drives` rows
